@@ -1,0 +1,62 @@
+# 1. SHARED DIMENSIONS (The 75 dimensions start here)
+dimensions:
+  - name: dim_product
+    table: "project.dataset.dim_products"
+    primary_key: product_id
+    attributes:
+      - name: category
+        column: product_category
+      - name: brand
+        column: brand_name
+
+  - name: dim_geography
+    table: "project.dataset.dim_locations"
+    primary_key: location_id
+    attributes:
+      - name: country
+        column: country_name
+      - name: region
+        column: sales_region
+
+  - name: dim_date
+    table: "project.dataset.dim_calendar"
+    primary_key: date_id
+    attributes:
+      - name: year
+        column: cal_year
+      - name: month
+        column: cal_month_name
+
+# 2. FACT TABLES (The 5 core engines)
+facts:
+  - name: fact_sales
+    table: "project.dataset.fct_orders"
+    joins:
+      - dim_product: "fact_sales.product_id = dim_product.product_id"
+      - dim_geography: "fact_sales.location_id = dim_geography.location_id"
+      - dim_date: "fact_sales.order_date = dim_date.date_id"
+    metrics:
+      - name: total_revenue
+        sql: "SUM(sales_amount_usd)"                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                
+      - name: order_count
+        sql: "COUNT(distinct order_id)"
+
+  - name: fact_inventory
+    table: "project.dataset.fct_stock_levels"
+    joins:
+      - dim_product: "fact_inventory.product_id = dim_product.product_id"
+    metrics:
+      - name: stock_on_hand
+        sql: "SUM(quantity_level)"
+      - name: inventory_cost
+        sql: "SUM(quantity_level * unit_cost)"
+
+  - name: fact_marketing
+    table: "project.dataset.fct_ad_spend"
+    joins:
+      - dim_geography: "fact_marketing.geo_id = dim_geography.location_id"
+    metrics:
+      - name: ad_spend
+        sql: "SUM(spend_amount)"
+      - name: impressions
+        sql: "SUM(total_impressions)"

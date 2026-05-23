@@ -1,0 +1,25 @@
+version: '3.8'
+
+services:
+  report_db:
+    build:
+      context: ./db
+      dockerfile: Dockerfile
+    image: report_template_db_image:latest
+    container_name: report_template_db
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: agentic_ai
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d agentic_ai"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:

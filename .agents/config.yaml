@@ -1,0 +1,37 @@
+skills:
+  enabled: true
+  auto_discover: true
+  path: .agents/skills
+
+default_skills:
+  - python-expert
+  - python-best-practices
+  - python-error-handling
+  - python-type-safety
+
+skill_settings:
+  python-expert:
+    priority: high
+
+  python-best-practices:
+    priority: high
+
+  python-error-handling:
+    priority: high
+
+  python-type-safety:
+    priority: high
+
+  python-testing-patterns:
+    priority: medium
+
+  fastapi-python:
+    priority: high
+
+  google-adk-python:
+    priority: medium
+
+context_paths:
+  - documentation/architecture.md 
+  - documentation/features.md
+  - documentation/implementation_plan.md

@@ -1,0 +1,55 @@
+# =============================================================================
+# Headless BI Reporting Platform - Git Ignore Configuration
+# =============================================================================
+
+# OS Files
+.DS_Store
+Thumbs.db
+
+# Environment Configs (Contains local credentials)
+.env
+.env*.local
+
+# IDE & Editor Settings
+.idea/
+*.iml
+.classpath
+.project
+.settings/
+*.launch
+*.sublime-workspace
+.vscode/
+.history/
+
+# Java Backend (Maven Output)
+/target/
+*.class
+*.jar
+*.war
+*.ear
+*.zip
+*.tar.gz
+dependency-reduced-pom.xml
+.mvn/timing.properties
+
+# Angular Frontend (Node & Angular Cache)
+/frontend/node_modules/
+/frontend/dist/
+/frontend/tmp/
+/frontend/out-tsc/
+/frontend/bazel-out/
+/frontend/.angular/
+/frontend/coverage/
+npm-debug.log
+yarn-error.log
+testem.log
+
+# Reporting Engine Outputs & Spreadsheet Cache
+/output/
+*.xlsx
+!hybrid_reporting_template.xlsx
+
+# Temporary & Log files
+*.log
+*.tmp
+*.bak

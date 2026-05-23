@@ -1,0 +1,553 @@
+# =============================================================================
+# SEMANTIC MODEL — Banking & Financial Data Warehouse
+# =============================================================================
+# Source schema: documentation/analytical_schema.md
+# Model type:   Star Schema (PostgreSQL dev / BigQuery prod)
+# Maintained:   Manually (future: ingest into sem_* PostgreSQL tables)
+# Version:      1.0.0
+# =============================================================================
+
+model:
+  name: banking_analytics
+  label: "Banking & Financial Analytics"
+  description: >
+    Unified semantic model over a star-schema banking data warehouse.
+    Covers Sales, Banking Transactions, Loans, Investments, and Department
+    Performance — all anchored to a shared reporting_date via dim_date.
+  version: 1
+
+
+# =============================================================================
+# CONFORMED DIMENSIONS
+# Shared context tables used across all fact tables.
+# =============================================================================
+dimensions:
+
+  - name: dim_date
+    label: "Date"
+    description: "Standard calendar dimension for time-series analysis (YTD, MTD, WTD)."
+    table: "dim_date"
+    primary_key: date_key
+    attributes:
+      - name: year
+        column: year
+        label: "Year"
+        data_type: integer
+      - name: quarter
+        column: quarter
+        label: "Quarter"
+        data_type: integer
+      - name: month
+        column: month
+        label: "Month Number"
+        data_type: integer
+      - name: month_name
+        column: month_name
+        label: "Month Name"
+        data_type: string
+      - name: week_of_year
+        column: week_of_year
+        label: "Week of Year"
+        data_type: integer
+      - name: day_of_week
+        column: day_of_week
+        label: "Day of Week"
+        data_type: integer
+      - name: is_weekend
+        column: is_weekend
+        label: "Is Weekend"
+        data_type: boolean
+
+  - name: dim_customers
+    label: "Customers"
+    description: "Profile and demographic data for all clients."
+    table: "dim_customers"
+    primary_key: id
+    attributes:
+      - name: customer_no
+        column: customer_no
+        label: "Customer Number"
+        data_type: integer
+      - name: national_id
+        column: national_id
+        label: "National ID"
+        data_type: string
+      - name: name
+        column: name
+        label: "Customer Name"
+        data_type: string
+      - name: email
+        column: email
+        label: "Email"
+        data_type: string
+      - name: signup_date
+        column: signup_date
+        label: "Signup Date"
+        data_type: date
+      - name: segment
+        column: segment
+        label: "Customer Segment"
+        data_type: string
+      - name: country_code
+        column: country_code
+        label: "Country Code"
+        data_type: string
+
+  - name: dim_products
+    label: "Products"
+    description: "Product catalog including hierarchies and pricing."
+    table: "dim_products"
+    primary_key: id
+    attributes:
+      - name: name
+        column: name
+        label: "Product Name"
+        data_type: string
+      - name: category
+        column: category
+        label: "Product Category"
+        data_type: string
+      - name: unit_price
+        column: unit_price
+        label: "Unit Price"
+        data_type: numeric
+
+  - name: dim_location
+    label: "Location"
+    description: "Standardized geographic dimension covering 36 strategic global markets."
+    table: "dim_location"
+    primary_key: id
+    attributes:
+      - name: country_name
+        column: country_name
+        label: "Country"
+        data_type: string
+      - name: region
+        column: region
+        label: "Region"
+        data_type: string   # Europe | America | Asia
+
+  - name: dim_countries
+    label: "Countries"
+    description: "Reference table for all global countries including ISO codes."
+    table: "dim_countries"
+    primary_key: id
+    attributes:
+      - name: country_name
+        column: country_name
+        label: "Country Name"
+        data_type: string
+      - name: iso_code
+        column: iso_code
+        label: "ISO Code"
+        data_type: string
+      - name: calling_code
+        column: calling_code
+        label: "Calling Code"
+        data_type: string
+
+  - name: dim_relationship_manager
+    label: "Relationship Manager"
+    description: "Attribution table for employees managing customer relationships."
+    table: "dim_relationship_manager"
+    primary_key: id
+    attributes:
+      - name: rm_code
+        column: rm_code
+        label: "RM Code"
+        data_type: string
+      - name: rm_name
+        column: rm_name
+        label: "RM Name"
+        data_type: string
+
+  - name: dim_investment_hierarchy
+    label: "Investment Hierarchy"
+    description: "Hierarchical categorization for investment products and strategies."
+    table: "dim_investment_hierarchy"
+    primary_key: id
+    attributes:
+      - name: asset_class
+        column: asset_class
+        label: "Asset Class"
+        data_type: string
+      - name: product_type
+        column: product_type
+        label: "Product Type"
+        data_type: string
+      - name: investment_strategy
+        column: investment_strategy
+        label: "Investment Strategy"
+        data_type: string
+
+  - name: dim_accounts
+    label: "Accounts"
+    description: "Analytical attributes for banking accounts."
+    table: "dim_accounts"
+    primary_key: id
+    attributes:
+      - name: customer_id
+        column: customer_id
+        label: "Customer ID"
+        data_type: integer
+      - name: account_type
+        column: account_type
+        label: "Account Type"
+        data_type: string
+      - name: open_date
+        column: open_date
+        label: "Open Date"
+        data_type: date
+      - name: status
+        column: status
+        label: "Account Status"
+        data_type: string
+
+
+# =============================================================================
+# FACT TABLES
+# Each fact is an explore entry-point. Every fact links to dim_date via
+# reporting_date, and to dim_location + dim_relationship_manager for
+# full cross-dimensional attribution.
+# =============================================================================
+facts:
+
+  # ---------------------------------------------------------------------------
+  # FACT: SALES
+  # Columns: sale_id, reporting_date, product_id, customer_id,
+  #          location_id, rm_id, quantity, amount
+  # ---------------------------------------------------------------------------
+  - name: fact_sales
+    label: "Sales"
+    description: "Sales transactions. Key metrics: revenue, quantity sold, average order value."
+    table: "fact_sales"
+    primary_key: sale_id
+    time_key: reporting_date               # always linked to dim_date.date_key
+    joins:
+      - dimension: dim_date
+        join_type: LEFT
+        condition: "fact_sales.reporting_date = dim_date.date_key"
+      - dimension: dim_products
+        join_type: LEFT
+        condition: "fact_sales.product_id = dim_products.id"
+      - dimension: dim_customers
+        join_type: LEFT
+        condition: "fact_sales.customer_id = dim_customers.id"
+      - dimension: dim_location
+        join_type: LEFT
+        condition: "fact_sales.location_id = dim_location.id"
+      - dimension: dim_relationship_manager
+        join_type: LEFT
+        condition: "fact_sales.rm_id = dim_relationship_manager.id"
+    metrics:
+      - name: total_revenue
+        label: "Total Revenue"
+        description: "Sum of all sales amounts."
+        sql: "SUM(fact_sales.amount)"
+        agg_type: SUM
+        data_type: currency
+
+      - name: total_quantity_sold
+        label: "Total Quantity Sold"
+        description: "Sum of all units sold."
+        sql: "SUM(fact_sales.quantity)"
+        agg_type: SUM
+        data_type: integer
+
+      - name: transaction_count
+        label: "Transaction Count"
+        description: "Number of distinct sales transactions."
+        sql: "COUNT(DISTINCT fact_sales.sale_id)"
+        agg_type: COUNT
+        data_type: integer
+
+      - name: avg_order_value
+        label: "Average Order Value"
+        description: "Average revenue per sales transaction."
+        sql: "AVG(fact_sales.amount)"
+        agg_type: AVG
+        data_type: currency
+
+      - name: avg_unit_price
+        label: "Average Unit Price"
+        description: "Average price per unit sold (revenue / quantity)."
+        sql: "CASE WHEN SUM(fact_sales.quantity) = 0 THEN NULL ELSE SUM(fact_sales.amount) / NULLIF(SUM(fact_sales.quantity), 0) END"
+        agg_type: FORMULA
+        data_type: currency
+
+
+  # ---------------------------------------------------------------------------
+  # FACT: BANKING TRANSACTIONS
+  # Columns: transaction_id, reporting_date, account_id, location_id,
+  #          rm_id, transaction_type, amount
+  # ---------------------------------------------------------------------------
+  - name: fact_banking_transactions
+    label: "Banking Transactions"
+    description: "All banking transactions. Key metrics: transaction volume, net flow, credits vs debits."
+    table: "fact_banking_transactions"
+    primary_key: transaction_id
+    time_key: reporting_date
+    joins:
+      - dimension: dim_date
+        join_type: LEFT
+        condition: "fact_banking_transactions.reporting_date = dim_date.date_key"
+      - dimension: dim_accounts
+        join_type: LEFT
+        condition: "fact_banking_transactions.account_id = dim_accounts.id"
+      - dimension: dim_location
+        join_type: LEFT
+        condition: "fact_banking_transactions.location_id = dim_location.id"
+      - dimension: dim_relationship_manager
+        join_type: LEFT
+        condition: "fact_banking_transactions.rm_id = dim_relationship_manager.id"
+    metrics:
+      - name: total_transaction_amount
+        label: "Total Transaction Amount"
+        description: "Sum of all transaction amounts regardless of type."
+        sql: "SUM(fact_banking_transactions.amount)"
+        agg_type: SUM
+        data_type: currency
+
+      - name: transaction_count
+        label: "Transaction Count"
+        description: "Number of distinct banking transactions."
+        sql: "COUNT(DISTINCT fact_banking_transactions.transaction_id)"
+        agg_type: COUNT
+        data_type: integer
+
+      - name: total_credits
+        label: "Total Credits"
+        description: "Sum of inbound/credit transactions."
+        sql: "SUM(CASE WHEN fact_banking_transactions.transaction_type = 'credit' THEN fact_banking_transactions.amount ELSE 0 END)"
+        agg_type: SUM
+        data_type: currency
+
+      - name: total_debits
+        label: "Total Debits"
+        description: "Sum of outbound/debit transactions."
+        sql: "SUM(CASE WHEN fact_banking_transactions.transaction_type = 'debit' THEN fact_banking_transactions.amount ELSE 0 END)"
+        agg_type: SUM
+        data_type: currency
+
+      - name: net_cash_flow
+        label: "Net Cash Flow"
+        description: "Credits minus debits."
+        sql: "SUM(CASE WHEN fact_banking_transactions.transaction_type = 'credit' THEN fact_banking_transactions.amount ELSE -fact_banking_transactions.amount END)"
+        agg_type: SUM
+        data_type: currency
+
+      - name: avg_transaction_amount
+        label: "Average Transaction Amount"
+        description: "Average value per banking transaction."
+        sql: "AVG(fact_banking_transactions.amount)"
+        agg_type: AVG
+        data_type: currency
+
+
+  # ---------------------------------------------------------------------------
+  # FACT: LOANS
+  # Columns: loan_id, customer_id, reporting_date, location_id,
+  #          rm_id, loan_type, principal_amount, interest_rate
+  # ---------------------------------------------------------------------------
+  - name: fact_loans
+    label: "Loans"
+    description: "Loan portfolio data. Key metrics: outstanding principal, interest income, loan count."
+    table: "fact_loans"
+    primary_key: loan_id
+    time_key: reporting_date
+    joins:
+      - dimension: dim_date
+        join_type: LEFT
+        condition: "fact_loans.reporting_date = dim_date.date_key"
+      - dimension: dim_customers
+        join_type: LEFT
+        condition: "fact_loans.customer_id = dim_customers.id"
+      - dimension: dim_location
+        join_type: LEFT
+        condition: "fact_loans.location_id = dim_location.id"
+      - dimension: dim_relationship_manager
+        join_type: LEFT
+        condition: "fact_loans.rm_id = dim_relationship_manager.id"
+    metrics:
+      - name: total_principal
+        label: "Total Principal Amount"
+        description: "Sum of all outstanding loan principal amounts."
+        sql: "SUM(fact_loans.principal_amount)"
+        agg_type: SUM
+        data_type: currency
+
+      - name: loan_count
+        label: "Loan Count"
+        description: "Number of distinct loans."
+        sql: "COUNT(DISTINCT fact_loans.loan_id)"
+        agg_type: COUNT
+        data_type: integer
+
+      - name: avg_interest_rate
+        label: "Average Interest Rate"
+        description: "Weighted average interest rate across the loan portfolio."
+        sql: "AVG(fact_loans.interest_rate)"
+        agg_type: AVG
+        data_type: percent
+
+      - name: avg_loan_size
+        label: "Average Loan Size"
+        description: "Average principal amount per loan."
+        sql: "AVG(fact_loans.principal_amount)"
+        agg_type: AVG
+        data_type: currency
+
+      - name: estimated_interest_income
+        label: "Estimated Interest Income"
+        description: "Approximate interest income: principal × interest_rate."
+        sql: "SUM(fact_loans.principal_amount * fact_loans.interest_rate)"
+        agg_type: SUM
+        data_type: currency
+
+
+  # ---------------------------------------------------------------------------
+  # FACT: INVESTMENTS
+  # Columns: investment_id, customer_id, reporting_date, hier_id,
+  #          location_id, rm_id, ticker_symbol, quantity, current_value
+  # ---------------------------------------------------------------------------
+  - name: fact_investments
+    label: "Investments"
+    description: "Investment portfolio holdings. Key metrics: AUM, portfolio count, average position value."
+    table: "fact_investments"
+    primary_key: investment_id
+    time_key: reporting_date
+    joins:
+      - dimension: dim_date
+        join_type: LEFT
+        condition: "fact_investments.reporting_date = dim_date.date_key"
+      - dimension: dim_customers
+        join_type: LEFT
+        condition: "fact_investments.customer_id = dim_customers.id"
+      - dimension: dim_investment_hierarchy
+        join_type: LEFT
+        condition: "fact_investments.hier_id = dim_investment_hierarchy.id"
+      - dimension: dim_location
+        join_type: LEFT
+        condition: "fact_investments.location_id = dim_location.id"
+      - dimension: dim_relationship_manager
+        join_type: LEFT
+        condition: "fact_investments.rm_id = dim_relationship_manager.id"
+    metrics:
+      - name: total_aum
+        label: "Total AUM"
+        description: "Assets Under Management: sum of current market value of all holdings."
+        sql: "SUM(fact_investments.current_value)"
+        agg_type: SUM
+        data_type: currency
+
+      - name: total_quantity
+        label: "Total Quantity"
+        description: "Total number of investment units/shares held."
+        sql: "SUM(fact_investments.quantity)"
+        agg_type: SUM
+        data_type: numeric
+
+      - name: investment_count
+        label: "Investment Count"
+        description: "Number of distinct investment positions."
+        sql: "COUNT(DISTINCT fact_investments.investment_id)"
+        agg_type: COUNT
+        data_type: integer
+
+      - name: avg_position_value
+        label: "Average Position Value"
+        description: "Average current value per investment position."
+        sql: "AVG(fact_investments.current_value)"
+        agg_type: AVG
+        data_type: currency
+
+      - name: unique_tickers
+        label: "Unique Tickers"
+        description: "Number of distinct securities held."
+        sql: "COUNT(DISTINCT fact_investments.ticker_symbol)"
+        agg_type: COUNT
+        data_type: integer
+
+
+  # ---------------------------------------------------------------------------
+  # FACT: DEPARTMENT PERFORMANCE
+  # Columns: id, reporting_date, location_id, rm_id, department, cost, budget
+  # Note: table name in DB is 'fact_department_performance' per analytical_schema.md
+  # ---------------------------------------------------------------------------
+  - name: fact_department_performance
+    label: "Department Performance"
+    description: "Department-level cost vs budget tracking. Key metrics: actual cost, budget, variance."
+    table: "fact_department_performance"
+    primary_key: id
+    time_key: reporting_date
+    joins:
+      - dimension: dim_date
+        join_type: LEFT
+        condition: "fact_department_performance.reporting_date = dim_date.date_key"
+      - dimension: dim_location
+        join_type: LEFT
+        condition: "fact_department_performance.location_id = dim_location.id"
+      - dimension: dim_relationship_manager
+        join_type: LEFT
+        condition: "fact_department_performance.rm_id = dim_relationship_manager.id"
+    metrics:
+      - name: total_cost
+        label: "Total Cost"
+        description: "Sum of all department costs."
+        sql: "SUM(fact_department_performance.cost)"
+        agg_type: SUM
+        data_type: currency
+
+      - name: total_budget
+        label: "Total Budget"
+        description: "Sum of all department budgets."
+        sql: "SUM(fact_department_performance.budget)"
+        agg_type: SUM
+        data_type: currency
+
+      - name: budget_variance
+        label: "Budget Variance"
+        description: "Budget minus actual cost (positive = under budget)."
+        sql: "SUM(fact_department_performance.budget - fact_department_performance.cost)"
+        agg_type: SUM
+        data_type: currency
+
+      - name: budget_utilization_rate
+        label: "Budget Utilization Rate"
+        description: "Actual cost as a percentage of budget."
+        sql: "CASE WHEN SUM(fact_department_performance.budget) = 0 THEN NULL ELSE SUM(fact_department_performance.cost) / NULLIF(SUM(fact_department_performance.budget), 0) END"
+        agg_type: FORMULA
+        data_type: percent
+
+      - name: department_count
+        label: "Department Count"
+        description: "Number of distinct departments reported."
+        sql: "COUNT(DISTINCT fact_department_performance.department)"
+        agg_type: COUNT
+        data_type: integer
+
+
+# =============================================================================
+# DERIVED METRICS
+# Cross-fact or cross-measure calculations.
+# These are evaluated in the post-processor after SQL execution.
+# =============================================================================
+derived_metrics:
+
+  - name: revenue_per_transaction
+    label: "Revenue per Transaction"
+    description: "Average revenue generated per banking transaction."
+    formula: "total_revenue / transaction_count"
+    depends_on: [total_revenue, transaction_count]
+
+  - name: loan_to_aum_ratio
+    label: "Loan to AUM Ratio"
+    description: "Total loan principal relative to total assets under management."
+    formula: "total_principal / total_aum"
+    depends_on: [total_principal, total_aum]
+
+  - name: cost_income_ratio
+    label: "Cost-Income Ratio"
+    description: "Total department cost relative to total revenue (efficiency metric)."
+    formula: "total_cost / total_revenue"
+    depends_on: [total_cost, total_revenue]
