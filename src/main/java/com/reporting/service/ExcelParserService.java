@@ -150,16 +150,22 @@ public class ExcelParserService {
                 // Delete old config to ensure clean import
                 deleteReportConfigCascade(reportId);
 
-                // Insert Report
-                Report r = Report.builder()
-                    .reportId(reportId)
-                    .name("Report - " + reportId)
-                    .status("draft")
-                    .version(1)
-                    .createdAt(LocalDateTime.now())
-                    .updatedAt(LocalDateTime.now())
-                    .build();
-                reportRepository.save(r);
+                // Insert or Update Report (preserves PK identity context in JPA transaction)
+                Report r = reportRepository.findById(reportId).orElse(null);
+                if (r == null) {
+                    r = Report.builder()
+                        .reportId(reportId)
+                        .name(convertToTitle(reportId))
+                        .status("draft")
+                        .version(1)
+                        .createdAt(LocalDateTime.now())
+                        .updatedAt(LocalDateTime.now())
+                        .build();
+                } else {
+                    r.setName(convertToTitle(reportId));
+                    r.setUpdatedAt(LocalDateTime.now());
+                }
+                r = reportRepository.save(r);
 
                 // Insert Columns
                 for (ParsedColumn pc : parsedCols) {
@@ -248,12 +254,11 @@ public class ExcelParserService {
     }
 
     private void deleteReportConfigCascade(String reportId) {
-        rowColumnMapRepository.deleteByReportId(reportId);
-        rowFormulaRepository.deleteByReportId(reportId);
-        rowMetricRepository.deleteByReportId(reportId);
-        reportRowRepository.deleteByReportId(reportId);
-        columnDefRepository.deleteByReportReportId(reportId);
-        reportRepository.deleteById(reportId);
+        jdbcTemplate.update("DELETE FROM reporting.rpt_row_column_map WHERE report_id = ?", reportId);
+        jdbcTemplate.update("DELETE FROM reporting.rpt_row_formula WHERE report_id = ?", reportId);
+        jdbcTemplate.update("DELETE FROM reporting.rpt_row_metric WHERE report_id = ?", reportId);
+        jdbcTemplate.update("DELETE FROM reporting.rpt_row WHERE report_id = ?", reportId);
+        jdbcTemplate.update("DELETE FROM reporting.rpt_column_def WHERE report_id = ?", reportId);
     }
 
     private Map<String, Integer> getHeaderMap(Row row) {
@@ -313,6 +318,29 @@ public class ExcelParserService {
             }
         }
         return defaultValue;
+    }
+
+    private String convertToTitle(String reportId) {
+        if (reportId == null || reportId.isBlank()) {
+            return "";
+        }
+        if (reportId.equalsIgnoreCase("RPT_001")) {
+            return "Sales Weekly Report";
+        }
+        String[] words = reportId.split("_");
+        StringBuilder title = new StringBuilder();
+        for (String word : words) {
+            if (word.isBlank()) continue;
+            String lower = word.toLowerCase();
+            if (lower.equals("kpi") || lower.equals("aum")) {
+                title.append(word.toUpperCase()).append(" ");
+            } else {
+                title.append(Character.toUpperCase(word.charAt(0)))
+                     .append(lower.substring(1))
+                     .append(" ");
+            }
+        }
+        return title.toString().trim();
     }
 
     @lombok.Value

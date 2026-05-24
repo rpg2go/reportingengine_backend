@@ -15,7 +15,7 @@ import { AuthService } from '../services/auth.service';
       <aside class="sidebar">
         <div class="sidebar-brand">
           <span class="brand-icon">📊</span>
-          <span class="brand-text">Headless BI</span>
+          <span class="brand-text">Reporting Engine</span>
         </div>
 
         <nav class="sidebar-menu">
@@ -63,6 +63,12 @@ import { AuthService } from '../services/auth.service';
                   class="date-input"
                 />
               </div>
+              <button 
+                [routerLink]="['/reports', reportId, 'edit']"
+                class="edit-btn-link"
+              >
+                <span>✏️ Edit Definition</span>
+              </button>
               <button 
                 (click)="runReport()" 
                 [disabled]="running()" 
@@ -386,6 +392,27 @@ import { AuthService } from '../services/auth.service';
 
     .date-input:focus {
       border-color: #6366f1;
+    }
+
+    .edit-btn-link {
+      padding: 12px 24px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 10px;
+      color: white;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      transition: all 0.2s ease;
+      align-self: flex-end;
+      text-decoration: none;
+    }
+
+    .edit-btn-link:hover {
+      background: rgba(255, 255, 255, 0.1);
+      border-color: rgba(99, 102, 241, 0.4);
     }
 
     .run-btn {

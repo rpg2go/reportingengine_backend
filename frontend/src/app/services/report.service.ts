@@ -7,7 +7,7 @@ import { AuthService } from './auth.service';
   providedIn: 'root'
 })
 export class ReportService {
-  private apiUrl = 'http://localhost:8101/api/reports';
+  private apiUrl = 'http://127.0.0.1:8101/api/reports';
 
   constructor(private http: HttpClient, private authService: AuthService) {}
 
@@ -41,6 +41,36 @@ export class ReportService {
 
   getSemanticModel(): Observable<any> {
     return this.http.get<any>(`${this.apiUrl}/semantic-model`, {
+      headers: this.authService.getAuthHeader()
+    });
+  }
+
+  saveReport(id: string, config: any): Observable<any> {
+    return this.http.put(`${this.apiUrl}/${id}`, config, {
+      headers: this.authService.getAuthHeader()
+    });
+  }
+
+  createReport(config: any): Observable<any> {
+    return this.http.post(this.apiUrl, config, {
+      headers: this.authService.getAuthHeader()
+    });
+  }
+
+  getTables(): Observable<string[]> {
+    return this.http.get<string[]>(`${this.apiUrl}/tables`, {
+      headers: this.authService.getAuthHeader()
+    });
+  }
+
+  getTableColumns(table: string): Observable<string[]> {
+    return this.http.get<string[]>(`${this.apiUrl}/table-columns?table=${table}`, {
+      headers: this.authService.getAuthHeader()
+    });
+  }
+
+  getDistinctValues(table: string, column: string): Observable<string[]> {
+    return this.http.get<string[]>(`${this.apiUrl}/dimensions/values?table=${table}&column=${column}`, {
       headers: this.authService.getAuthHeader()
     });
   }

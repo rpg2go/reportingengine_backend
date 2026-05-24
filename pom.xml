@@ -15,7 +15,7 @@
     <artifactId>report-template-engine</artifactId>
     <version>1.0.0</version>
     <name>report-template-engine</name>
-    <description>Headless BI Reporting Engine in Spring Boot</description>
+    <description>Reporting Engine in Spring Boot</description>
 
     <properties>
         <java.version>17</java.version>

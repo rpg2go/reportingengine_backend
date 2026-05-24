@@ -125,4 +125,78 @@ public class ReportController {
         
         return ResponseEntity.ok(model);
     }
+
+    @PutMapping("/{id}")
+    public ResponseEntity<?> saveReport(
+            @PathVariable("id") String id,
+            @RequestBody ReportConfigDto configDto) {
+        configDto.setReportId(id);
+        try {
+            configService.saveToDb(configDto);
+            return ResponseEntity.ok(Map.of("message", "Report saved successfully"));
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body(Map.of("message", "Failed to save report: " + e.getMessage()));
+        }
+    }
+
+    @PostMapping
+    public ResponseEntity<?> createReport(@RequestBody ReportConfigDto configDto) {
+        if (configDto.getReportId() == null || configDto.getReportId().isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("message", "Report ID is required"));
+        }
+        try {
+            configService.saveToDb(configDto);
+            return ResponseEntity.ok(Map.of("message", "Report created successfully"));
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body(Map.of("message", "Failed to create report: " + e.getMessage()));
+        }
+    }
+
+    @GetMapping("/tables")
+    public ResponseEntity<List<String>> listTables() {
+        String sql = "SELECT n.nspname || '.' || c.relname as full_name " +
+                     "FROM pg_catalog.pg_class c " +
+                     "JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace " +
+                     "WHERE n.nspname = 'analytics' AND c.relkind = 'r' " +
+                     "ORDER BY c.relname";
+        List<String> tables = jdbcTemplate.getJdbcOperations().queryForList(sql, String.class);
+        return ResponseEntity.ok(tables);
+    }
+
+    @GetMapping("/table-columns")
+    public ResponseEntity<List<String>> listTableColumns(@RequestParam("table") String table) {
+        if (!table.contains(".")) {
+            return ResponseEntity.badRequest().build();
+        }
+        String[] parts = table.split("\\.");
+        String schema = parts[0];
+        String tableName = parts[1];
+        
+        String sql = "SELECT a.attname AS column_name " +
+                     "FROM pg_catalog.pg_attribute a " +
+                     "JOIN pg_catalog.pg_class c ON c.oid = a.attrelid " +
+                     "JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace " +
+                     "WHERE n.nspname = ? AND c.relname = ? " +
+                     "  AND a.attnum > 0 AND NOT a.attisdropped " +
+                     "ORDER BY a.attname";
+        List<String> columns = jdbcTemplate.getJdbcOperations().queryForList(sql, String.class, schema, tableName);
+        return ResponseEntity.ok(columns);
+    }
+
+    @GetMapping("/dimensions/values")
+    public ResponseEntity<List<String>> getDimensionValues(
+            @RequestParam("table") String table,
+            @RequestParam("column") String column) {
+        if (!table.startsWith("analytics.") || !column.matches("^[a-zA-Z0-9_]+$")) {
+            return ResponseEntity.badRequest().build();
+        }
+        String sql = String.format("SELECT DISTINCT %s FROM %s WHERE %s IS NOT NULL ORDER BY %s LIMIT 100", 
+            column, table, column, column);
+        
+        List<String> values = jdbcTemplate.getJdbcOperations().query(sql, (rs, rowNum) -> {
+            Object val = rs.getObject(1);
+            return val != null ? val.toString() : "";
+        });
+        return ResponseEntity.ok(values);
+    }
 }

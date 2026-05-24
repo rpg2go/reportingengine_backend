@@ -1,20 +1,21 @@
 import { Component, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router, RouterModule } from '@angular/router';
+import { FormsModule } from '@angular/forms';
 import { ReportService } from '../services/report.service';
 import { AuthService } from '../services/auth.service';
 
 @Component({
   selector: 'app-semantic',
   standalone: true,
-  imports: [CommonModule, RouterModule],
+  imports: [CommonModule, RouterModule, FormsModule],
   template: `
     <div class="dashboard-container">
       <!-- Sidebar / Header -->
       <aside class="sidebar">
         <div class="sidebar-brand">
           <span class="brand-icon">📊</span>
-          <span class="brand-text">Headless BI</span>
+          <span class="brand-text">Reporting Engine</span>
         </div>
 
         <nav class="sidebar-menu">
@@ -76,17 +77,57 @@ import { AuthService } from '../services/auth.service';
           <div class="tab-content animate-fade-in">
             <!-- Explores Tab -->
             @if (activeTab() === 'explores') {
+              <!-- Search & Quick Filters for Explores -->
+              <div class="search-filter-bar mb-6 animate-fade-in">
+                <div class="search-input-wrapper">
+                  <span class="search-icon">🔍</span>
+                  <input 
+                    type="text" 
+                    [(ngModel)]="exploreSearchQuery" 
+                    placeholder="Search explores by name or fact view..." 
+                    class="search-input"
+                  />
+                  @if (exploreSearchQuery()) {
+                    <button (click)="exploreSearchQuery.set('')" class="clear-search-btn">✕</button>
+                  }
+                </div>
+                
+                <div class="filter-chips">
+                  <button 
+                    class="filter-chip-btn" 
+                    [class.active]="exploreFilterType() === 'all'" 
+                    (click)="exploreFilterType.set('all')"
+                  >
+                    All Explores ({{ modelData().explores.length }})
+                  </button>
+                  <button 
+                    class="filter-chip-btn" 
+                    [class.active]="exploreFilterType() === 'joins'" 
+                    (click)="exploreFilterType.set('joins')"
+                  >
+                    🔗 With Joins ({{ getExploresWithJoinsCount() }})
+                  </button>
+                  <button 
+                    class="filter-chip-btn" 
+                    [class.active]="exploreFilterType() === 'direct'" 
+                    (click)="exploreFilterType.set('direct')"
+                  >
+                    🎯 Direct Fact Only ({{ getExploresDirectCount() }})
+                  </button>
+                </div>
+              </div>
+
               <div class="explores-list">
-                @for (explore of modelData().explores; track explore.explore_id) {
-                  <div class="glass-card mb-6">
+                @for (explore of filteredExplores; track explore.explore_id) {
+                  <div class="glass-card mb-6 card-hover">
                     <div class="card-title-bar">
                       <div class="flex-column">
-                        <span class="badge">Explore</span>
+                        <span class="badge explore-badge">Explore</span>
                         <h3>{{ explore.name }}</h3>
                       </div>
                       <div class="text-right">
                         <span class="subtext">Fact View:</span>
-                        <code class="code-highlight">{{ explore.fact_view_name }}</code>
+                        <code class="code-highlight fact-view-code">{{ explore.fact_view_name }}</code>
                       </div>
                     </div>
                     
@@ -97,31 +138,47 @@ import { AuthService } from '../services/auth.service';
                       </div>
                     }
 
-                    <h4 class="section-title mt-4">🔗 Join Relationships</h4>
-                    @if (getJoinsForExplore(explore.name).length === 0) {
-                      <p class="no-data-msg">No dimensions joined to this explore. It queries the fact view directly.</p>
-                    } @else {
-                      <div class="table-wrapper mt-2">
-                        <table class="grid-table">
-                          <thead>
-                            <tr>
-                              <th>Type</th>
-                              <th>Dimension View</th>
-                              <th>Join Condition (ON)</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            @for (join of getJoinsForExplore(explore.name); track join.join_id) {
-                              <tr>
-                                <td class="bold-text"><span class="join-type-badge">{{ join.join_type }}</span></td>
-                                <td><code class="code-highlight">{{ join.to_view }}</code></td>
-                                <td class="sql-cell"><code>{{ join.join_sql }}</code></td>
-                              </tr>
-                            }
-                          </tbody>
-                        </table>
+                    <div class="joins-section mt-4">
+                      <div class="joins-header flex-header">
+                        <h4 class="section-title">🔗 Join Relationships</h4>
+                        <span class="joins-count-badge">
+                          {{ getJoinsForExplore(explore.name).length }} {{ getJoinsForExplore(explore.name).length === 1 ? 'Join' : 'Joins' }}
+                        </span>
                       </div>
-                    }
+                      @if (getJoinsForExplore(explore.name).length === 0) {
+                        <p class="no-data-msg">No dimensions joined to this explore. It queries the fact view directly.</p>
+                      } @else {
+                        <div class="table-wrapper mt-2">
+                          <table class="grid-table">
+                            <thead>
+                              <tr>
+                                <th>Type</th>
+                                <th>Dimension View</th>
+                                <th>Join Condition (ON)</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              @for (join of getJoinsForExplore(explore.name); track join.join_id) {
+                                <tr>
+                                  <td class="bold-text"><span class="join-type-badge">{{ join.join_type }}</span></td>
+                                  <td><code class="code-highlight dim-view-code">{{ join.to_view }}</code></td>
+                                  <td class="sql-cell"><code>{{ join.join_sql }}</code></td>
+                                </tr>
+                              }
+                            </tbody>
+                          </table>
+                        </div>
+                      }
+                    </div>
+                  </div>
+                }
+                
+                @if (filteredExplores.length === 0) {
+                  <div class="empty-state animate-fade-in">
+                    <span class="empty-icon">🔍</span>
+                    <h4>No Explores Found</h4>
+                    <p>We couldn't find any explores matching your search terms or filters.</p>
+                    <button (click)="clearExploreFilters()" class="clear-filters-btn">Reset Filters</button>
                   </div>
                 }
               </div>
@@ -129,9 +186,49 @@ import { AuthService } from '../services/auth.service';
 
             <!-- Views Tab -->
             @if (activeTab() === 'views') {
+              <!-- Search & Quick Filters for Views -->
+              <div class="search-filter-bar mb-6 animate-fade-in">
+                <div class="search-input-wrapper">
+                  <span class="search-icon">🔍</span>
+                  <input 
+                    type="text" 
+                    [(ngModel)]="viewSearchQuery" 
+                    placeholder="Search views by name, table, description..." 
+                    class="search-input"
+                  />
+                  @if (viewSearchQuery()) {
+                    <button (click)="viewSearchQuery.set('')" class="clear-search-btn">✕</button>
+                  }
+                </div>
+                
+                <div class="filter-chips">
+                  <button 
+                    class="filter-chip-btn" 
+                    [class.active]="viewFilterType() === 'all'" 
+                    (click)="viewFilterType.set('all')"
+                  >
+                    All Views ({{ modelData().views.length }})
+                  </button>
+                  <button 
+                    class="filter-chip-btn" 
+                    [class.active]="viewFilterType() === 'fact'" 
+                    (click)="viewFilterType.set('fact')"
+                  >
+                    📊 Fact Views ({{ getViewsCountByType('fact') }})
+                  </button>
+                  <button 
+                    class="filter-chip-btn" 
+                    [class.active]="viewFilterType() === 'dimension'" 
+                    (click)="viewFilterType.set('dimension')"
+                  >
+                    📐 Dimension Views ({{ getViewsCountByType('dimension') }})
+                  </button>
+                </div>
+              </div>
+
               <div class="views-list">
-                @for (view of modelData().views; track view.view_id) {
-                  <div class="glass-card mb-6">
+                @for (view of filteredViews; track view.view_id) {
+                  <div class="glass-card mb-6 card-hover">
                     <div class="card-title-bar">
                       <div class="flex-column">
                         <span class="badge" [class.badge-fact]="view.view_type === 'fact'">
@@ -141,7 +238,7 @@ import { AuthService } from '../services/auth.service';
                       </div>
                       <div class="text-right">
                         <span class="subtext">Physical Table:</span>
-                        <code class="code-highlight">{{ view.table_ref }}</code>
+                        <code class="code-highlight table-code">{{ view.table_ref }}</code>
                       </div>
                     </div>
 
@@ -154,20 +251,22 @@ import { AuthService } from '../services/auth.service';
                       @if (view.time_key) {
                         <span class="key-pill">📅 Time Key: <code>{{ view.time_key }}</code></span>
                       }
+                      <span class="stat-pill">📐 {{ getDimensionsForView(view.name).length }} Dimensions</span>
+                      <span class="stat-pill measure">📊 {{ getMeasuresForView(view.name).length }} Measures</span>
                     </div>
 
-                    <!-- Tabs inside View: Dimensions & Measures -->
+                    <!-- Bento-like columns for Dimensions and Measures -->
                     <div class="inner-tabs">
                       <div class="inner-grid">
                         <!-- Dimensions Column -->
-                        <div class="column-section">
-                          <h4 class="section-title">📐 Dimensions</h4>
+                        <div class="column-section dimensions-column">
+                          <h4 class="section-title text-dim">📐 Dimensions</h4>
                           @if (getDimensionsForView(view.name).length === 0) {
                             <p class="no-data-msg">No dimensions defined for this view.</p>
                           } @else {
                             <div class="list-wrapper">
                               @for (dim of getDimensionsForView(view.name); track dim.dimension_id) {
-                                <div class="list-item">
+                                <div class="list-item dim-item">
                                   <div class="item-header">
                                     <span class="item-name">{{ dim.name }}</span>
                                     <span class="item-type-badge">{{ dim.data_type }}</span>
@@ -185,14 +284,14 @@ import { AuthService } from '../services/auth.service';
                         </div>
 
                         <!-- Measures Column -->
-                        <div class="column-section">
-                          <h4 class="section-title">📊 Measures</h4>
+                        <div class="column-section measures-column">
+                          <h4 class="section-title text-measure">📊 Measures</h4>
                           @if (getMeasuresForView(view.name).length === 0) {
                             <p class="no-data-msg">No measures defined for this view.</p>
                           } @else {
                             <div class="list-wrapper">
                               @for (meas of getMeasuresForView(view.name); track meas.measure_id) {
-                                <div class="list-item">
+                                <div class="list-item meas-item">
                                   <div class="item-header">
                                     <span class="item-name">{{ meas.name }}</span>
                                     <span class="item-type-badge measure">{{ meas.data_type || 'numeric' }}</span>
@@ -213,6 +312,15 @@ import { AuthService } from '../services/auth.service';
                         </div>
                       </div>
                     </div>
+                  </div>
+                }
+                
+                @if (filteredViews.length === 0) {
+                  <div class="empty-state animate-fade-in">
+                    <span class="empty-icon">🔍</span>
+                    <h4>No Views Found</h4>
+                    <p>We couldn't find any views matching your search terms or filters.</p>
+                    <button (click)="clearViewFilters()" class="clear-filters-btn">Reset Filters</button>
                   </div>
                 }
               </div>
@@ -495,6 +603,7 @@ import { AuthService } from '../services/auth.service';
     /* Keys section */
     .view-keys {
       display: flex;
+      flex-wrap: wrap;
       gap: 12px;
     }
 
@@ -747,6 +856,248 @@ import { AuthService } from '../services/auth.service';
     .animate-fade-in {
       animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
     }
+
+    /* PREMIUM UX ADDITIONS */
+    .search-filter-bar {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      padding: 18px 24px;
+      background: rgba(30, 41, 59, 0.3);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      border-radius: 16px;
+      backdrop-filter: blur(8px);
+    }
+
+    .search-input-wrapper {
+      position: relative;
+      width: 480px;
+      max-width: 100%;
+    }
+
+    .search-icon {
+      position: absolute;
+      left: 14px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: #64748b;
+      font-size: 16px;
+      pointer-events: none;
+    }
+
+    .search-input {
+      width: 100%;
+      padding: 10px 40px 10px 42px;
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 10px;
+      color: #f8fafc;
+      font-size: 14px;
+      outline: none;
+      transition: all 0.2s ease;
+      font-family: inherit;
+    }
+
+    .search-input:focus {
+      border-color: #6366f1;
+      box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.15);
+      background: rgba(15, 23, 42, 0.8);
+    }
+
+    .clear-search-btn {
+      position: absolute;
+      right: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: none;
+      border: none;
+      color: #64748b;
+      cursor: pointer;
+      font-size: 12px;
+      padding: 4px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s ease;
+    }
+
+    .clear-search-btn:hover {
+      color: #f8fafc;
+      background: rgba(255, 255, 255, 0.1);
+    }
+
+    .filter-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .filter-chip-btn {
+      padding: 8px 16px;
+      background: rgba(15, 23, 42, 0.4);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 500;
+      color: #cbd5e1;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .filter-chip-btn:hover {
+      background: rgba(255, 255, 255, 0.05);
+      color: #f8fafc;
+      border-color: rgba(255, 255, 255, 0.15);
+    }
+
+    .filter-chip-btn.active {
+      background: rgba(99, 102, 241, 0.15);
+      color: #a5b4fc;
+      border-color: rgba(99, 102, 241, 0.4);
+      box-shadow: 0 0 12px rgba(99, 102, 241, 0.1);
+    }
+
+    /* Cards Hover and Glow */
+    .card-hover {
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .card-hover:hover {
+      transform: translateY(-3px);
+      border-color: rgba(99, 102, 241, 0.25);
+      box-shadow: 0 12px 30px rgba(15, 23, 42, 0.6), 0 0 20px rgba(99, 102, 241, 0.08);
+      background: rgba(30, 41, 59, 0.55);
+    }
+
+    /* Stat Pills */
+    .stat-pill {
+      font-size: 12px;
+      background: rgba(14, 165, 233, 0.1);
+      padding: 6px 12px;
+      border-radius: 10px;
+      border: 1px solid rgba(14, 165, 233, 0.2);
+      color: #38bdf8;
+      font-weight: 500;
+    }
+
+    .stat-pill.measure {
+      background: rgba(34, 197, 94, 0.1);
+      border-color: rgba(34, 197, 94, 0.2);
+      color: #4ade80;
+    }
+
+    /* Empty state */
+    .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 60px 40px;
+      text-align: center;
+      background: rgba(30, 41, 59, 0.25);
+      border: 1px dashed rgba(255, 255, 255, 0.08);
+      border-radius: 20px;
+      gap: 12px;
+      width: 100%;
+    }
+
+    .empty-icon {
+      font-size: 32px;
+      color: #64748b;
+    }
+
+    .empty-state h4 {
+      font-size: 18px;
+      font-weight: 600;
+      margin: 0;
+      color: #f8fafc;
+    }
+
+    .empty-state p {
+      font-size: 14px;
+      color: #94a3b8;
+      margin: 0 0 8px 0;
+      max-width: 320px;
+    }
+
+    .clear-filters-btn {
+      padding: 8px 18px;
+      background: rgba(99, 102, 241, 0.15);
+      border: 1px solid rgba(99, 102, 241, 0.3);
+      border-radius: 8px;
+      color: #a5b4fc;
+      font-weight: 600;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .clear-filters-btn:hover {
+      background: rgba(99, 102, 241, 0.25);
+      color: white;
+    }
+
+    /* Section count badge */
+    .joins-count-badge {
+      font-size: 11px;
+      font-weight: 600;
+      background: rgba(255, 255, 255, 0.05);
+      padding: 4px 8px;
+      border-radius: 6px;
+      color: #cbd5e1;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    @media (max-width: 1024px) {
+      .inner-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .column-section.dimensions-column {
+      border-left: 2px solid rgba(14, 165, 233, 0.3);
+    }
+
+    .column-section.measures-column {
+      border-left: 2px solid rgba(34, 197, 94, 0.3);
+    }
+
+    .text-dim {
+      color: #38bdf8 !important;
+    }
+
+    .text-measure {
+      color: #4ade80 !important;
+    }
+
+    .dim-item {
+      border-left: 2px solid rgba(14, 165, 233, 0.5) !important;
+    }
+
+    .meas-item {
+      border-left: 2px solid rgba(34, 197, 94, 0.5) !important;
+    }
+
+    .explore-badge {
+      background: rgba(99, 102, 241, 0.15) !important;
+      color: #c7d2fe !important;
+      border-color: rgba(99, 102, 241, 0.25) !important;
+    }
+
+    .fact-view-code {
+      color: #f472b6 !important;
+    }
+
+    .dim-view-code {
+      color: #38bdf8 !important;
+    }
+
+    .table-code {
+      color: #a7f3d0 !important;
+    }
   `]
 })
 export class SemanticViewerComponent implements OnInit {
@@ -754,6 +1105,13 @@ export class SemanticViewerComponent implements OnInit {
   loading = signal(true);
   activeTab = signal<string>('explores');
   username = '';
+
+  // Search & Filter state
+  exploreSearchQuery = signal('');
+  exploreFilterType = signal('all'); // 'all', 'joins', 'direct'
+
+  viewSearchQuery = signal('');
+  viewFilterType = signal('all'); // 'all', 'fact', 'dimension'
 
   constructor(
     private reportService: ReportService,
@@ -779,6 +1137,71 @@ export class SemanticViewerComponent implements OnInit {
         console.error('Failed to load semantic model metadata', err);
       }
     });
+  }
+
+  // Filter calculations & getters
+  get filteredExplores(): any[] {
+    const query = this.exploreSearchQuery().toLowerCase().trim();
+    const filter = this.exploreFilterType();
+    
+    return this.modelData().explores.filter((explore: any) => {
+      const matchesQuery = !query || 
+        explore.name.toLowerCase().includes(query) || 
+        (explore.fact_view_name && explore.fact_view_name.toLowerCase().includes(query));
+      
+      if (!matchesQuery) return false;
+      
+      const joinCount = this.getJoinsForExplore(explore.name).length;
+      if (filter === 'joins') {
+        return joinCount > 0;
+      } else if (filter === 'direct') {
+        return joinCount === 0;
+      }
+      return true;
+    });
+  }
+
+  get filteredViews(): any[] {
+    const query = this.viewSearchQuery().toLowerCase().trim();
+    const filter = this.viewFilterType();
+    
+    return this.modelData().views.filter((view: any) => {
+      const matchesQuery = !query || 
+        view.name.toLowerCase().includes(query) || 
+        (view.table_ref && view.table_ref.toLowerCase().includes(query)) ||
+        (view.description && view.description.toLowerCase().includes(query));
+        
+      if (!matchesQuery) return false;
+      
+      if (filter === 'fact') {
+        return view.view_type === 'fact';
+      } else if (filter === 'dimension') {
+        return view.view_type === 'dimension';
+      }
+      return true;
+    });
+  }
+
+  getExploresWithJoinsCount(): number {
+    return this.modelData().explores.filter((e: any) => this.getJoinsForExplore(e.name).length > 0).length;
+  }
+
+  getExploresDirectCount(): number {
+    return this.modelData().explores.filter((e: any) => this.getJoinsForExplore(e.name).length === 0).length;
+  }
+
+  getViewsCountByType(type: string): number {
+    return this.modelData().views.filter((v: any) => v.view_type === type).length;
+  }
+
+  clearExploreFilters(): void {
+    this.exploreSearchQuery.set('');
+    this.exploreFilterType.set('all');
+  }
+
+  clearViewFilters(): void {
+    this.viewSearchQuery.set('');
+    this.viewFilterType.set('all');
   }
 
   getJoinsForExplore(exploreName: string): any[] {

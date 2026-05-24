@@ -15,8 +15,7 @@ import { CommonModule } from '@angular/common';
           <div class="logo-circle">
             <span class="logo-icon">📊</span>
           </div>
-          <h1>Headless BI</h1>
-          <p>Reporting Engine Platform</p>
+          <h1>Reporting Engine</h1>
         </div>
 
         <form (ngSubmit)="onSubmit()" #loginForm="ngForm" class="login-form">
@@ -69,7 +68,7 @@ import { CommonModule } from '@angular/common';
         </form>
 
         <div class="login-footer">
-          <p>Default credentials: <code>admin</code> / <code>password</code></p>
+          <p></p>
         </div>
       </div>
     </div>

@@ -6,7 +6,7 @@ import { Observable, tap } from 'rxjs';
   providedIn: 'root'
 })
 export class AuthService {
-  private apiUrl = 'http://localhost:8101/api/auth';
+  private apiUrl = 'http://127.0.0.1:8101/api/auth';
   isAuthenticated = signal<boolean>(localStorage.getItem('token') !== null);
 
   constructor(private http: HttpClient) {}

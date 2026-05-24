@@ -8,18 +8,17 @@ I need you to design a **production-grade database schema** for a unified semant
 
 I have:
 
-* A Google BigQuery data warehouse (star schema: ~5 fact tables, ~75 dimensions)
-* Looker (LookML) semantic layer already defining:
+- A Google BigQuery data warehouse (star schema: ~5 fact tables, ~75 dimensions)
+- Looker (LookML) semantic layer already defining:
+    - dimensions
+    - measures
+    - joins (explores)
 
-  * dimensions
-  * measures
-  * joins (explores)
-* A custom Excel-based reporting configuration system that defines:
-
-  * report structure (rows, hierarchy)
-  * layout (columns, formatting)
-  * time intelligence (YTD, MTD, WTD, rolling weeks)
-  * calculated rows and columns
+- A custom Excel-based reporting configuration system that defines:
+    - report structure (rows, hierarchy)
+    - layout (columns, formatting)
+    - time intelligence (YTD, MTD, WTD, rolling weeks)
+    - calculated rows and columns
 
 ---
 
@@ -46,14 +45,14 @@ PostgreSQL
 
 Must support:
 
-* Models (LookML models)
-* Explores (entry points)
-* Views (tables)
-* Dimensions
-* Measures
-* Joins (relationships)
-* Derived metrics (formulas)
-* SQL expressions
+- Models (LookML models)
+- Explores (entry points)
+- Views (tables)
+- Dimensions
+- Measures
+- Joins (relationships)
+- Derived metrics (formulas)
+- SQL expressions
 
 ---
 
@@ -61,13 +60,13 @@ Must support:
 
 Must support:
 
-* Reports (multiple per system)
-* Report rows (hierarchical structure)
-* Report columns (time-based and calculated)
-* Row-based formulas (e.g. R2 - R3)
-* Column-based formulas (e.g. WoW %)
-* Layout properties (indent, order)
-* Style references (formatting)
+- Reports (multiple per system)
+- Report rows (hierarchical structure)
+- Report columns (time-based and calculated)
+- Row-based formulas (e.g. R2 - R3)
+- Column-based formulas (e.g. WoW %)
+- Layout properties (indent, order)
+- Style references (formatting)
 
 ---
 
@@ -75,11 +74,11 @@ Must support:
 
 Must support:
 
-* WEEK (with offsets)
-* MTD (month-to-date)
-* YTD (year-to-date)
-* Rolling N periods
-* Custom time filters
+- WEEK (with offsets)
+- MTD (month-to-date)
+- YTD (year-to-date)
+- Rolling N periods
+- Custom time filters
 
 ---
 
@@ -87,9 +86,9 @@ Must support:
 
 The model should allow:
 
-* Importing LookML definitions
-* Importing Excel report templates
-* Future extensibility (e.g. dbt metrics)
+- Importing LookML definitions
+- Importing Excel report templates
+- Future extensibility (e.g. dbt metrics)
 
 ---
 
@@ -97,10 +96,10 @@ The model should allow:
 
 Must support:
 
-* Versioning of semantic definitions
-* Versioning of reports
-* Draft vs published states
-* Audit fields (created_at, updated_at)
+- Versioning of semantic definitions
+- Versioning of reports
+- Draft vs published states
+- Audit fields (created_at, updated_at)
 
 ---
 
@@ -112,16 +111,16 @@ Must support:
 
 Provide:
 
-* Full list of tables
-* Columns with data types
-* Primary keys / foreign keys
-* Relationships between tables
+- Full list of tables
+- Columns with data types
+- Primary keys / foreign keys
+- Relationships between tables
 
 Organize into logical groups:
 
-* semantic layer tables
-* reporting layer tables
-* shared/common tables
+- semantic layer tables
+- reporting layer tables
+- shared/common tables
 
 ---
 
@@ -129,12 +128,11 @@ Organize into logical groups:
 
 Explain clearly:
 
-* how LookML constructs map to your schema
-
-  * dimension → ?
-  * measure → ?
-  * explore → ?
-  * join → ?
+- how LookML constructs map to your schema
+    - dimension → ?
+    - measure → ?
+    - explore → ?
+    - join → ?
 
 ---
 
@@ -142,8 +140,8 @@ Explain clearly:
 
 Explain:
 
-* how REPORT_DEFINITION sheet maps into tables
-* how rows, columns, and formulas are stored
+- how REPORT_DEFINITION sheet maps into tables
+- how rows, columns, and formulas are stored
 
 ---
 
@@ -151,9 +149,9 @@ Explain:
 
 Describe:
 
-* Excel → ingestion → DB
-* LookML → ingestion → DB
-* DB → execution engine → SQL → report
+- Excel → ingestion → DB
+- LookML → ingestion → DB
+- DB → execution engine → SQL → report
 
 ---
 
@@ -161,9 +159,9 @@ Describe:
 
 Explain how this schema enables:
 
-* dynamic SQL generation
-* join resolution
-* metric computation
+- dynamic SQL generation
+- join resolution
+- metric computation
 
 ---
 
@@ -171,27 +169,27 @@ Explain how this schema enables:
 
 Discuss:
 
-* normalization vs performance
-* flexibility vs governance
-* complexity risks
+- normalization vs performance
+- flexibility vs governance
+- complexity risks
 
 ---
 
 ## 7. 💡 Bonus (if possible)
 
-* Suggest BigQuery-specific optimizations
-* Suggest indexing / partitioning strategy
-* Suggest how to cache or precompute metrics
+- Suggest BigQuery-specific optimizations
+- Suggest indexing / partitioning strategy
+- Suggest how to cache or precompute metrics
 
 ---
 
 # 🎯 FINAL GOAL
 
-Design a system equivalent to a **headless BI semantic + reporting layer**, where:
+Design a system equivalent to a **Reporting Engine semantic + reporting layer**, where:
 
-* LookML + Excel = input sources
-* Database = single source of truth
-* Backend = execution engine
+- LookML + Excel = input sources
+- Database = single source of truth
+- Backend = execution engine
 
 ---
 

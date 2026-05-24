@@ -8,8 +8,8 @@ I need your help designing and extending a reporting system that uses an Excel f
 
 I currently have a data warehouse built in Google BigQuery / PostgreSQL ( existing database) with a star schema:
 
-* ~5 fact tables
-* ~75 dimension tables
+- ~5 fact tables
+- ~75 dimension tables
 
 I want to give business users the ability to define their own reports using a structured Excel template.
 
@@ -29,12 +29,12 @@ This Excel file will act as a **report configuration layer**, and at runtime my 
 
 Design a **scalable, maintainable architecture** that supports:
 
-* Multiple reports in one Excel file
-* Complex report layouts (like financial statements)
-* Time intelligence (WTD, MTD, YTD, rolling weeks)
-* Derived metrics and formulas
-* Controlled flexibility for business users
-* Strong validation and governance
+- Multiple reports in one Excel file
+- Complex report layouts (like financial statements)
+- Time intelligence (WTD, MTD, YTD, rolling weeks)
+- Derived metrics and formulas
+- Controlled flexibility for business users
+- Strong validation and governance
 
 ---
 
@@ -46,17 +46,17 @@ We are using a **hybrid Excel model**:
 
 Contains:
 
-* Report structure (rows, hierarchy, indentation)
-* Metrics and formulas
-* Layout definition
-* Column usage (C1–C7)
+- Report structure (rows, hierarchy, indentation)
+- Metrics and formulas
+- Layout definition
+- Column usage (C1–C7)
 
 ## 2. CONFIG (hidden sheet)
 
 Contains:
 
-* Style definitions
-* Valid values (types, operators, etc.)
+- Style definitions
+- Valid values (types, operators, etc.)
 
 ---
 
@@ -68,11 +68,11 @@ The sheet contains:
 
 Defines time-based columns:
 
-* col_id (C1, C2…)
-* label (Current Week, MTD, YTD)
-* type (WEEK, MTD, YTD, CALC)
-* offset (e.g. 0, -1, -2)
-* formula (for calculated columns like WoW %)
+- col_id (C1, C2…)
+- label (Current Week, MTD, YTD)
+- type (WEEK, MTD, YTD, CALC)
+- offset (e.g. 0, -1, -2)
+- formula (for calculated columns like WoW %)
 
 ---
 
@@ -80,15 +80,15 @@ Defines time-based columns:
 
 Each row defines part of the report:
 
-* report_id
-* row_id
-* parent (for hierarchy)
-* label (display text)
-* type (section, data, calc, blank)
-* source (metric OR formula like R2-R3)
-* style (header, section, normal, total)
-* indent (hierarchy level)
-* C1–C7 (X = include value for that column)
+- report_id
+- row_id
+- parent (for hierarchy)
+- label (display text)
+- type (section, data, calc, blank)
+- source (metric OR formula like R2-R3)
+- style (header, section, normal, total)
+- indent (hierarchy level)
+- C1–C7 (X = include value for that column)
 
 ---
 
@@ -96,8 +96,8 @@ Each row defines part of the report:
 
 ## 1. Multi-report support
 
-* One Excel file contains multiple reports
-* Execution is done by passing a `report_id`
+- One Excel file contains multiple reports
+- Execution is done by passing a `report_id`
 
 ---
 
@@ -105,11 +105,11 @@ Each row defines part of the report:
 
 Support:
 
-* WEEK (with offsets)
-* MTD (month-to-date)
-* YTD (year-to-date)
-* Rolling N weeks
-* Comparisons (WoW, % growth)
+- WEEK (with offsets)
+- MTD (month-to-date)
+- YTD (year-to-date)
+- Rolling N weeks
+- Comparisons (WoW, % growth)
 
 ---
 
@@ -117,11 +117,11 @@ Support:
 
 Support:
 
-* Hierarchical rows (like financial statements)
-* Indentation
-* Subtotals and totals
-* Blank rows
-* Multi-column output
+- Hierarchical rows (like financial statements)
+- Indentation
+- Subtotals and totals
+- Blank rows
+- Multi-column output
 
 ---
 
@@ -129,9 +129,9 @@ Support:
 
 Support:
 
-* Predefined metrics from semantic layer
-* Derived metrics (formulas)
-* Row-based calculations (R2 - R3)
+- Predefined metrics from semantic layer
+- Derived metrics (formulas)
+- Row-based calculations (R2 - R3)
 
 ---
 
@@ -139,11 +139,11 @@ Support:
 
 Support:
 
-* Font size
-* Bold
-* Borders
-* Alignment
-* Style reuse via style_id
+- Font size
+- Bold
+- Borders
+- Alignment
+- Style reuse via style_id
 
 ---
 
@@ -151,10 +151,10 @@ Support:
 
 Must validate:
 
-* Fields exist in semantic layer
-* Join paths are valid
-* No circular formulas
-* Correct data types
+- Fields exist in semantic layer
+- Join paths are valid
+- No circular formulas
+- Correct data types
 
 ---
 
@@ -166,46 +166,46 @@ Please provide:
 
 ## 1. 🏗️ Architecture Design
 
-* End-to-end architecture
-* Key components (parser, semantic layer, query engine, layout engine)
-* Data flow from Excel → SQL → final report
+- End-to-end architecture
+- Key components (parser, semantic layer, query engine, layout engine)
+- Data flow from Excel → SQL → final report
 
 ---
 
 ## 2. 🧠 Parsing Strategy
 
-* How to parse the Excel file
-* How to split column definitions vs report body
-* How to process one report_id
+- How to parse the Excel file
+- How to split column definitions vs report body
+- How to process one report_id
 
 ---
 
 ## 3. ⚙️ SQL Generation Strategy
 
-* How to handle:
+- How to handle:
+    - multiple time-based columns
+    - CASE WHEN logic
+    - aggregation
 
-  * multiple time-based columns
-  * CASE WHEN logic
-  * aggregation
-* How to avoid performance issues in BigQuery / PostreSQL ( existing database)
+- How to avoid performance issues in BigQuery / PostreSQL ( existing database)
 
 ---
 
 ## 4. 🧮 Calculation Engine
 
-* How to evaluate:
+- How to evaluate:
+    - column formulas (e.g. WoW %)
+    - row formulas (R2-R3)
 
-  * column formulas (e.g. WoW %)
-  * row formulas (R2-R3)
-* Order of execution
+- Order of execution
 
 ---
 
 ## 5. 🎨 Layout Rendering Strategy
 
-* How to build hierarchical output
-* How to apply styles programmatically
-* Suggested libraries (Python)
+- How to build hierarchical output
+- How to apply styles programmatically
+- Suggested libraries (Python)
 
 ---
 
@@ -213,13 +213,12 @@ Please provide:
 
 Provide:
 
-* Suggested tech stack
-* Python module structure
-* Pseudocode or code snippets for:
-
-  * Excel parser
-  * SQL builder
-  * layout renderer
+- Suggested tech stack
+- Python module structure
+- Pseudocode or code snippets for:
+    - Excel parser
+    - SQL builder
+    - layout renderer
 
 ---
 
@@ -227,19 +226,19 @@ Provide:
 
 Explain:
 
-* scalability challenges
-* performance risks
-* governance concerns
+- scalability challenges
+- performance risks
+- governance concerns
 
 ---
 
 # 🎯 FINAL GOAL
 
-I want to build a system that behaves like a **headless BI tool**, where:
+I want to build a system that behaves like a **Reporting Engine tool**, where:
 
-* Excel = report definition layer
-* Backend = semantic + execution engine
-* Output = formatted reports
+- Excel = report definition layer
+- Backend = semantic + execution engine
+- Output = formatted reports
 
 ---
 

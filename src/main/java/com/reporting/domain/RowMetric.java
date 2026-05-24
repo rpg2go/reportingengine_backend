@@ -24,8 +24,11 @@ public class RowMetric {
     @Column(name = "row_id", nullable = false, length = 50)
     private String rowId;
 
-    @Column(name = "measure_id", nullable = false)
+    @Column(name = "measure_id")
     private Integer measureId;
+
+    @Column(name = "sql_expr", length = 500)
+    private String sqlExpr;
 
     @Column(name = "explore_id")
     private Integer exploreId;

@@ -1,4 +1,4 @@
-# Headless BI Reporting Engine — Implementation Plan (Finalized)
+# Reporting Engine — Implementation Plan (Finalized)
 
 ## Confirmed Architectural Decisions
 
