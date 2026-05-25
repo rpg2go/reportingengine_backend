@@ -42,3 +42,10 @@ dependency-reduced-pom.xml
 *.log
 *.tmp
 *.bak
+
+# Python (ADK Validation Agents cache)
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
