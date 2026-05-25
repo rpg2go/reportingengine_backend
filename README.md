@@ -1,18 +1,17 @@
-# Reporting Engine Platform
+# Reporting Engine Back-End
 
-A robust, enterprise-grade, metadata-driven report configuration and execution platform. The system operates across a **Java 17 (Spring Boot v3.2.4) backend**, a **modern Angular 21 SPA frontend**, and a **dockerized PostgreSQL 16 database**.
+A robust, enterprise-grade, metadata-driven report configuration and execution engine. This repository contains the **Java 17 (Spring Boot v3.2.4) backend** and database migrations. The frontend is split into the [ReportTemplate_FrontEnd](file:///G:/workspace/ReportTemplate_FrontEnd) repository.
 
-The reporting platform ingests Excel layout templates, normalizes their configuration into metadata tables, resolves logical metrics against a semantic data model, generates high-performance SQL query structures with conditional aggregation, evaluates math formulas, and renders final styled Excel workbooks using Apache POI.
+The backend ingests Excel layout templates, normalizes their configuration into metadata tables, resolves logical metrics against a semantic data model, generates high-performance SQL query structures with conditional aggregation, evaluates math formulas, and renders final styled Excel workbooks using Apache POI.
 
 ---
 
 ## Repo Metadata
 
 - **Author**: Antigravity Developer Team & Google DeepMind Pair Programmer
-- **Repository**: G:\workspace\ReportTemplate
+- **Repository**: [ReportTemplate_BackEnd](file:///G:/workspace/ReportTemplate_BackEnd)
 - **Backend Stack**: Java 17, Spring Boot 3.2.4, Spring Data JPA, Hibernate, exp4j
-- **Frontend Stack**: Angular 21.2.0, standalone components, TypeScript, vanilla CSS deep-slate dark-mode styling
-- **Database**: PostgreSQL 16 (running in Docker Container)
+- **Database**: PostgreSQL 16 (Local Docker container or Neon Serverless Postgres in production)
 
 ---
 
@@ -42,7 +41,7 @@ The reporting platform ingests Excel layout templates, normalizes their configur
 | [docs/architecture-and-walkthrough.md](docs/architecture-and-walkthrough.md)       | System design decisions (ADRs), solution architecture, and user journeys   |
 | [docs/testing.md](docs/testing.md)                                                 | Quality assurance guidelines, testing commands, and manual REST API checks |
 | [deployment/README.md](deployment/README.md)                                       | Application packaging, Docker compose guidelines, and CI/CD stages         |
-| [frontend/README.md](frontend/README.md)                                           | Frontend-specific setup and Angular standalone component structure         |
+| [.agents/agents/validation_agents.md](.agents/agents/validation_agents.md)         | Back-end validation agents specification and execution guide               |
 | [documentation/report_authoring_guide.md](documentation/report_authoring_guide.md) | Business user guide on how to design layout templates in Excel             |
 | [documentation/implementation_plan.md](documentation/implementation_plan.md)       | Base implementation plan for platform migration and dynamic filters        |
 | [GEMINI.md](GEMINI.md)                                                             | Handoff state, schema layout, API endpoints, and phase 2 roadmap           |
@@ -62,30 +61,26 @@ The reporting platform ingests Excel layout templates, normalizes their configur
 ## Project Structure
 
 ```text
-ReportTemplate/
+ReportTemplate_BackEnd/
+├── .agents/                    # ADK validation agents configuration & code
+│   ├── agents/                 # Validator specifications
+│   └── validation/             # Executable validation agent (agent.py, tools.py)
 ├── db/                         # Database container configuration
-│   ├── migrations/             # SQL migration scripts (000 to 007)
+│   ├── migrations/             # SQL migration scripts (000 to 008)
 │   └── Dockerfile              # Custom Postgres image bundling migrations
 ├── src/                        # Spring Boot Java application source code
 │   ├── main/
 │   │   ├── java/com/reporting/
 │   │   │   ├── Application.java # Bootloader application class
-│   │   │   ├── config/         # Security & CORS settings
-│   │   │   ├── controller/     # REST Endpoints (Auth, Reports)
-│   │   │   ├── domain/         # JPA Entities (rpt_* tables)
-│   │   │   ├── dto/            # Data Transfer Objects
-│   │   │   ├── repository/     # Data repositories
-│   │   │   └── service/        # Core services (Parser, SQL, POI, formulas)
++   │   │   ├── config/         # Security & CORS settings
++   │   │   ├── controller/     # REST Endpoints (Auth, Reports)
++   │   │   ├── domain/         # JPA Entities (rpt_* tables)
++   │   │   ├── dto/            # Data Transfer Objects
++   │   │   ├── repository/     # Data repositories
++   │   │   ├── service/        # Core services (Parser, SQL, POI, formulas)
++   │   │   └── util/           # MigrationRunner, DbDumper utilities
 │   │   └── resources/
 │   │       └── application.properties # Server and datasource config
-├── frontend/                   # Standalone Angular SPA UI (v21.2)
-│   ├── src/app/
-│   │   ├── components/         # Catalog, Builder, Detail, Semantic views
-│   │   ├── guards/             # Auth routes guard
-│   │   ├── services/           # REST service clients
-│   │   ├── app.routes.ts       # Route configurations
-│   │   └── app.ts              # Core bootstrapper
-│   └── package.json            # Node.js dependencies configuration
 ├── documentation/              # Design plans and authoring guides
 ├── maven/                      # Embedded Apache Maven 3.9.6 wrapper
 ├── docker-compose.yml          # Container composition orchestration
@@ -158,7 +153,7 @@ All core services are located in [src/main/java/com/reporting/service/](file:///
 
 ## Quick Start: Working With This Repo
 
-Follow these steps to run the Reporting Engine Platform locally:
+Follow these steps to run the Reporting Engine backend locally:
 
 ### Prerequisites
 
@@ -166,7 +161,7 @@ Ensure you have the following installed on your machine:
 
 - **Docker & Docker Compose**: To run the PostgreSQL database.
 - **Java Development Kit (JDK) 17**: Required for building and running the backend.
-- **Node.js (v18+ or v20+ recommended)**: Required for building and running the Angular frontend.
+- **Python (v3.10+)**: Required for running the ADK validation agent.
 
 ### One-Time Setup
 
@@ -180,12 +175,10 @@ Ensure you have the following installed on your machine:
 
     _Note: This will expose PostgreSQL on port `5432` with database `agentic_ai`._
 
-2. **Install Frontend Dependencies**:
-   Navigate to the `frontend/` directory and install the npm packages:
+2. **Initialize ADK Validation Environment**:
+   Ensure `google-adk` is installed:
     ```bash
-    cd frontend
-    npm install
-    cd ..
+    pip install google-adk
     ```
 
 ### Per Dev Session
@@ -203,22 +196,18 @@ Ensure you have the following installed on your machine:
         ./maven/apache-maven-3.9.6/bin/mvn spring-boot:run
         ```
 
-2. **Start the Angular UI**:
-   Run the dev server (defaults to port `4200`):
-
+2. **Run ADK Validation Agent**:
+   To validate backend changes (compiling, running JUnit tests, and checking code quality/security):
     ```bash
-    cd frontend
-    npm start
+    adk run .agents/validation
     ```
-
-3. **Verify Connection**:
-   Navigate to [http://127.0.0.1:4200](http://127.0.0.1:4200) in your browser. The frontend will dynamically proxy requests to the backend API at `http://127.0.0.1:8101/api`.
+    Prompt the agent with: `"Validate the codebase changes"` or `"Audit code and run tests"`.
 
 ---
 
 ## Useful Commands
 
-Below is a summary of the most useful commands for building and running the platform components:
+Below is a summary of the most useful commands for building and running the backend components:
 
 | Category     | Command                                                | Target/CWD   | Description                                                    |
 | :----------- | :----------------------------------------------------- | :----------- | :------------------------------------------------------------- |
@@ -227,10 +216,8 @@ Below is a summary of the most useful commands for building and running the plat
 | **Backend**  | `maven\apache-maven-3.9.6\bin\mvn.cmd clean compile`   | Project Root | Clean compile Spring Boot application (Windows)                |
 | **Backend**  | `maven\apache-maven-3.9.6\bin\mvn.cmd spring-boot:run` | Project Root | Runs the backend server on port 8101 (Windows)                 |
 | **Backend**  | `maven\apache-maven-3.9.6\bin\mvn.cmd test`            | Project Root | Runs JUnit unit and integration tests                          |
-| **Frontend** | `npm install`                                          | `frontend/`  | Installs Angular project dependencies                          |
-| **Frontend** | `npm start`                                            | `frontend/`  | Starts the Angular development server on port 4200             |
-| **Frontend** | `npm run build`                                        | `frontend/`  | Builds optimized assets in `dist/frontend/`                    |
-| **Frontend** | `npm test`                                             | `frontend/`  | Runs Karma/Jasmine unit tests                                  |
+| **ADK Agent**| `adk run .agents/validation`                           | Project Root | Runs the backend validation agent interactively                |
+| **ADK Agent**| `adk web .agents/validation`                           | Project Root | Launches the Web UI to chat/run backend validation tasks       |
 
 ---
 

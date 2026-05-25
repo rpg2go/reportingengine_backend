@@ -4,34 +4,16 @@ skills:
   path: .agents/skills
 
 default_skills:
-  - python-expert
-  - python-best-practices
-  - python-error-handling
-  - python-type-safety
+  - springboot-patterns
+  - springboot-security
+  - java-junit
 
 skill_settings:
-  python-expert:
+  springboot-patterns:
     priority: high
 
-  python-best-practices:
+  springboot-security:
     priority: high
 
-  python-error-handling:
+  java-junit:
     priority: high
-
-  python-type-safety:
-    priority: high
-
-  python-testing-patterns:
-    priority: medium
-
-  fastapi-python:
-    priority: high
-
-  google-adk-python:
-    priority: medium
-
-context_paths:
-  - documentation/architecture.md 
-  - documentation/features.md
-  - documentation/implementation_plan.md
