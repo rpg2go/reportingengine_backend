@@ -4,11 +4,13 @@ import com.reporting.dto.ReportConfigDto;
 import com.reporting.dto.ResolvedMetricDto;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
+import lombok.extern.slf4j.Slf4j;
 
 import java.time.LocalDate;
 import java.util.Collections;
 import java.util.Map;
 
+@Slf4j
 @Service
 public class ReportRunnerService {
 
@@ -36,27 +38,37 @@ public class ReportRunnerService {
     public byte[] runReport(String reportId, LocalDate referenceDate) throws Exception {
         LocalDate refDate = referenceDate != null ? referenceDate : LocalDate.now();
 
+        log.info("Starting report run execution for reportId: {} with referenceDate: {}", reportId, refDate);
+
         // 1. Load Config
         ReportConfigDto config = configService.loadFromDb(reportId, refDate);
+        log.info("Loaded configuration for reportId: {}, Columns count: {}, Rows count: {}", 
+            reportId, config.getColumns().size(), config.getRows().size());
 
         // 2. Resolve Metrics
         Map<String, ResolvedMetricDto> resolved = resolverService.resolveAll(config);
+        log.info("Resolved {} metrics mapping definitions", resolved.size());
 
         // 3. Generate SQL
         String sql = generatorService.generate(config, resolved);
+        log.debug("Generated query SQL: \n{}", sql);
 
         // 4. Execute SQL
         Map<String, Object> rawData;
         try {
+            log.info("Executing generated DWH queries for reportId: {}", reportId);
             rawData = jdbcTemplate.queryForMap(sql);
         } catch (Exception e) {
-            rawData = Collections.emptyMap();
+            log.error("Failed to execute generated report SQL query for reportId: {}. Generated SQL: \n{}", reportId, sql, e);
+            throw new RuntimeException("Database execution failed for generated SQL query: " + e.getMessage(), e);
         }
 
         // 5. Post-Process
+        log.info("Post-processing raw data results with formulas");
         Map<String, Map<String, Double>> processedData = postProcessorService.process(config, rawData);
 
         // 6. Render
+        log.info("Rendering report results into Excel template format");
         return rendererService.render(config, processedData);
     }
 }

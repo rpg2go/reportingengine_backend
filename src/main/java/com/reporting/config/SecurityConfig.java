@@ -36,9 +36,17 @@ public class SecurityConfig {
 
     @Bean
     public UserDetailsService userDetailsService() {
-        UserDetails user = User.withDefaultPasswordEncoder()
-            .username("admin")
-            .password("password")
+        String adminUsername = System.getenv("SECURITY_ADMIN_USERNAME");
+        if (adminUsername == null || adminUsername.isBlank()) {
+            adminUsername = "admin";
+        }
+        String adminPassword = System.getenv("SECURITY_ADMIN_PASSWORD");
+        if (adminPassword == null || adminPassword.isBlank()) {
+            adminPassword = "password";
+        }
+
+        UserDetails user = User.withUsername(adminUsername)
+            .password("{noop}" + adminPassword)
             .roles("USER")
             .build();
         return new InMemoryUserDetailsManager(user);

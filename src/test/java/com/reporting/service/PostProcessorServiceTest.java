@@ -1,0 +1,107 @@
+package com.reporting.service;
+
+import com.reporting.dto.ColumnDefDto;
+import com.reporting.dto.Enums;
+import com.reporting.dto.ReportConfigDto;
+import com.reporting.dto.ReportRowDto;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+@DisplayName("PostProcessorService Unit Tests")
+public class PostProcessorServiceTest {
+
+    private final PostProcessorService service = new PostProcessorService();
+
+    @Test
+    @DisplayName("evaluateFormula with simple expressions")
+    public void evaluateFormula_simpleExpressions() {
+        assertThat(service.evaluateFormula("1 + 2 * 3", Map.of("dummy", 0.0))).isEqualTo(7.0);
+        assertThat(service.evaluateFormula("(10 - 2) / 4", Map.of("dummy", 0.0))).isEqualTo(2.0);
+    }
+
+    @Test
+    @DisplayName("evaluateFormula with context variables")
+    public void evaluateFormula_withVariables() {
+        Map<String, Double> context = Map.of("R1", 10.0, "R2", 5.0, "R11", 100.0);
+        
+        // Exact matching
+        assertThat(service.evaluateFormula("R1 + R2", context)).isEqualTo(15.0);
+        assertThat(service.evaluateFormula("R1 / R2", context)).isEqualTo(2.0);
+        
+        // Test key sorting (R11 must not get partially replaced by R1)
+        assertThat(service.evaluateFormula("R11 / R1", context)).isEqualTo(10.0);
+        
+        // Exact matching with lowercase variables and context
+        Map<String, Double> lowercaseContext = Map.of("r1", 10.0, "r2", 5.0);
+        assertThat(service.evaluateFormula("r1 + r2", lowercaseContext)).isEqualTo(15.0);
+    }
+
+    @Test
+    @DisplayName("evaluateFormula edge cases: division by zero, invalid characters, etc.")
+    public void evaluateFormula_edgeCases() {
+        // Division by zero should return 0.0, not crash
+        assertThat(service.evaluateFormula("5 / 0", Map.of())).isEqualTo(0.0);
+        
+        // Invalid formulas
+        assertThat(service.evaluateFormula("invalid++formula", Map.of())).isEqualTo(0.0);
+        assertThat(service.evaluateFormula(null, Map.of())).isEqualTo(0.0);
+        assertThat(service.evaluateFormula("", Map.of())).isEqualTo(0.0);
+    }
+
+    @Test
+    @DisplayName("process full report matrix with DATA and CALC elements")
+    public void process_fullMatrixCalculations() {
+        // Arrange
+        // Columns: C1 (SQL), C2 (SQL), C3 (CALC formula: C1 - C2)
+        List<ColumnDefDto> columns = List.of(
+            new ColumnDefDto("C1", "Col 1", Enums.ColType.WEEK, 0, null, null, 1),
+            new ColumnDefDto("C2", "Col 2", Enums.ColType.WEEK, -1, null, null, 2),
+            new ColumnDefDto("C3", "Col 3", Enums.ColType.CALC, 0, null, "C1 - C2", 3)
+        );
+
+        // Rows: R1 (DATA), R2 (DATA), R3 (CALC formula: R1 + R2)
+        List<ReportRowDto> rows = List.of(
+            new ReportRowDto("R1", "REP1", "Row 1", Enums.RowType.data, "m1", null, "normal", 0, 1, Set.of("C1", "C2", "C3"), null),
+            new ReportRowDto("R2", "REP1", "Row 2", Enums.RowType.data, "m2", null, "normal", 0, 2, Set.of("C1", "C2", "C3"), null),
+            new ReportRowDto("R3", "REP1", "Total Row", Enums.RowType.calc, "R1 + R2", null, "total", 0, 3, Set.of("C1", "C2", "C3"), null)
+        );
+
+        ReportConfigDto config = new ReportConfigDto(
+            "REP1", "Test Report", columns, rows, null, 1, Enums.ReportStatus.draft,
+            "analytics.fact_sales", "weekly", null, null, false, null, null
+        );
+
+        // Map results. In PostProcessorService, keys are: metric_rowId_colId
+        Map<String, Object> dbResults = Map.of(
+            "metric_r1_c1", 100.0,
+            "metric_r1_c2", 40.0,
+            "metric_r2_c1", 200.0,
+            "metric_r2_c2", 50.0
+        );
+
+        // Act
+        Map<String, Map<String, Double>> matrix = service.process(config, dbResults);
+
+        // Assert
+        // Check R1
+        assertThat(matrix.get("R1").get("C1")).isEqualTo(100.0);
+        assertThat(matrix.get("R1").get("C2")).isEqualTo(40.0);
+        assertThat(matrix.get("R1").get("C3")).isEqualTo(60.0); // 100 - 40
+
+        // Check R2
+        assertThat(matrix.get("R2").get("C1")).isEqualTo(200.0);
+        assertThat(matrix.get("R2").get("C2")).isEqualTo(50.0);
+        assertThat(matrix.get("R2").get("C3")).isEqualTo(150.0); // 200 - 50
+
+        // Check R3 (R1 + R2)
+        assertThat(matrix.get("R3").get("C1")).isEqualTo(300.0); // 100 + 200
+        assertThat(matrix.get("R3").get("C2")).isEqualTo(90.0);  // 40 + 50
+        assertThat(matrix.get("R3").get("C3")).isEqualTo(210.0); // 60 + 150 (and C1 - C2 check: 300 - 90 = 210)
+    }
+}

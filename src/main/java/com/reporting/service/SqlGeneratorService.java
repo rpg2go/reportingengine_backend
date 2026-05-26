@@ -91,9 +91,11 @@ public class SqlGeneratorService {
                     fill = "NULL";
                 }
 
-                String filterClause = (row.filterExpr() != null && !row.filterExpr().isBlank())
-                    ? " AND (" + row.filterExpr() + ")"
-                    : "";
+                String filterClause = "";
+                if (row.filterExpr() != null && !row.filterExpr().isBlank()) {
+                    validateFilterExpr(row.filterExpr());
+                    filterClause = " AND (" + row.filterExpr() + ")";
+                }
 
                 String clause = String.format(
                     "%s(%sCASE WHEN %s >= '%s' AND %s <= '%s'%s THEN %s ELSE %s END)",
@@ -120,5 +122,34 @@ public class SqlGeneratorService {
             factTable,
             joinStr
         );
+    }
+
+    private void validateFilterExpr(String expr) {
+        if (expr == null || expr.isBlank()) {
+            return;
+        }
+        String upper = expr.toUpperCase();
+        if (upper.contains(";") || upper.contains("--") || upper.contains("/*") ||
+            upper.contains("UNION") || upper.contains("INSERT") || upper.contains("UPDATE") ||
+            upper.contains("DELETE") || upper.contains("DROP") || upper.contains("ALTER") ||
+            upper.contains("TRUNCATE") || upper.contains("GRANT") || upper.contains("REVOKE") ||
+            upper.contains("EXECUTE") || upper.contains("XP_CMDSHELL")) {
+            throw new IllegalArgumentException("Invalid or dangerous SQL sequences in filter expression: " + expr);
+        }
+        
+        // Match parentheses to prevent breaking out of the generated CASE WHEN statement
+        int openParen = 0;
+        for (int i = 0; i < expr.length(); i++) {
+            if (expr.charAt(i) == '(') openParen++;
+            else if (expr.charAt(i) == ')') {
+                openParen--;
+                if (openParen < 0) {
+                    throw new IllegalArgumentException("Unmatched parentheses in filter expression: " + expr);
+                }
+            }
+        }
+        if (openParen != 0) {
+            throw new IllegalArgumentException("Unmatched parentheses in filter expression: " + expr);
+        }
     }
 }

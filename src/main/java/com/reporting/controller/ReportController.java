@@ -13,6 +13,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
+import lombok.extern.slf4j.Slf4j;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -20,6 +21,7 @@ import java.util.Map;
 import java.util.HashMap;
 import java.util.Collections;
 
+@Slf4j
 @RestController
 @RequestMapping("/api/reports")
 public class ReportController {
@@ -61,9 +63,11 @@ public class ReportController {
             return ResponseEntity.badRequest().body(Map.of("message", "File is empty"));
         }
         try {
+            log.info("Importing report template: {}", file.getOriginalFilename());
             parserService.importTemplate(file.getInputStream(), file.getOriginalFilename());
             return ResponseEntity.ok(Map.of("message", "Template imported successfully"));
         } catch (Exception e) {
+            log.error("Failed to import template {}: {}", file.getOriginalFilename(), e.getMessage(), e);
             return ResponseEntity.status(500).body(Map.of("message", "Failed to import template: " + e.getMessage()));
         }
     }
@@ -74,6 +78,7 @@ public class ReportController {
             @RequestParam(value = "date", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
         LocalDate refDate = date != null ? date : LocalDate.now();
         try {
+            log.info("Running report generation for report ID: {} with refDate: {}", id, refDate);
             byte[] xlsxBytes = runnerService.runReport(id, refDate);
             String filename = String.format("%s_%s.xlsx", id, refDate.toString());
 
@@ -82,6 +87,7 @@ public class ReportController {
                 .contentType(MediaType.APPLICATION_OCTET_STREAM)
                 .body(xlsxBytes);
         } catch (Exception e) {
+            log.error("Failed to run report ID: {} with refDate: {}: {}", id, refDate, e.getMessage(), e);
             return ResponseEntity.status(500)
                 .contentType(MediaType.APPLICATION_JSON)
                 .body(("{\"message\": \"Execution failed: " + e.getMessage().replace("\"", "\\\"") + "\"}").getBytes());
@@ -187,9 +193,19 @@ public class ReportController {
     public ResponseEntity<List<String>> getDimensionValues(
             @RequestParam("table") String table,
             @RequestParam("column") String column) {
+        log.info("Fetching dimension values for table: {}, column: {}", table, column);
         if (!table.startsWith("analytics.") || !column.matches("^[a-zA-Z0-9_]+$")) {
+            log.warn("Invalid table format or column regex mismatch. Table: {}, Column: {}", table, column);
             return ResponseEntity.badRequest().build();
         }
+
+        // Whitelist table name validation against existing database catalog tables in 'analytics' schema
+        List<String> validTables = listTables().getBody();
+        if (validTables == null || !validTables.contains(table)) {
+            log.warn("Requested table is not in the analytics catalog whitelist: {}", table);
+            return ResponseEntity.badRequest().build();
+        }
+
         String sql = String.format("SELECT DISTINCT %s FROM %s WHERE %s IS NOT NULL ORDER BY %s LIMIT 100", 
             column, table, column, column);
         
