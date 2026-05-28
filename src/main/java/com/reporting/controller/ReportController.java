@@ -189,6 +189,30 @@ public class ReportController {
         return ResponseEntity.ok(columns);
     }
 
+    @GetMapping("/column-types")
+    public ResponseEntity<Map<String, String>> getColumnTypes(@RequestParam("table") String table) {
+        if (!table.contains(".")) {
+            return ResponseEntity.badRequest().build();
+        }
+        String[] parts = table.split("\\.");
+        String schema = parts[0];
+        String tableName = parts[1];
+        
+        String sql = "SELECT a.attname AS column_name, pg_catalog.format_type(a.atttypid, a.atttypmod) AS data_type " +
+                     "FROM pg_catalog.pg_attribute a " +
+                     "JOIN pg_catalog.pg_class c ON c.oid = a.attrelid " +
+                     "JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace " +
+                     "WHERE n.nspname = ? AND c.relname = ? " +
+                     "  AND a.attnum > 0 AND NOT a.attisdropped";
+                     
+        Map<String, String> colTypes = new HashMap<>();
+        jdbcTemplate.getJdbcOperations().query(sql, (rs) -> {
+            colTypes.put(rs.getString("column_name"), rs.getString("data_type"));
+        }, schema, tableName);
+        
+        return ResponseEntity.ok(colTypes);
+    }
+
     @GetMapping("/dimensions/values")
     public ResponseEntity<List<String>> getDimensionValues(
             @RequestParam("table") String table,
@@ -214,5 +238,30 @@ public class ReportController {
             return val != null ? val.toString() : "";
         });
         return ResponseEntity.ok(values);
+    }
+
+    @GetMapping("/dimension-joins")
+    public ResponseEntity<List<Map<String, Object>>> getDimensionJoins(@RequestParam("factTable") String factTable) {
+        log.info("Fetching dimension joins for fact table: {}", factTable);
+        String sql = """
+            SELECT 
+                tv.name AS dimView, 
+                j.join_type AS joinType, 
+                j.join_sql AS joinSql 
+            FROM reporting.sem_join j 
+            JOIN reporting.sem_explore e ON e.explore_id = j.explore_id 
+            JOIN reporting.sem_view fv ON fv.view_id = e.fact_view_id 
+            JOIN reporting.sem_view tv ON tv.view_id = j.to_view_id 
+            WHERE fv.table_ref = :factTable 
+            ORDER BY j.join_id
+            """;
+        List<Map<String, Object>> joins = jdbcTemplate.query(sql, Map.of("factTable", factTable), (rs, rowNum) -> {
+            Map<String, Object> join = new HashMap<>();
+            join.put("dimView", rs.getString("dimView"));
+            join.put("joinType", rs.getString("joinType"));
+            join.put("joinSql", rs.getString("joinSql"));
+            return join;
+        });
+        return ResponseEntity.ok(joins);
     }
 }

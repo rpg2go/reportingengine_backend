@@ -25,6 +25,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
@@ -135,6 +136,13 @@ public class ReportControllerTest {
     }
 
     @Test
+    @DisplayName("GET /api/reports/column-types: returns bad request if table name has no schema dot")
+    public void getColumnTypes_noSchemaDot_shouldReturnBadRequest() throws Exception {
+        mockMvc.perform(get("/api/reports/column-types").param("table", "fact_sales"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     @DisplayName("GET /api/reports/dimensions/values: rejects injection queries on column name")
     public void getDimensionValues_sqlInjectionInColumn_shouldReturnBadRequest() throws Exception {
         mockMvc.perform(get("/api/reports/dimensions/values")
@@ -176,5 +184,23 @@ public class ReportControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0]").value("North"))
                 .andExpect(jsonPath("$[1]").value("South"));
+    }
+
+    @Test
+    @DisplayName("GET /api/reports/dimension-joins: returns list of joins successfully")
+    public void getDimensionJoins_shouldReturnJoinsList() throws Exception {
+        Map<String, Object> mockJoin = Map.of(
+            "dimView", "dim_relationship_manager",
+            "joinType", "LEFT",
+            "joinSql", "fv.rm_id = tv.id"
+        );
+        when(jdbcTemplate.query(anyString(), anyMap(), any(RowMapper.class)))
+                .thenReturn(List.of(mockJoin));
+
+        mockMvc.perform(get("/api/reports/dimension-joins").param("factTable", "analytics.fact_sales"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].dimView").value("dim_relationship_manager"))
+                .andExpect(jsonPath("$[0].joinType").value("LEFT"))
+                .andExpect(jsonPath("$[0].joinSql").value("fv.rm_id = tv.id"));
     }
 }
