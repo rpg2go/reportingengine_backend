@@ -138,4 +138,224 @@ public class SqlGeneratorServiceTest {
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("Unmatched parentheses");
     }
+
+    @Test
+    @DisplayName("generate with general filters maps Looker operators to SQL correctly")
+    public void generate_withGeneralFilters_shouldMapOperators() {
+        // Arrange
+        List<ColumnDefDto> columns = List.of(
+            new ColumnDefDto("C1", "Col 1", Enums.ColType.WEEK, 0, null, null, 1)
+        );
+        List<ReportRowDto> rows = List.of(
+            new ReportRowDto("R1", "REP1", "Row 1", Enums.RowType.data, "m1", null, "normal", 0, 1, Set.of("C1"), null)
+        );
+        
+        String generalFiltersJson = "[" +
+            "{\"attribute\":\"amount\",\"operator\":\"=\",\"value\":\"100\"}," +
+            "{\"dimTable\":\"dim_rm\",\"attribute\":\"status\",\"operator\":\"is\",\"value\":\"active\"}" +
+            "]";
+            
+        ReportConfigDto config = new ReportConfigDto(
+            "REP1", "Test Report", columns, rows, LocalDate.of(2026, 5, 26), 1, Enums.ReportStatus.draft,
+            "analytics.fact_sales", "weekly", null, null, false, null, generalFiltersJson
+        );
+
+        Map<String, ResolvedMetricDto> resolved = Map.of(
+            "R1", new ResolvedMetricDto(
+                "m1", 101, "SUM(amount)", "SUM", "NUMERIC", "analytics.fact_sales", "fact_sales", "order_date", 1, null
+            )
+        );
+
+        // Act
+        String sql = service.generate(config, resolved);
+
+        // Assert
+        assertThat(sql).contains("WHERE (amount = '100') AND (dim_rm.status = 'active')");
+    }
+
+    @Test
+    @DisplayName("generate with general filters maps negation operators with null-safety")
+    public void generate_withGeneralFiltersNegation_shouldBeNullSafe() {
+        // Arrange
+        List<ColumnDefDto> columns = List.of(
+            new ColumnDefDto("C1", "Col 1", Enums.ColType.WEEK, 0, null, null, 1)
+        );
+        List<ReportRowDto> rows = List.of(
+            new ReportRowDto("R1", "REP1", "Row 1", Enums.RowType.data, "m1", null, "normal", 0, 1, Set.of("C1"), null)
+        );
+        
+        String generalFiltersJson = "[" +
+            "{\"attribute\":\"region\",\"operator\":\"is not\",\"value\":\"West\"}," +
+            "{\"attribute\":\"category\",\"operator\":\"!=\",\"value\":\"Furniture\"}," +
+            "{\"attribute\":\"name\",\"operator\":\"not like\",\"value\":\"John\"}" +
+            "]";
+            
+        ReportConfigDto config = new ReportConfigDto(
+            "REP1", "Test Report", columns, rows, LocalDate.of(2026, 5, 26), 1, Enums.ReportStatus.draft,
+            "analytics.fact_sales", "weekly", null, null, false, null, generalFiltersJson
+        );
+
+        Map<String, ResolvedMetricDto> resolved = Map.of(
+            "R1", new ResolvedMetricDto(
+                "m1", 101, "SUM(amount)", "SUM", "NUMERIC", "analytics.fact_sales", "fact_sales", "order_date", 1, null
+            )
+        );
+
+        // Act
+        String sql = service.generate(config, resolved);
+
+        // Assert
+        assertThat(sql).contains("WHERE ((region <> 'West' OR region IS NULL)) " +
+            "AND ((category <> 'Furniture' OR category IS NULL)) " +
+            "AND ((name NOT LIKE '%John%' ESCAPE '\\' OR name IS NULL))");
+    }
+
+    @Test
+    @DisplayName("generate with general filters splits IN operator values by comma")
+    public void generate_withGeneralFiltersIn_shouldSplitValues() {
+        // Arrange
+        List<ColumnDefDto> columns = List.of(
+            new ColumnDefDto("C1", "Col 1", Enums.ColType.WEEK, 0, null, null, 1)
+        );
+        List<ReportRowDto> rows = List.of(
+            new ReportRowDto("R1", "REP1", "Row 1", Enums.RowType.data, "m1", null, "normal", 0, 1, Set.of("C1"), null)
+        );
+        
+        String generalFiltersJson = "[" +
+            "{\"attribute\":\"country\",\"operator\":\"in\",\"value\":\"US, CA, FR\"}" +
+            "]";
+            
+        ReportConfigDto config = new ReportConfigDto(
+            "REP1", "Test Report", columns, rows, LocalDate.of(2026, 5, 26), 1, Enums.ReportStatus.draft,
+            "analytics.fact_sales", "weekly", null, null, false, null, generalFiltersJson
+        );
+
+        Map<String, ResolvedMetricDto> resolved = Map.of(
+            "R1", new ResolvedMetricDto(
+                "m1", 101, "SUM(amount)", "SUM", "NUMERIC", "analytics.fact_sales", "fact_sales", "order_date", 1, null
+            )
+        );
+
+        // Act
+        String sql = service.generate(config, resolved);
+
+        // Assert
+        assertThat(sql).contains("WHERE (country IN ('US', 'CA', 'FR'))");
+    }
+
+    @Test
+    @DisplayName("generate with general filters maps special operators and ignores value")
+    public void generate_withGeneralFiltersSpecial_shouldIgnoreValue() {
+        // Arrange
+        List<ColumnDefDto> columns = List.of(
+            new ColumnDefDto("C1", "Col 1", Enums.ColType.WEEK, 0, null, null, 1)
+        );
+        List<ReportRowDto> rows = List.of(
+            new ReportRowDto("R1", "REP1", "Row 1", Enums.RowType.data, "m1", null, "normal", 0, 1, Set.of("C1"), null)
+        );
+        
+        String generalFiltersJson = "[" +
+            "{\"attribute\":\"region\",\"operator\":\"is blank\",\"value\":\"ignored\"}," +
+            "{\"attribute\":\"category\",\"operator\":\"is not blank\",\"value\":null}," +
+            "{\"attribute\":\"name\",\"operator\":\"is null\"}," +
+            "{\"attribute\":\"status\",\"operator\":\"is not null\"}" +
+            "]";
+            
+        ReportConfigDto config = new ReportConfigDto(
+            "REP1", "Test Report", columns, rows, LocalDate.of(2026, 5, 26), 1, Enums.ReportStatus.draft,
+            "analytics.fact_sales", "weekly", null, null, false, null, generalFiltersJson
+        );
+
+        Map<String, ResolvedMetricDto> resolved = Map.of(
+            "R1", new ResolvedMetricDto(
+                "m1", 101, "SUM(amount)", "SUM", "NUMERIC", "analytics.fact_sales", "fact_sales", "order_date", 1, null
+            )
+        );
+
+        // Act
+        String sql = service.generate(config, resolved);
+
+        // Assert
+        assertThat(sql).contains("WHERE ((region IS NULL OR TRIM(region) = '')) " +
+            "AND ((category IS NOT NULL AND TRIM(category) <> '')) " +
+            "AND (name IS NULL) " +
+            "AND (status IS NOT NULL)");
+    }
+
+    @Test
+    @DisplayName("generate with general filters handles wildcard search escaping")
+    public void generate_withGeneralFiltersWildcards_shouldEscape() {
+        // Arrange
+        List<ColumnDefDto> columns = List.of(
+            new ColumnDefDto("C1", "Col 1", Enums.ColType.WEEK, 0, null, null, 1)
+        );
+        List<ReportRowDto> rows = List.of(
+            new ReportRowDto("R1", "REP1", "Row 1", Enums.RowType.data, "m1", null, "normal", 0, 1, Set.of("C1"), null)
+        );
+        
+        String generalFiltersJson = "[" +
+            "{\"attribute\":\"code\",\"operator\":\"like\",\"value\":\"10%_\\\\\"}," +
+            "{\"attribute\":\"prefix\",\"operator\":\"starts with\",\"value\":\"abc%\"}," +
+            "{\"attribute\":\"suffix\",\"operator\":\"ends with\",\"value\":\"_xyz\"}" +
+            "]";
+            
+        ReportConfigDto config = new ReportConfigDto(
+            "REP1", "Test Report", columns, rows, LocalDate.of(2026, 5, 26), 1, Enums.ReportStatus.draft,
+            "analytics.fact_sales", "weekly", null, null, false, null, generalFiltersJson
+        );
+
+        Map<String, ResolvedMetricDto> resolved = Map.of(
+            "R1", new ResolvedMetricDto(
+                "m1", 101, "SUM(amount)", "SUM", "NUMERIC", "analytics.fact_sales", "fact_sales", "order_date", 1, null
+            )
+        );
+
+        // Act
+        String sql = service.generate(config, resolved);
+
+        // Assert
+        assertThat(sql).contains("WHERE (code LIKE '%10\\%\\_\\\\%' ESCAPE '\\') " +
+            "AND (prefix LIKE 'abc\\%%' ESCAPE '\\') " +
+            "AND (suffix LIKE '%\\_xyz' ESCAPE '\\')");
+    }
+
+    @Test
+    @DisplayName("generate with general filters compiles comparison operators correctly")
+    public void generate_withGeneralFiltersComparison_shouldCompile() {
+        // Arrange
+        List<ColumnDefDto> columns = List.of(
+            new ColumnDefDto("C1", "Col 1", Enums.ColType.WEEK, 0, null, null, 1)
+        );
+        List<ReportRowDto> rows = List.of(
+            new ReportRowDto("R1", "REP1", "Row 1", Enums.RowType.data, "m1", null, "normal", 0, 1, Set.of("C1"), null)
+        );
+        
+        String generalFiltersJson = "[" +
+            "{\"attribute\":\"amount\",\"operator\":\">\",\"value\":\"100\"}," +
+            "{\"attribute\":\"amount\",\"operator\":\">=\",\"value\":\"150\"}," +
+            "{\"attribute\":\"quantity\",\"operator\":\"<\",\"value\":\"10\"}," +
+            "{\"attribute\":\"quantity\",\"operator\":\"<=\",\"value\":\"20\"}" +
+            "]";
+            
+        ReportConfigDto config = new ReportConfigDto(
+            "REP1", "Test Report", columns, rows, LocalDate.of(2026, 5, 26), 1, Enums.ReportStatus.draft,
+            "analytics.fact_sales", "weekly", null, null, false, null, generalFiltersJson
+        );
+
+        Map<String, ResolvedMetricDto> resolved = Map.of(
+            "R1", new ResolvedMetricDto(
+                "m1", 101, "SUM(amount)", "SUM", "NUMERIC", "analytics.fact_sales", "fact_sales", "order_date", 1, null
+            )
+        );
+
+        // Act
+        String sql = service.generate(config, resolved);
+
+        // Assert
+        assertThat(sql).contains("WHERE (amount > '100') " +
+            "AND (amount >= '150') " +
+            "AND (quantity < '10') " +
+            "AND (quantity <= '20')");
+    }
 }
+

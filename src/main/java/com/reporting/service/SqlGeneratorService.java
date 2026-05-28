@@ -1,6 +1,8 @@
 package com.reporting.service;
 
 import com.reporting.dto.*;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.core.type.TypeReference;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
@@ -113,14 +115,29 @@ public class SqlGeneratorService {
             }
         }
 
+        List<FilterCondition> generalFilters = parseGeneralFilters(config.getGeneralFilters());
+        List<String> compiledFilters = new ArrayList<>();
+        for (FilterCondition cond : generalFilters) {
+            String sqlCond = compileFilterCondition(cond);
+            if (sqlCond != null && !sqlCond.isBlank()) {
+                compiledFilters.add("(" + sqlCond + ")");
+            }
+        }
+        
+        String whereClause = "";
+        if (!compiledFilters.isEmpty()) {
+            whereClause = "\n  WHERE " + String.join(" AND ", compiledFilters);
+        }
+
         String joinStr = (joins != null && !joins.isEmpty()) ? "\n" + String.join("\n", joins) : "";
 
         return String.format(
-            "cte_%d AS (\n  SELECT\n  %s\n  FROM %s%s\n)",
+            "cte_%d AS (\n  SELECT\n  %s\n  FROM %s%s%s\n)",
             exploreId,
             String.join(",\n  ", selectClauses),
             factTable,
-            joinStr
+            joinStr,
+            whereClause
         );
     }
 
@@ -151,5 +168,161 @@ public class SqlGeneratorService {
         if (openParen != 0) {
             throw new IllegalArgumentException("Unmatched parentheses in filter expression: " + expr);
         }
+    }
+
+    private List<FilterCondition> parseGeneralFilters(String json) {
+        if (json == null || json.isBlank()) {
+            return Collections.emptyList();
+        }
+        try {
+            ObjectMapper mapper = new ObjectMapper();
+            return mapper.readValue(json, new TypeReference<List<FilterCondition>>() {});
+        } catch (Exception e) {
+            throw new IllegalArgumentException("Failed to parse general filters JSON: " + json, e);
+        }
+    }
+
+    public String compileFilterCondition(FilterCondition cond) {
+        if (cond == null) {
+            return "";
+        }
+        
+        String dimTable = cond.getDimTable();
+        String attribute = cond.getAttribute();
+        String operator = cond.getOperator();
+        String value = cond.getValue();
+        
+        if (attribute == null || attribute.isBlank()) {
+            throw new IllegalArgumentException("Filter attribute cannot be blank");
+        }
+        if (operator == null || operator.isBlank()) {
+            throw new IllegalArgumentException("Filter operator cannot be blank");
+        }
+        
+        if (dimTable != null && !dimTable.isBlank() && !dimTable.matches("^[a-zA-Z0-9_]+$")) {
+            throw new IllegalArgumentException("Invalid table name in filter: " + dimTable);
+        }
+        if (!attribute.matches("^[a-zA-Z0-9_]+$")) {
+            throw new IllegalArgumentException("Invalid column name in filter: " + attribute);
+        }
+        
+        String col = (dimTable != null && !dimTable.isBlank()) ? (dimTable.trim() + "." + attribute.trim()) : attribute.trim();
+        String op = operator.trim().toLowerCase();
+        
+        String result;
+        switch (op) {
+            case "=":
+            case "is": {
+                String escapedVal = (value != null ? value : "").replace("'", "''");
+                result = String.format("%s = '%s'", col, escapedVal);
+                break;
+            }
+            case "is not":
+            case "!=": {
+                String escapedVal = (value != null ? value : "").replace("'", "''");
+                result = String.format("(%s <> '%s' OR %s IS NULL)", col, escapedVal, col);
+                break;
+            }
+            case "like": {
+                String escapedVal = (value != null ? value : "").replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_").replace("'", "''");
+                result = String.format("%s LIKE '%%%s%%' ESCAPE '\\'", col, escapedVal);
+                break;
+            }
+            case "not like": {
+                String escapedVal = (value != null ? value : "").replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_").replace("'", "''");
+                result = String.format("(%s NOT LIKE '%%%s%%' ESCAPE '\\' OR %s IS NULL)", col, escapedVal, col);
+                break;
+            }
+            case "starts with": {
+                String escapedVal = (value != null ? value : "").replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_").replace("'", "''");
+                result = String.format("%s LIKE '%s%%' ESCAPE '\\'", col, escapedVal);
+                break;
+            }
+            case "ends with": {
+                String escapedVal = (value != null ? value : "").replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_").replace("'", "''");
+                result = String.format("%s LIKE '%%%s' ESCAPE '\\'", col, escapedVal);
+                break;
+            }
+            case "is blank": {
+                result = String.format("(%s IS NULL OR TRIM(%s) = '')", col, col);
+                break;
+            }
+            case "is not blank": {
+                result = String.format("(%s IS NOT NULL AND TRIM(%s) <> '')", col, col);
+                break;
+            }
+            case "is null": {
+                result = String.format("%s IS NULL", col);
+                break;
+            }
+            case "is not null": {
+                result = String.format("%s IS NOT NULL", col);
+                break;
+            }
+            case "in": {
+                String valStr = value != null ? value : "";
+                String[] parts = valStr.split(",");
+                List<String> list = new ArrayList<>();
+                for (String part : parts) {
+                    list.add("'" + part.trim().replace("'", "''") + "'");
+                }
+                if (list.isEmpty()) {
+                    result = String.format("%s IN (NULL)", col);
+                } else {
+                    result = String.format("%s IN (%s)", col, String.join(", ", list));
+                }
+                break;
+            }
+            case ">": {
+                String escapedVal = (value != null ? value : "").replace("'", "''");
+                result = String.format("%s > '%s'", col, escapedVal);
+                break;
+            }
+            case ">=": {
+                String escapedVal = (value != null ? value : "").replace("'", "''");
+                result = String.format("%s >= '%s'", col, escapedVal);
+                break;
+            }
+            case "<": {
+                String escapedVal = (value != null ? value : "").replace("'", "''");
+                result = String.format("%s < '%s'", col, escapedVal);
+                break;
+            }
+            case "<=": {
+                String escapedVal = (value != null ? value : "").replace("'", "''");
+                result = String.format("%s <= '%s'", col, escapedVal);
+                break;
+            }
+            default:
+                throw new IllegalArgumentException("Unsupported filter operator: " + operator);
+        }
+        
+        validateFilterExpr(result);
+        return result;
+    }
+
+    public static class FilterCondition {
+        private String dimTable;
+        private String attribute;
+        private String operator;
+        private String value;
+
+        public FilterCondition() {}
+
+        public FilterCondition(String dimTable, String attribute, String operator, String value) {
+            this.dimTable = dimTable;
+            this.attribute = attribute;
+            this.operator = operator;
+            this.value = value;
+        }
+
+        public String getDimTable() { return dimTable; }
+        public void setDimTable(String dimTable) { this.dimTable = dimTable; }
+        public String getAttribute() { return attribute; }
+        public void setAttribute(String attribute) { this.attribute = attribute; }
+        public String getOperator() { return operator; }
+        public void setOperator(String operator) { this.operator = operator; }
+        public String getValue() { return value; }
+        public void setValue(String value) { this.value = value; }
     }
 }
