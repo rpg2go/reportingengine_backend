@@ -203,4 +203,66 @@ public class ReportControllerTest {
                 .andExpect(jsonPath("$[0].joinType").value("LEFT"))
                 .andExpect(jsonPath("$[0].joinSql").value("fv.rm_id = tv.id"));
     }
+
+    @Test
+    @DisplayName("GET /api/reports/table-columns: resolves dim view name without dot and returns columns")
+    public void listTableColumns_dimTableWithoutDot_shouldResolveAndReturnColumns() throws Exception {
+        JdbcOperations mockJdbcOperations = mock(JdbcOperations.class);
+        when(jdbcTemplate.getJdbcOperations()).thenReturn(mockJdbcOperations);
+        when(mockJdbcOperations.queryForObject(anyString(), eq(String.class), eq("dim_products")))
+                .thenReturn("analytics.dim_products");
+        when(mockJdbcOperations.queryForList(anyString(), eq(String.class), eq("analytics"), eq("dim_products")))
+                .thenReturn(List.of("id", "name", "category"));
+
+        mockMvc.perform(get("/api/reports/table-columns").param("table", "dim_products"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0]").value("id"))
+                .andExpect(jsonPath("$[1]").value("name"));
+    }
+
+    @Test
+    @DisplayName("GET /api/reports/column-types: resolves dim view name without dot and returns column types")
+    public void getColumnTypes_dimTableWithoutDot_shouldResolveAndReturnTypes() throws Exception {
+        JdbcOperations mockJdbcOperations = mock(JdbcOperations.class);
+        when(jdbcTemplate.getJdbcOperations()).thenReturn(mockJdbcOperations);
+        when(mockJdbcOperations.queryForObject(anyString(), eq(String.class), eq("dim_products")))
+                .thenReturn("analytics.dim_products");
+        
+        doAnswer(invocation -> {
+            org.springframework.jdbc.core.RowCallbackHandler handler = invocation.getArgument(1);
+            java.sql.ResultSet rs = mock(java.sql.ResultSet.class);
+            when(rs.getString("column_name")).thenReturn("id", "name");
+            when(rs.getString("data_type")).thenReturn("integer", "character varying");
+            
+            handler.processRow(rs);
+            handler.processRow(rs);
+            return null;
+        }).when(mockJdbcOperations).query(anyString(), any(org.springframework.jdbc.core.RowCallbackHandler.class), eq("analytics"), eq("dim_products"));
+
+        mockMvc.perform(get("/api/reports/column-types").param("table", "dim_products"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value("integer"))
+                .andExpect(jsonPath("$.name").value("character varying"));
+    }
+
+    @Test
+    @DisplayName("GET /api/reports/dimensions/values: resolves dim view name without dot and returns values")
+    public void getDimensionValues_dimTableWithoutDot_shouldResolveAndReturnValues() throws Exception {
+        JdbcOperations mockJdbcOperations = mock(JdbcOperations.class);
+        when(jdbcTemplate.getJdbcOperations()).thenReturn(mockJdbcOperations);
+        when(mockJdbcOperations.queryForObject(anyString(), eq(String.class), eq("dim_products")))
+                .thenReturn("analytics.dim_products");
+        when(mockJdbcOperations.queryForList(anyString(), eq(String.class)))
+                .thenReturn(List.of("analytics.dim_products"));
+        when(mockJdbcOperations.query(anyString(), any(RowMapper.class)))
+                .thenReturn(List.of("Gadget", "Widget"));
+
+        mockMvc.perform(get("/api/reports/dimensions/values")
+                        .param("table", "dim_products")
+                        .param("column", "category"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0]").value("Gadget"))
+                .andExpect(jsonPath("$[1]").value("Widget"));
+    }
 }
+

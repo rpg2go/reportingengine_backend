@@ -169,12 +169,28 @@ public class ReportController {
         return ResponseEntity.ok(tables);
     }
 
+    private String resolveTableRef(String table) {
+        if (table == null) {
+            return null;
+        }
+        if (table.contains(".")) {
+            return table;
+        }
+        String sql = "SELECT table_ref FROM reporting.sem_view WHERE name = ?";
+        try {
+            return jdbcTemplate.getJdbcOperations().queryForObject(sql, String.class, table);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
     @GetMapping("/table-columns")
     public ResponseEntity<List<String>> listTableColumns(@RequestParam("table") String table) {
-        if (!table.contains(".")) {
+        String resolved = resolveTableRef(table);
+        if (resolved == null || !resolved.contains(".")) {
             return ResponseEntity.badRequest().build();
         }
-        String[] parts = table.split("\\.");
+        String[] parts = resolved.split("\\.");
         String schema = parts[0];
         String tableName = parts[1];
         
@@ -191,10 +207,11 @@ public class ReportController {
 
     @GetMapping("/column-types")
     public ResponseEntity<Map<String, String>> getColumnTypes(@RequestParam("table") String table) {
-        if (!table.contains(".")) {
+        String resolved = resolveTableRef(table);
+        if (resolved == null || !resolved.contains(".")) {
             return ResponseEntity.badRequest().build();
         }
-        String[] parts = table.split("\\.");
+        String[] parts = resolved.split("\\.");
         String schema = parts[0];
         String tableName = parts[1];
         
@@ -217,21 +234,25 @@ public class ReportController {
     public ResponseEntity<List<String>> getDimensionValues(
             @RequestParam("table") String table,
             @RequestParam("column") String column) {
-        log.info("Fetching dimension values for table: {}, column: {}", table, column);
-        if (!table.startsWith("analytics.") || !column.matches("^[a-zA-Z0-9_]+$")) {
-            log.warn("Invalid table format or column regex mismatch. Table: {}, Column: {}", table, column);
+        String resolved = resolveTableRef(table);
+        if (resolved == null) {
+            return ResponseEntity.badRequest().build();
+        }
+        log.info("Fetching dimension values for table: {} (resolved: {}), column: {}", table, resolved, column);
+        if (!resolved.startsWith("analytics.") || !column.matches("^[a-zA-Z0-9_]+$")) {
+            log.warn("Invalid table format or column regex mismatch. Table: {}, Column: {}", resolved, column);
             return ResponseEntity.badRequest().build();
         }
 
         // Whitelist table name validation against existing database catalog tables in 'analytics' schema
         List<String> validTables = listTables().getBody();
-        if (validTables == null || !validTables.contains(table)) {
-            log.warn("Requested table is not in the analytics catalog whitelist: {}", table);
+        if (validTables == null || !validTables.contains(resolved)) {
+            log.warn("Requested table is not in the analytics catalog whitelist: {}", resolved);
             return ResponseEntity.badRequest().build();
         }
 
         String sql = String.format("SELECT DISTINCT %s FROM %s WHERE %s IS NOT NULL ORDER BY %s LIMIT 100", 
-            column, table, column, column);
+            column, resolved, column, column);
         
         List<String> values = jdbcTemplate.getJdbcOperations().query(sql, (rs, rowNum) -> {
             Object val = rs.getObject(1);
