@@ -13,6 +13,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
+import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
 
 import java.time.LocalDate;
@@ -135,7 +136,7 @@ public class ReportController {
     @PutMapping("/{id}")
     public ResponseEntity<?> saveReport(
             @PathVariable("id") String id,
-            @RequestBody ReportConfigDto configDto) {
+            @Valid @RequestBody ReportConfigDto configDto) {
         configDto.setReportId(id);
         try {
             configService.saveToDb(configDto);
@@ -146,7 +147,7 @@ public class ReportController {
     }
 
     @PostMapping
-    public ResponseEntity<?> createReport(@RequestBody ReportConfigDto configDto) {
+    public ResponseEntity<?> createReport(@Valid @RequestBody ReportConfigDto configDto) {
         if (configDto.getReportId() == null || configDto.getReportId().isBlank()) {
             return ResponseEntity.badRequest().body(Map.of("message", "Report ID is required"));
         }

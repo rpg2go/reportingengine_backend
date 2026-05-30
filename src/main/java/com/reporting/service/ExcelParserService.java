@@ -72,10 +72,24 @@ public class ExcelParserService {
                 String colId = getCellString(row.getCell(aHeaderMap.get("col_id")));
                 if (colId.isBlank()) continue;
 
+                if (colId.length() > 10) {
+                    throw new IllegalArgumentException("Column ID '" + colId + "' in Section A exceeds maximum length of 10 characters");
+                }
+                String colLabel = getCellString(row.getCell(aHeaderMap.get("label")));
+                if (colLabel.length() > 200) {
+                    throw new IllegalArgumentException("Column label '" + colLabel + "' in Section A exceeds maximum length of 200 characters");
+                }
+                String colTypeStr = getCellString(row.getCell(aHeaderMap.get("type"))).toUpperCase();
+                try {
+                    com.reporting.dto.Enums.ColType.valueOf(colTypeStr);
+                } catch (IllegalArgumentException e) {
+                    throw new IllegalArgumentException("Invalid column type '" + colTypeStr + "' for column '" + colId + "'. Must be one of: WEEK, MTD, YTD, ROLLING, CALC");
+                }
+
                 ParsedColumn col = ParsedColumn.builder()
                     .colId(colId)
-                    .label(getCellString(row.getCell(aHeaderMap.get("label"))))
-                    .colType(getCellString(row.getCell(aHeaderMap.get("type"))).toUpperCase())
+                    .label(colLabel)
+                    .colType(colTypeStr)
                     .periodOffset(getCellInt(row.getCell(aHeaderMap.get("offset")), 0))
                     .rollingN(getCellInt(row.getCell(aHeaderMap.get("rolling_n")), null))
                     .formulaExpr(getCellString(row.getCell(aHeaderMap.get("formula"))))
@@ -106,6 +120,31 @@ public class ExcelParserService {
                 String rowId = getCellString(row.getCell(bHeaderMap.get("row_id")));
                 if (reportId.isBlank() || rowId.isBlank()) continue;
 
+                if (reportId.length() > 50) {
+                    throw new IllegalArgumentException("Report ID '" + reportId + "' in Section B exceeds maximum length of 50 characters");
+                }
+                if (rowId.length() > 50) {
+                    throw new IllegalArgumentException("Row ID '" + rowId + "' in Section B exceeds maximum length of 50 characters");
+                }
+                String rowLabel = getCellString(row.getCell(bHeaderMap.get("label")));
+                if (rowLabel.length() > 300) {
+                    throw new IllegalArgumentException("Row label '" + rowLabel + "' for row '" + rowId + "' exceeds maximum length of 300 characters");
+                }
+                String rowTypeStr = getCellString(row.getCell(bHeaderMap.get("type"))).toLowerCase();
+                try {
+                    com.reporting.dto.Enums.RowType.valueOf(rowTypeStr);
+                } catch (IllegalArgumentException e) {
+                    throw new IllegalArgumentException("Invalid row type '" + rowTypeStr + "' for row '" + rowId + "'. Must be one of: section, data, calc, blank");
+                }
+                String parentRowId = bHeaderMap.containsKey("parent") ? getCellString(row.getCell(bHeaderMap.get("parent"))) : null;
+                if (parentRowId != null && parentRowId.length() > 50) {
+                    throw new IllegalArgumentException("Parent Row ID '" + parentRowId + "' for row '" + rowId + "' exceeds maximum length of 50 characters");
+                }
+                String filterExpr = bHeaderMap.containsKey("filter") ? getCellString(row.getCell(bHeaderMap.get("filter"))) : null;
+                if (filterExpr != null && filterExpr.length() > 2000) {
+                    throw new IllegalArgumentException("Filter expression for row '" + rowId + "' exceeds maximum length of 2000 characters");
+                }
+
                 Set<String> activeCols = new HashSet<>();
                 for (Map.Entry<String, Integer> colFlag : colFlags.entrySet()) {
                     String flagVal = getCellString(row.getCell(colFlag.getValue()));
@@ -117,13 +156,13 @@ public class ExcelParserService {
                 ParsedRow pr = ParsedRow.builder()
                     .reportId(reportId)
                     .rowId(rowId)
-                    .label(getCellString(row.getCell(bHeaderMap.get("label"))))
-                    .rowType(getCellString(row.getCell(bHeaderMap.get("type"))).toLowerCase())
+                    .label(rowLabel)
+                    .rowType(rowTypeStr)
                     .source(getCellString(row.getCell(bHeaderMap.get("source"))))
-                    .parentRowId(bHeaderMap.containsKey("parent") ? getCellString(row.getCell(bHeaderMap.get("parent"))) : null)
+                    .parentRowId(parentRowId != null && !parentRowId.isBlank() ? parentRowId : null)
                     .style(bHeaderMap.containsKey("style") ? getCellString(row.getCell(bHeaderMap.get("style"))) : "normal")
                     .indentLevel(bHeaderMap.containsKey("indent") ? getCellInt(row.getCell(bHeaderMap.get("indent")), 0) : 0)
-                    .filterExpr(bHeaderMap.containsKey("filter") ? getCellString(row.getCell(bHeaderMap.get("filter"))) : null)
+                    .filterExpr(filterExpr)
                     .activeCols(activeCols)
                     .displayOrder(parsedRows.size() + 1)
                     .build();

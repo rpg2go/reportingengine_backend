@@ -98,10 +98,20 @@ public class ReportControllerTest {
                 .andExpect(jsonPath("$.message").value("Template imported successfully"));
     }
 
+    private ReportConfigDto createValidReportConfigDto() {
+        ReportConfigDto dto = new ReportConfigDto();
+        dto.setReportId("RPT_NEW");
+        dto.setName("New Report");
+        dto.setColumns(Collections.emptyList());
+        dto.setRows(Collections.emptyList());
+        dto.setStatus(Enums.ReportStatus.draft);
+        return dto;
+    }
+
     @Test
     @DisplayName("POST /api/reports: returns Bad Request when report ID is missing")
     public void createReport_missingReportId_shouldReturnBadRequest() throws Exception {
-        ReportConfigDto dto = new ReportConfigDto();
+        ReportConfigDto dto = createValidReportConfigDto();
         dto.setReportId(""); // Empty report ID
         
         mockMvc.perform(post("/api/reports")
@@ -109,15 +119,14 @@ public class ReportControllerTest {
                         .content(objectMapper.writeValueAsString(dto))
                         .with(csrf()))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message").value("Report ID is required"));
+                .andExpect(jsonPath("$.message").value("Validation failed"))
+                .andExpect(jsonPath("$.errors.reportId").value("Report ID is required"));
     }
 
     @Test
     @DisplayName("POST /api/reports: successfully saves new config")
     public void createReport_validConfig_shouldReturnSuccess() throws Exception {
-        ReportConfigDto dto = new ReportConfigDto();
-        dto.setReportId("RPT_NEW");
-        dto.setName("New Report");
+        ReportConfigDto dto = createValidReportConfigDto();
         doNothing().when(configService).saveToDb(any());
 
         mockMvc.perform(post("/api/reports")
@@ -126,6 +135,36 @@ public class ReportControllerTest {
                         .with(csrf()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.message").value("Report created successfully"));
+    }
+
+    @Test
+    @DisplayName("PUT /api/reports/{id}: successfully saves existing config")
+    public void saveReport_validConfig_shouldReturnSuccess() throws Exception {
+        ReportConfigDto dto = createValidReportConfigDto();
+        dto.setReportId("RPT_NEW");
+        doNothing().when(configService).saveToDb(any());
+
+        mockMvc.perform(put("/api/reports/RPT_NEW")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(dto))
+                        .with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("Report saved successfully"));
+    }
+
+    @Test
+    @DisplayName("PUT /api/reports/{id}: returns Bad Request when name is blank")
+    public void saveReport_blankName_shouldReturnBadRequest() throws Exception {
+        ReportConfigDto dto = createValidReportConfigDto();
+        dto.setName("   "); // Blank name
+        
+        mockMvc.perform(put("/api/reports/RPT_NEW")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(dto))
+                        .with(csrf()))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Validation failed"))
+                .andExpect(jsonPath("$.errors.name").value("Name is required"));
     }
 
     @Test

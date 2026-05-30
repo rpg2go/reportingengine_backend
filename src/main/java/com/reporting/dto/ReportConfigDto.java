@@ -1,21 +1,48 @@
 package com.reporting.dto;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import java.time.LocalDate;
 import java.util.List;
 
 public class ReportConfigDto {
+    @NotBlank(message = "Report ID is required")
+    @Size(max = 50, message = "Report ID must be at most 50 characters")
     private String reportId;
+
+    @NotBlank(message = "Name is required")
+    @Size(max = 200, message = "Name must be at most 200 characters")
     private String name;
+
+    @NotNull(message = "Columns list cannot be null")
+    @Valid
     private List<ColumnDefDto> columns;
+
+    @NotNull(message = "Rows list cannot be null")
+    @Valid
     private List<ReportRowDto> rows;
+
     private LocalDate referenceDate;
     private Integer exploreId;
+
+    @NotNull(message = "Status cannot be null")
     private Enums.ReportStatus status;
+
+    @Size(max = 150, message = "Source table must be at most 150 characters")
     private String sourceTable;
+
+    @Size(max = 100, message = "Granularity must be at most 100 characters")
     private String granularity;
+
+    @Size(max = 50, message = "Timeframe start must be at most 50 characters")
     private String timeframeStart;
+
+    @Size(max = 50, message = "Timeframe end must be at most 50 characters")
     private String timeframeEnd;
+
     private Boolean timeframeToday;
     private String quickFilters;
     private String generalFilters;
