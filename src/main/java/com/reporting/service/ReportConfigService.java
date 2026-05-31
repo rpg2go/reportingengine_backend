@@ -66,15 +66,114 @@ public class ReportConfigService {
                 rs.getInt("display_order")
             ), reportId);
 
-        // 3. Row metrics — sql_expr or fallback to measure name
-        Map<String, String> measureNamesByRow = new HashMap<>();
+        // 3. Row metrics — sql_expr or fallback to measure_definition JSON
+        // 2.5 Load semantic measures for translation lookup
+        Map<String, SemanticMeasureInfo> semMeasures = new HashMap<>();
         jdbcTemplate.query(
-            "SELECT rm.row_id, COALESCE(rm.sql_expr, sm.name, '') AS source " +
+            "SELECT sm.name, sm.sql_expr, sv.table_ref " +
+            "FROM reporting.sem_measure sm " +
+            "JOIN reporting.sem_view sv ON sv.view_id = sm.view_id",
+            (RowCallbackHandler) rs -> {
+                String name = rs.getString("name").toLowerCase();
+                semMeasures.put(name, new SemanticMeasureInfo(
+                    rs.getString("sql_expr"),
+                    rs.getString("table_ref")
+                ));
+            }
+        );
+
+        // 2.6 Load semantic view table references for resilient table detection
+        Set<String> semViewTables = new LinkedHashSet<>();
+        jdbcTemplate.query(
+            "SELECT DISTINCT table_ref FROM reporting.sem_view WHERE table_ref IS NOT NULL",
+            (RowCallbackHandler) rs -> {
+                String tbl = rs.getString("table_ref");
+                if (tbl != null && !tbl.isBlank()) {
+                    semViewTables.add(tbl.trim());
+                }
+            }
+        );
+
+        // 3. Row metrics — sql_expr or fallback to measure_definition JSON
+        Map<String, MeasureDefinition> measuresByRow = new HashMap<>();
+        com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+        jdbcTemplate.query(
+            "SELECT rm.row_id, rm.measure_definition, rm.sql_expr, sm.name AS sem_name, sm.sql_expr AS sem_sql_expr, sv.table_ref AS sem_table " +
             "FROM reporting.rpt_row_metric rm " +
             "LEFT JOIN reporting.sem_measure sm ON sm.measure_id = rm.measure_id " +
+            "LEFT JOIN reporting.sem_view sv ON sv.view_id = sm.view_id " +
             "WHERE rm.report_id = ?",
-            (RowCallbackHandler) rs -> measureNamesByRow.put(rs.getString("row_id").toUpperCase(), rs.getString("source")),
+            (RowCallbackHandler) rs -> {
+                String rid = rs.getString("row_id").toUpperCase();
+                String measureDefStr = rs.getString("measure_definition");
+                MeasureDefinition mdef = null;
+                if (measureDefStr != null && !measureDefStr.isBlank()) {
+                    try {
+                        mdef = mapper.readValue(measureDefStr, MeasureDefinition.class);
+                    } catch (Exception e) {
+                        // ignore
+                    }
+                }
+                if (mdef == null) {
+                    // Fallback to sql_expr or sem_sql_expr or sem_name
+                    String expr = rs.getString("sql_expr");
+                    if (expr == null || expr.isBlank()) {
+                        expr = rs.getString("sem_sql_expr");
+                    }
+                    if (expr == null || expr.isBlank()) {
+                        expr = rs.getString("sem_name");
+                    }
+                    if (expr == null) {
+                        expr = "";
+                    }
+                    String table = rs.getString("sem_table");
+                    mdef = MeasureDefinition.builder()
+                        .mode("raw")
+                        .rawSql(expr)
+                        .table(table)
+                        .build();
+                }
+
+                // Apply fallback translation layer if rawSql matches a semantic measure
+                if (mdef.getRawSql() != null) {
+                    String cleanSql = mdef.getRawSql().trim().toLowerCase();
+                    if (semMeasures.containsKey(cleanSql)) {
+                        SemanticMeasureInfo info = semMeasures.get(cleanSql);
+                        mdef = MeasureDefinition.builder()
+                            .mode("raw")
+                            .rawSql(info.sqlExpr)
+                            .table(info.tableRef)
+                            .build();
+                    }
+                }
+
+                // Resilient Table Detection: If table is null/blank, scan rawSql for known table_refs
+                if (mdef.getTable() == null || mdef.getTable().isBlank()) {
+                    if (mdef.getRawSql() != null && !mdef.getRawSql().isBlank()) {
+                        String raw = mdef.getRawSql();
+                        for (String tbl : semViewTables) {
+                            String shortTbl = tbl;
+                            if (tbl.contains(".")) {
+                                shortTbl = tbl.substring(tbl.lastIndexOf(".") + 1);
+                            }
+                            String escapedFull = java.util.regex.Pattern.quote(tbl);
+                            String escapedShort = java.util.regex.Pattern.quote(shortTbl);
+                            java.util.regex.Pattern pattern = java.util.regex.Pattern.compile(
+                                "\\b(" + escapedFull + "|" + escapedShort + ")\\b",
+                                java.util.regex.Pattern.CASE_INSENSITIVE
+                            );
+                            if (pattern.matcher(raw).find()) {
+                                mdef.setTable(tbl);
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                measuresByRow.put(rid, mdef);
+            },
             reportId);
+
 
         // 4. Row formulas
         Map<String, String> formulasByRow = new HashMap<>();
@@ -107,11 +206,15 @@ public class ReportConfigService {
             (rs, rowNum) -> {
                 String rid = rs.getString("row_id").toUpperCase();
                 String rowType = rs.getString("row_type");
-                String source = "";
+                MeasureDefinition source = null;
                 if ("data".equalsIgnoreCase(rowType)) {
-                    source = measureNamesByRow.getOrDefault(rid, "");
+                    source = measuresByRow.get(rid);
                 } else if ("calc".equalsIgnoreCase(rowType)) {
-                    source = formulasByRow.getOrDefault(rid, "");
+                    String formula = formulasByRow.getOrDefault(rid, "");
+                    source = MeasureDefinition.builder()
+                        .mode("raw")
+                        .rawSql(formula)
+                        .build();
                 }
                 Integer styleId = (Integer) rs.getObject("style_id");
                 String styleName = styleId != null ? styleNameMap.getOrDefault(styleId, "normal") : "normal";
@@ -151,6 +254,7 @@ public class ReportConfigService {
     @Transactional
     public void saveToDb(ReportConfigDto dto) {
         String reportId = dto.getReportId();
+        com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
 
         // 1. Delete previous configuration cascade to ensure clean overwrite (only delete child tables)
         jdbcTemplate.update("DELETE FROM reporting.rpt_row_column_map WHERE report_id = ?", reportId);
@@ -244,22 +348,37 @@ public class ReportConfigService {
                 reportRowRepository.save(rr);
 
                 // Row Metric (DATA rows)
-                if (rrDto.rowType() == Enums.RowType.data && rrDto.source() != null && !rrDto.source().isBlank()) {
+                if (rrDto.rowType() == Enums.RowType.data && rrDto.source() != null) {
+                    String defJson = null;
+                    String sqlExpr = "";
+                    try {
+                        defJson = mapper.writeValueAsString(rrDto.source());
+                        if ("visual".equalsIgnoreCase(rrDto.source().getMode())) {
+                            String agg = rrDto.source().getAggregation() != null ? rrDto.source().getAggregation().trim().toUpperCase() : "SUM";
+                            String col = rrDto.source().getTargetColumn() != null ? rrDto.source().getTargetColumn().trim() : "";
+                            sqlExpr = agg + "(" + col + ")";
+                        } else {
+                            sqlExpr = rrDto.source().getRawSql();
+                        }
+                    } catch (Exception e) {
+                        // ignore
+                    }
                     RowMetric rm = RowMetric.builder()
                         .reportId(reportId)
                         .rowId(rrDto.rowId())
-                        .sqlExpr(rrDto.source()) // directly save custom SQL expression / aggregation
+                        .sqlExpr(sqlExpr)
+                        .measureDefinition(defJson)
                         .exploreId(dto.getExploreId())
                         .build();
                     rowMetricRepository.save(rm);
                 }
 
                 // Row Formula (CALC rows)
-                if (rrDto.rowType() == Enums.RowType.calc && rrDto.source() != null && !rrDto.source().isBlank()) {
+                if (rrDto.rowType() == Enums.RowType.calc && rrDto.source() != null) {
                     RowFormula rf = RowFormula.builder()
                         .reportId(reportId)
                         .rowId(rrDto.rowId())
-                        .formulaExpr(rrDto.source())
+                        .formulaExpr(rrDto.source().getRawSql() != null ? rrDto.source().getRawSql() : "")
                         .build();
                     rowFormulaRepository.save(rf);
                 }
@@ -278,6 +397,15 @@ public class ReportConfigService {
                     }
                 }
             }
+        }
+    }
+
+    private static class SemanticMeasureInfo {
+        final String sqlExpr;
+        final String tableRef;
+        SemanticMeasureInfo(String sqlExpr, String tableRef) {
+            this.sqlExpr = sqlExpr;
+            this.tableRef = tableRef;
         }
     }
 }

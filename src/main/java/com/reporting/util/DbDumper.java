@@ -95,7 +95,7 @@ public class DbDumper {
             // 4. Dump rpt_row_metric
             System.out.println("Dumping reporting.rpt_row_metric...");
             dumpTable(conn, writer, "reporting.rpt_row_metric", new String[]{
-                "report_id", "row_id", "measure_id", "explore_id", "sql_expr"
+                "report_id", "row_id", "measure_id", "explore_id", "sql_expr", "measure_definition"
             }, "report_id, row_id");
 
             // 5. Dump rpt_row_formula

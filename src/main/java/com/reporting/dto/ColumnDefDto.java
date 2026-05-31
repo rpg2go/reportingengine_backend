@@ -4,6 +4,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
+@com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
 public record ColumnDefDto(
     @NotBlank(message = "Column ID is required")
     @Size(max = 10, message = "Column ID must be at most 10 characters")

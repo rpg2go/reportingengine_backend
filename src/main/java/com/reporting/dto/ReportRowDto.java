@@ -5,6 +5,7 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.util.Set;
 
+@com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
 public record ReportRowDto(
     @NotBlank(message = "Row ID is required")
     @Size(max = 50, message = "Row ID must be at most 50 characters")
@@ -20,7 +21,7 @@ public record ReportRowDto(
     @NotNull(message = "Row type is required")
     Enums.RowType rowType,
 
-    String source,
+    MeasureDefinition source,
 
     @Size(max = 50, message = "Parent Row ID must be at most 50 characters")
     String parentRowId,

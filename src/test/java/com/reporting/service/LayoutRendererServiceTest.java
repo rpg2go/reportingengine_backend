@@ -4,6 +4,7 @@ import com.reporting.dto.ColumnDefDto;
 import com.reporting.dto.Enums;
 import com.reporting.dto.ReportConfigDto;
 import com.reporting.dto.ReportRowDto;
+import com.reporting.dto.MeasureDefinition;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
@@ -32,8 +33,8 @@ public class LayoutRendererServiceTest {
             new ColumnDefDto("C1", "Col 1 Label", Enums.ColType.WEEK, 0, null, null, 1)
         );
         List<ReportRowDto> rows = List.of(
-            new ReportRowDto("R1", "REP1", "Revenue", Enums.RowType.data, "m1", null, "section", 0, 1, Set.of("C1"), null),
-            new ReportRowDto("R2", "REP1", "Cost", Enums.RowType.data, "m2", null, "normal", 1, 2, Set.of("C1"), null)
+            new ReportRowDto("R1", "REP1", "Revenue", Enums.RowType.data, new MeasureDefinition("raw", null, null, null, "m1"), null, "section", 0, 1, Set.of("C1"), null),
+            new ReportRowDto("R2", "REP1", "Cost", Enums.RowType.data, new MeasureDefinition("raw", null, null, null, "m2"), null, "normal", 1, 2, Set.of("C1"), null)
         );
         ReportConfigDto config = new ReportConfigDto(
             "REP1", "Report A", columns, rows, null, 1, null, "a", "w", null, null, false, null, null

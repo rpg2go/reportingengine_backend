@@ -18,7 +18,7 @@ The platform is designed to run in containerized environments. There are two pri
 ### 1. Database Image
 
 - Bundles PostgreSQL 16 on Alpine.
-- Copies all migrations located in [db/migrations/](file:///G:/workspace/ReportTemplate/db/migrations) to `/docker-entrypoint-initdb.d/` so they run automatically when the container starts.
+- Copies all migrations located in [db/migrations/](file:///G:/workspace/ReportTemplate_BackEnd/db/migrations) to `/docker-entrypoint-initdb.d/` so they run automatically when the container starts.
 
 ### 2. Backend (Spring Boot Jar)
 

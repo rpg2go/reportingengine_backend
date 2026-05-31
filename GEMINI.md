@@ -8,7 +8,8 @@ This document serves as the architecture reference, implementation state, and co
 
 - **Objective**: Build a metadata-driven orchestration reporting engine.
 - **Phase 1 (Completed)**: JPA Database Persistence, migration utilities, and Direct JDBC access optimization.
-- **Phase 2 (Pending)**: SQL Compilation, Dynamic Row Filters Assembly, and Excel Rendering. See Phase 2 Roadmap below.
+- **Phase 2 (Completed)**: SQL Compilation, Dynamic Row Filters Assembly, and Excel Rendering.
+- **Phase 3 (In Progress)**: Validation, Verification, and Polish. See Phase 3 Roadmap below.
 
 ---
 
@@ -129,16 +130,15 @@ maven\apache-maven-3.9.6\bin\mvn.cmd compile exec:java "-Dexec.mainClass=com.rep
 
 ---
 
-## 🧭 Phase 2 Implementation Roadmap
+## 🧭 Phase 3 Validation & Polish Roadmap
 
-When you are tasked with starting Phase 2, follow this development sequence:
+When you are tasked with starting Phase 3, follow this development sequence:
 
-1. **SQL Compilation (`SqlGeneratorService.java`)**:
-   - Ingest the report's `source_table`.
-   - Read the row's custom SQL aggregation (`sql_expr` e.g., `SUM(amount)`).
-   - Apply row-level `filter_expr` as well as report-level `general_filters` (from `rpt_report.general_filters` JSON list).
-   - Build date boundaries for columns based on column offsets/rolling settings relative to the reference date, and combine them all inside query CTE definitions.
-2. **Calculation Evaluation (`PostProcessorService.java`)**:
-   - Evaluate row-level formulas (e.g., `R2 / R3`) and column-level formulas (e.g., `C2-C3`) using a post-processor parser (like `exp4j` which is already in `pom.xml`).
-3. **Excel Rendering (`LayoutRendererService.java`)**:
-   - Format, style, and print the finished dataset into the download spreadsheet templates.
+1. **Frontend Integration & UI Enhancements**:
+   - Update report detail view to show a loading spinner and live status badges during execution runs.
+   - Fix "Rolling In" field behavior in the Step 2 column setup wizard.
+2. **Edge Case Validation**:
+   - Test handling of mathematical divide-by-zero, cyclic formula references, and missing metrics.
+   - Refine unit tests to expand coverage metrics.
+3. **Advanced Filtering**:
+   - Extend general filters builder to support free-text SQL conditions (e.g., `amount > 1000`).

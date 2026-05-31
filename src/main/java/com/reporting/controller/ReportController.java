@@ -2,10 +2,12 @@ package com.reporting.controller;
 
 import com.reporting.domain.Report;
 import com.reporting.dto.ReportConfigDto;
+import com.reporting.dto.ValidationResult;
 import com.reporting.repository.ReportRepository;
 import com.reporting.service.ExcelParserService;
 import com.reporting.service.ReportConfigService;
 import com.reporting.service.ReportRunnerService;
+import com.reporting.service.ReportValidationService;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -31,17 +33,20 @@ public class ReportController {
     private final ReportConfigService configService;
     private final ExcelParserService parserService;
     private final ReportRunnerService runnerService;
+    private final ReportValidationService validationService;
     private final NamedParameterJdbcTemplate jdbcTemplate;
 
     public ReportController(ReportRepository reportRepository,
                             ReportConfigService configService,
                             ExcelParserService parserService,
                             ReportRunnerService runnerService,
+                            ReportValidationService validationService,
                             NamedParameterJdbcTemplate jdbcTemplate) {
         this.reportRepository = reportRepository;
         this.configService = configService;
         this.parserService = parserService;
         this.runnerService = runnerService;
+        this.validationService = validationService;
         this.jdbcTemplate = jdbcTemplate;
     }
 
@@ -157,6 +162,12 @@ public class ReportController {
         } catch (Exception e) {
             return ResponseEntity.status(500).body(Map.of("message", "Failed to create report: " + e.getMessage()));
         }
+    }
+
+    @PostMapping("/validate")
+    public ResponseEntity<ValidationResult> validateReport(@Valid @RequestBody ReportConfigDto configDto) {
+        log.info("Validating report config for ID: {}", configDto.getReportId());
+        return ResponseEntity.ok(validationService.validateConfiguration(configDto));
     }
 
     @GetMapping("/tables")

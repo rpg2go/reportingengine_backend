@@ -4,6 +4,7 @@ import com.reporting.dto.ColumnDefDto;
 import com.reporting.dto.Enums;
 import com.reporting.dto.ReportConfigDto;
 import com.reporting.dto.ReportRowDto;
+import com.reporting.dto.MeasureDefinition;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -67,9 +68,9 @@ public class PostProcessorServiceTest {
 
         // Rows: R1 (DATA), R2 (DATA), R3 (CALC formula: R1 + R2)
         List<ReportRowDto> rows = List.of(
-            new ReportRowDto("R1", "REP1", "Row 1", Enums.RowType.data, "m1", null, "normal", 0, 1, Set.of("C1", "C2", "C3"), null),
-            new ReportRowDto("R2", "REP1", "Row 2", Enums.RowType.data, "m2", null, "normal", 0, 2, Set.of("C1", "C2", "C3"), null),
-            new ReportRowDto("R3", "REP1", "Total Row", Enums.RowType.calc, "R1 + R2", null, "total", 0, 3, Set.of("C1", "C2", "C3"), null)
+            new ReportRowDto("R1", "REP1", "Row 1", Enums.RowType.data, new MeasureDefinition("raw", null, null, null, "m1"), null, "normal", 0, 1, Set.of("C1", "C2", "C3"), null),
+            new ReportRowDto("R2", "REP1", "Row 2", Enums.RowType.data, new MeasureDefinition("raw", null, null, null, "m2"), null, "normal", 0, 2, Set.of("C1", "C2", "C3"), null),
+            new ReportRowDto("R3", "REP1", "Total Row", Enums.RowType.calc, new MeasureDefinition("raw", null, null, null, "R1 + R2"), null, "total", 0, 3, Set.of("C1", "C2", "C3"), null)
         );
 
         ReportConfigDto config = new ReportConfigDto(
@@ -77,12 +78,12 @@ public class PostProcessorServiceTest {
             "analytics.fact_sales", "weekly", null, null, false, null, null
         );
 
-        // Map results. In PostProcessorService, keys are: metric_rowId_colId
-        Map<String, Object> dbResults = Map.of(
-            "metric_r1_c1", 100.0,
-            "metric_r1_c2", 40.0,
-            "metric_r2_c1", 200.0,
-            "metric_r2_c2", 50.0
+        // Map results. In PostProcessorService, flat list of row_id/col_id/val maps
+        List<Map<String, Object>> dbResults = List.of(
+            Map.of("row_id", "R1", "col_id", "C1", "val", 100.0),
+            Map.of("row_id", "R1", "col_id", "C2", "val", 40.0),
+            Map.of("row_id", "R2", "col_id", "C1", "val", 200.0),
+            Map.of("row_id", "R2", "col_id", "C2", "val", 50.0)
         );
 
         // Act

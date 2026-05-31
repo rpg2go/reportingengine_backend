@@ -97,9 +97,21 @@ public abstract class BaseIT {
                 }
             }
 
-            if (tablesExist) {
-                System.out.println("Database tables already initialized. Skipping migration run.");
-                return;
+            // Setup migration tracking table
+            try (Statement stmt = conn.createStatement()) {
+                stmt.execute("CREATE TABLE IF NOT EXISTS reporting.schema_migrations (" +
+                             "migration_name VARCHAR(255) PRIMARY KEY," +
+                             "applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP" +
+                             ");");
+            }
+
+            // Retrieve already applied migrations
+            java.util.Set<String> applied = new java.util.HashSet<>();
+            try (Statement stmt = conn.createStatement();
+                 ResultSet rs = stmt.executeQuery("SELECT migration_name FROM reporting.schema_migrations")) {
+                while (rs.next()) {
+                    applied.add(rs.getString("migration_name"));
+                }
             }
 
             // Run migrations from db/migrations directory
@@ -116,17 +128,32 @@ public abstract class BaseIT {
 
             Arrays.sort(files, Comparator.comparing(File::getName));
 
-            // Setup migration tracking table
-            try (Statement stmt = conn.createStatement()) {
-                stmt.execute("CREATE TABLE IF NOT EXISTS reporting.schema_migrations (" +
-                             "migration_name VARCHAR(255) PRIMARY KEY," +
-                             "applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP" +
-                             ");");
+            // If tables exist but schema_migrations is not populated for 000-007, pre-populate them to skip execution
+            if (tablesExist) {
+                for (File file : files) {
+                    String name = file.getName();
+                    if (name.compareTo("008_") < 0) { // All files before 008
+                        if (!applied.contains(name)) {
+                            System.out.println("Table reporting.rpt_report exists. Marking migration as already applied in test DB: " + name);
+                            try (java.sql.PreparedStatement pstmt = conn.prepareStatement(
+                                "INSERT INTO reporting.schema_migrations (migration_name) VALUES (?) ON CONFLICT DO NOTHING"
+                            )) {
+                                pstmt.setString(1, name);
+                                pstmt.executeUpdate();
+                            }
+                            applied.add(name);
+                        }
+                    }
+                }
             }
 
             for (File file : files) {
                 String name = file.getName();
-                System.out.println("Applying migration file: " + name);
+                if (applied.contains(name)) {
+                    continue;
+                }
+                
+                System.out.println("Applying migration file to test DB: " + name);
                 String sql = Files.readString(file.toPath());
                 
                 try (Statement stmt = conn.createStatement()) {
@@ -139,7 +166,7 @@ public abstract class BaseIT {
                     pstmt.executeUpdate();
                 }
             }
-            System.out.println("All migrations successfully applied to test database.");
+            System.out.println("Unapplied migrations successfully applied to test database.");
         } catch (Exception e) {
             System.err.println("Failed to run database migrations during test setup: " + e.getMessage());
             e.printStackTrace();

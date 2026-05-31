@@ -1,8 +1,10 @@
 package com.reporting.service;
 
 import com.reporting.dto.*;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.time.LocalDate;
 import java.util.Collections;
@@ -12,18 +14,43 @@ import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.*;
 
 @DisplayName("SqlGeneratorService Unit Tests")
 public class SqlGeneratorServiceTest {
 
-    private final SqlGeneratorService service = new SqlGeneratorService();
+    private JdbcTemplate jdbcTemplate;
+    private SqlGeneratorService service;
+
+    @BeforeEach
+    public void setUp() {
+        jdbcTemplate = mock(JdbcTemplate.class);
+        
+        // Mock getTimeKeyForTable
+        when(jdbcTemplate.queryForObject(
+            eq("SELECT time_key FROM reporting.sem_view WHERE table_ref = ?"),
+            eq(String.class),
+            any(Object.class)
+        )).thenReturn("order_date");
+
+        // Mock isNumericColumn
+        when(jdbcTemplate.queryForObject(
+            contains("information_schema.columns"),
+            eq(String.class),
+            any(Object.class),
+            any(Object.class),
+            any(Object.class)
+        )).thenReturn("numeric");
+
+        service = new SqlGeneratorService(jdbcTemplate);
+    }
 
     @Test
     @DisplayName("generate with empty resolved metrics should return simple query message")
     public void generate_emptyResolvedMetrics_shouldReturnDummyMessage() {
         ReportConfigDto config = new ReportConfigDto();
         String sql = service.generate(config, Collections.emptyMap());
-        assertThat(sql).contains("SELECT 'No data rows' as message");
+        assertThat(sql).contains("SELECT '' AS row_id, '' AS col_id, 0.0::DOUBLE PRECISION AS val WHERE FALSE");
     }
 
     @Test
@@ -34,30 +61,22 @@ public class SqlGeneratorServiceTest {
             new ColumnDefDto("C1", "Col 1", Enums.ColType.WEEK, 0, null, null, 1)
         );
         List<ReportRowDto> rows = List.of(
-            new ReportRowDto("R1", "REP1", "Row 1", Enums.RowType.data, "m1", null, "normal", 0, 1, Set.of("C1"), "region = 'North'")
+            new ReportRowDto("R1", "REP1", "Row 1", Enums.RowType.data, 
+                new MeasureDefinition("visual", "SUM", "amount", "analytics.fact_sales", null), 
+                null, "normal", 0, 1, Set.of("C1"), "region = 'North'")
         );
         ReportConfigDto config = new ReportConfigDto(
             "REP1", "Test Report", columns, rows, LocalDate.of(2026, 5, 26), 1, Enums.ReportStatus.draft,
             "analytics.fact_sales", "weekly", null, null, false, null, null
         );
 
-        Map<String, ResolvedMetricDto> resolved = Map.of(
-            "R1", new ResolvedMetricDto(
-                "m1", 101, "SUM(amount)", "SUM", "NUMERIC", "analytics.fact_sales", "fact_sales", "order_date", 1, List.of("LEFT JOIN analytics.dim_region r ON r.id = region_id")
-            )
-        );
-
         // Act
-        String sql = service.generate(config, resolved);
+        String sql = service.generate(config, Collections.emptyMap());
 
         // Assert
-        assertThat(sql).contains("WITH");
-        assertThat(sql).contains("cte_1 AS (");
-        assertThat(sql).contains("SELECT");
-        assertThat(sql).contains("SUM(CASE WHEN order_date >= '2026-05-25' AND order_date <= '2026-05-26' AND (region = 'North') THEN amount ELSE 0 END) AS metric_R1_C1");
-        assertThat(sql).contains("FROM analytics.fact_sales");
-        assertThat(sql).contains("LEFT JOIN analytics.dim_region r ON r.id = region_id");
-        assertThat(sql).contains("SELECT\n  cte_1.*\nFROM (SELECT 1 as dummy) d\nLEFT JOIN cte_1 ON TRUE");
+        assertThat(sql).contains("WITH base_data AS (");
+        assertThat(sql).contains("SELECT * FROM analytics.fact_sales");
+        assertThat(sql).contains("SELECT 'R1' AS row_id, 'C1' AS col_id, CAST(SUM(CASE WHEN order_date >= '2026-05-25' AND order_date <= '2026-05-26' AND (region = 'North') THEN amount ELSE 0 END) AS DOUBLE PRECISION) AS val FROM base_data");
     }
 
     @Test
@@ -68,24 +87,20 @@ public class SqlGeneratorServiceTest {
             new ColumnDefDto("C1", "Col 1", Enums.ColType.WEEK, 0, null, null, 1)
         );
         List<ReportRowDto> rows = List.of(
-            new ReportRowDto("R1", "REP1", "Row 1", Enums.RowType.data, "m1", null, "normal", 0, 1, Set.of("C1"), null)
+            new ReportRowDto("R1", "REP1", "Row 1", Enums.RowType.data, 
+                new MeasureDefinition("raw", null, null, null, "COUNT(DISTINCT user_id)"), 
+                null, "normal", 0, 1, Set.of("C1"), null)
         );
         ReportConfigDto config = new ReportConfigDto(
             "REP1", "Test Report", columns, rows, LocalDate.of(2026, 5, 26), 1, Enums.ReportStatus.draft,
             "analytics.fact_sales", "weekly", null, null, false, null, null
         );
 
-        Map<String, ResolvedMetricDto> resolved = Map.of(
-            "R1", new ResolvedMetricDto(
-                "m1", 102, "COUNT(DISTINCT user_id)", "COUNT", "INTEGER", "analytics.fact_sales", "fact_sales", "order_date", 1, null
-            )
-        );
-
         // Act
-        String sql = service.generate(config, resolved);
+        String sql = service.generate(config, Collections.emptyMap());
 
         // Assert
-        assertThat(sql).contains("COUNT(DISTINCT CASE WHEN order_date >= '2026-05-25' AND order_date <= '2026-05-26' THEN user_id ELSE NULL END) AS metric_R1_C1");
+        assertThat(sql).contains("COUNT(DISTINCT CASE WHEN order_date >= '2026-05-25' AND order_date <= '2026-05-26' THEN (user_id) ELSE NULL END)");
     }
 
     @Test
@@ -95,21 +110,24 @@ public class SqlGeneratorServiceTest {
         
         // UNION injection
         List<ReportRowDto> rowsUnion = List.of(
-            new ReportRowDto("R1", "REP1", "Row 1", Enums.RowType.data, "m1", null, "normal", 0, 1, Set.of("C1"), "region = 'North' UNION SELECT * FROM users")
+            new ReportRowDto("R1", "REP1", "Row 1", Enums.RowType.data, 
+                new MeasureDefinition("raw", null, null, null, "SUM(amount)"), 
+                null, "normal", 0, 1, Set.of("C1"), "region = 'North' UNION SELECT * FROM users")
         );
         ReportConfigDto configUnion = new ReportConfigDto("REP1", "Test", columns, rowsUnion, LocalDate.now(), 1, null, "a", "w", null, null, false, null, null);
-        Map<String, ResolvedMetricDto> resolved = Map.of("R1", new ResolvedMetricDto("m1", 101, "SUM(amount)", "SUM", "NUMERIC", "a", "f", "d", 1, null));
         
-        assertThatThrownBy(() -> service.generate(configUnion, resolved))
+        assertThatThrownBy(() -> service.generate(configUnion, Collections.emptyMap()))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("Invalid or dangerous SQL sequences");
 
         // Comment block injection (--)
         List<ReportRowDto> rowsComment = List.of(
-            new ReportRowDto("R1", "REP1", "Row 1", Enums.RowType.data, "m1", null, "normal", 0, 1, Set.of("C1"), "region = 'North' -- comment")
+            new ReportRowDto("R1", "REP1", "Row 1", Enums.RowType.data, 
+                new MeasureDefinition("raw", null, null, null, "SUM(amount)"), 
+                null, "normal", 0, 1, Set.of("C1"), "region = 'North' -- comment")
         );
         ReportConfigDto configComment = new ReportConfigDto("REP1", "Test", columns, rowsComment, LocalDate.now(), 1, null, "a", "w", null, null, false, null, null);
-        assertThatThrownBy(() -> service.generate(configComment, resolved))
+        assertThatThrownBy(() -> service.generate(configComment, Collections.emptyMap()))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("Invalid or dangerous SQL sequences");
     }
@@ -118,23 +136,26 @@ public class SqlGeneratorServiceTest {
     @DisplayName("validateFilterExpr should check matching parentheses")
     public void validateFilterExpr_unmatchedParentheses_shouldThrowException() {
         List<ColumnDefDto> columns = List.of(new ColumnDefDto("C1", "Col 1", Enums.ColType.WEEK, 0, null, null, 1));
-        Map<String, ResolvedMetricDto> resolved = Map.of("R1", new ResolvedMetricDto("m1", 101, "SUM(amount)", "SUM", "NUMERIC", "a", "f", "d", 1, null));
 
         // Unmatched open parenthesis
         List<ReportRowDto> rowsOpen = List.of(
-            new ReportRowDto("R1", "REP1", "Row 1", Enums.RowType.data, "m1", null, "normal", 0, 1, Set.of("C1"), "(region = 'North'")
+            new ReportRowDto("R1", "REP1", "Row 1", Enums.RowType.data, 
+                new MeasureDefinition("raw", null, null, null, "SUM(amount)"), 
+                null, "normal", 0, 1, Set.of("C1"), "(region = 'North'")
         );
         ReportConfigDto configOpen = new ReportConfigDto("REP1", "Test", columns, rowsOpen, LocalDate.now(), 1, null, "a", "w", null, null, false, null, null);
-        assertThatThrownBy(() -> service.generate(configOpen, resolved))
+        assertThatThrownBy(() -> service.generate(configOpen, Collections.emptyMap()))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("Unmatched parentheses");
 
         // Unmatched close parenthesis
         List<ReportRowDto> rowsClose = List.of(
-            new ReportRowDto("R1", "REP1", "Row 1", Enums.RowType.data, "m1", null, "normal", 0, 1, Set.of("C1"), "region = 'North')")
+            new ReportRowDto("R1", "REP1", "Row 1", Enums.RowType.data, 
+                new MeasureDefinition("raw", null, null, null, "SUM(amount)"), 
+                null, "normal", 0, 1, Set.of("C1"), "region = 'North')")
         );
         ReportConfigDto configClose = new ReportConfigDto("REP1", "Test", columns, rowsClose, LocalDate.now(), 1, null, "a", "w", null, null, false, null, null);
-        assertThatThrownBy(() -> service.generate(configClose, resolved))
+        assertThatThrownBy(() -> service.generate(configClose, Collections.emptyMap()))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("Unmatched parentheses");
     }
@@ -147,7 +168,9 @@ public class SqlGeneratorServiceTest {
             new ColumnDefDto("C1", "Col 1", Enums.ColType.WEEK, 0, null, null, 1)
         );
         List<ReportRowDto> rows = List.of(
-            new ReportRowDto("R1", "REP1", "Row 1", Enums.RowType.data, "m1", null, "normal", 0, 1, Set.of("C1"), null)
+            new ReportRowDto("R1", "REP1", "Row 1", Enums.RowType.data, 
+                new MeasureDefinition("raw", null, null, null, "SUM(amount)"), 
+                null, "normal", 0, 1, Set.of("C1"), null)
         );
         
         String generalFiltersJson = "[" +
@@ -160,14 +183,8 @@ public class SqlGeneratorServiceTest {
             "analytics.fact_sales", "weekly", null, null, false, null, generalFiltersJson
         );
 
-        Map<String, ResolvedMetricDto> resolved = Map.of(
-            "R1", new ResolvedMetricDto(
-                "m1", 101, "SUM(amount)", "SUM", "NUMERIC", "analytics.fact_sales", "fact_sales", "order_date", 1, null
-            )
-        );
-
         // Act
-        String sql = service.generate(config, resolved);
+        String sql = service.generate(config, Collections.emptyMap());
 
         // Assert
         assertThat(sql).contains("WHERE (amount = '100') AND (dim_rm.status = 'active')");
@@ -181,7 +198,9 @@ public class SqlGeneratorServiceTest {
             new ColumnDefDto("C1", "Col 1", Enums.ColType.WEEK, 0, null, null, 1)
         );
         List<ReportRowDto> rows = List.of(
-            new ReportRowDto("R1", "REP1", "Row 1", Enums.RowType.data, "m1", null, "normal", 0, 1, Set.of("C1"), null)
+            new ReportRowDto("R1", "REP1", "Row 1", Enums.RowType.data, 
+                new MeasureDefinition("raw", null, null, null, "SUM(amount)"), 
+                null, "normal", 0, 1, Set.of("C1"), null)
         );
         
         String generalFiltersJson = "[" +
@@ -195,14 +214,8 @@ public class SqlGeneratorServiceTest {
             "analytics.fact_sales", "weekly", null, null, false, null, generalFiltersJson
         );
 
-        Map<String, ResolvedMetricDto> resolved = Map.of(
-            "R1", new ResolvedMetricDto(
-                "m1", 101, "SUM(amount)", "SUM", "NUMERIC", "analytics.fact_sales", "fact_sales", "order_date", 1, null
-            )
-        );
-
         // Act
-        String sql = service.generate(config, resolved);
+        String sql = service.generate(config, Collections.emptyMap());
 
         // Assert
         assertThat(sql).contains("WHERE ((region <> 'West' OR region IS NULL)) " +
@@ -218,7 +231,9 @@ public class SqlGeneratorServiceTest {
             new ColumnDefDto("C1", "Col 1", Enums.ColType.WEEK, 0, null, null, 1)
         );
         List<ReportRowDto> rows = List.of(
-            new ReportRowDto("R1", "REP1", "Row 1", Enums.RowType.data, "m1", null, "normal", 0, 1, Set.of("C1"), null)
+            new ReportRowDto("R1", "REP1", "Row 1", Enums.RowType.data, 
+                new MeasureDefinition("raw", null, null, null, "SUM(amount)"), 
+                null, "normal", 0, 1, Set.of("C1"), null)
         );
         
         String generalFiltersJson = "[" +
@@ -230,14 +245,8 @@ public class SqlGeneratorServiceTest {
             "analytics.fact_sales", "weekly", null, null, false, null, generalFiltersJson
         );
 
-        Map<String, ResolvedMetricDto> resolved = Map.of(
-            "R1", new ResolvedMetricDto(
-                "m1", 101, "SUM(amount)", "SUM", "NUMERIC", "analytics.fact_sales", "fact_sales", "order_date", 1, null
-            )
-        );
-
         // Act
-        String sql = service.generate(config, resolved);
+        String sql = service.generate(config, Collections.emptyMap());
 
         // Assert
         assertThat(sql).contains("WHERE (country IN ('US', 'CA', 'FR'))");
@@ -251,7 +260,9 @@ public class SqlGeneratorServiceTest {
             new ColumnDefDto("C1", "Col 1", Enums.ColType.WEEK, 0, null, null, 1)
         );
         List<ReportRowDto> rows = List.of(
-            new ReportRowDto("R1", "REP1", "Row 1", Enums.RowType.data, "m1", null, "normal", 0, 1, Set.of("C1"), null)
+            new ReportRowDto("R1", "REP1", "Row 1", Enums.RowType.data, 
+                new MeasureDefinition("raw", null, null, null, "SUM(amount)"), 
+                null, "normal", 0, 1, Set.of("C1"), null)
         );
         
         String generalFiltersJson = "[" +
@@ -266,14 +277,8 @@ public class SqlGeneratorServiceTest {
             "analytics.fact_sales", "weekly", null, null, false, null, generalFiltersJson
         );
 
-        Map<String, ResolvedMetricDto> resolved = Map.of(
-            "R1", new ResolvedMetricDto(
-                "m1", 101, "SUM(amount)", "SUM", "NUMERIC", "analytics.fact_sales", "fact_sales", "order_date", 1, null
-            )
-        );
-
         // Act
-        String sql = service.generate(config, resolved);
+        String sql = service.generate(config, Collections.emptyMap());
 
         // Assert
         assertThat(sql).contains("WHERE ((region IS NULL OR TRIM(region) = '')) " +
@@ -290,7 +295,9 @@ public class SqlGeneratorServiceTest {
             new ColumnDefDto("C1", "Col 1", Enums.ColType.WEEK, 0, null, null, 1)
         );
         List<ReportRowDto> rows = List.of(
-            new ReportRowDto("R1", "REP1", "Row 1", Enums.RowType.data, "m1", null, "normal", 0, 1, Set.of("C1"), null)
+            new ReportRowDto("R1", "REP1", "Row 1", Enums.RowType.data, 
+                new MeasureDefinition("raw", null, null, null, "SUM(amount)"), 
+                null, "normal", 0, 1, Set.of("C1"), null)
         );
         
         String generalFiltersJson = "[" +
@@ -304,14 +311,8 @@ public class SqlGeneratorServiceTest {
             "analytics.fact_sales", "weekly", null, null, false, null, generalFiltersJson
         );
 
-        Map<String, ResolvedMetricDto> resolved = Map.of(
-            "R1", new ResolvedMetricDto(
-                "m1", 101, "SUM(amount)", "SUM", "NUMERIC", "analytics.fact_sales", "fact_sales", "order_date", 1, null
-            )
-        );
-
         // Act
-        String sql = service.generate(config, resolved);
+        String sql = service.generate(config, Collections.emptyMap());
 
         // Assert
         assertThat(sql).contains("WHERE (code LIKE '%10\\%\\_\\\\%' ESCAPE '\\') " +
@@ -327,7 +328,9 @@ public class SqlGeneratorServiceTest {
             new ColumnDefDto("C1", "Col 1", Enums.ColType.WEEK, 0, null, null, 1)
         );
         List<ReportRowDto> rows = List.of(
-            new ReportRowDto("R1", "REP1", "Row 1", Enums.RowType.data, "m1", null, "normal", 0, 1, Set.of("C1"), null)
+            new ReportRowDto("R1", "REP1", "Row 1", Enums.RowType.data, 
+                new MeasureDefinition("raw", null, null, null, "SUM(amount)"), 
+                null, "normal", 0, 1, Set.of("C1"), null)
         );
         
         String generalFiltersJson = "[" +
@@ -342,14 +345,8 @@ public class SqlGeneratorServiceTest {
             "analytics.fact_sales", "weekly", null, null, false, null, generalFiltersJson
         );
 
-        Map<String, ResolvedMetricDto> resolved = Map.of(
-            "R1", new ResolvedMetricDto(
-                "m1", 101, "SUM(amount)", "SUM", "NUMERIC", "analytics.fact_sales", "fact_sales", "order_date", 1, null
-            )
-        );
-
         // Act
-        String sql = service.generate(config, resolved);
+        String sql = service.generate(config, Collections.emptyMap());
 
         // Assert
         assertThat(sql).contains("WHERE (amount > '100') " +
@@ -357,5 +354,87 @@ public class SqlGeneratorServiceTest {
             "AND (quantity < '10') " +
             "AND (quantity <= '20')");
     }
-}
 
+    @Test
+    @DisplayName("generate with general filters containing conjunction and unknown properties should parse and compile successfully")
+    public void generate_withConjunctionAndUnknownFilterProperties_shouldParseAndCompile() {
+        // Arrange
+        List<ColumnDefDto> columns = List.of(
+            new ColumnDefDto("C1", "Col 1", Enums.ColType.WEEK, 0, null, null, 1)
+        );
+        List<ReportRowDto> rows = List.of(
+            new ReportRowDto("R1", "REP1", "Row 1", Enums.RowType.data, 
+                new MeasureDefinition("raw", null, null, null, "SUM(amount)"), 
+                null, "normal", 0, 1, Set.of("C1"), null)
+        );
+        
+        String generalFiltersJson = "[" +
+            "{\"dimTable\":\"\",\"attribute\":\"interest_rate\",\"operator\":\"is not null\",\"value\":\"\",\"conjunction\":\"AND\",\"extraField\":\"ignoredVal\"}" +
+            "]";
+            
+        ReportConfigDto config = new ReportConfigDto(
+            "REP1", "Test Report", columns, rows, LocalDate.of(2026, 5, 26), 1, Enums.ReportStatus.draft,
+            "analytics.fact_sales", "weekly", null, null, false, null, generalFiltersJson
+        );
+
+        // Act
+        String sql = service.generate(config, Collections.emptyMap());
+
+        // Assert
+        assertThat(sql).contains("WHERE (interest_rate IS NOT NULL)");
+    }
+
+    @Test
+    @DisplayName("generate with row filter containing raw SQL condition should compile successfully")
+    public void generate_withRawSqlRowFilter_shouldCompileSuccessfully() {
+        // Arrange
+        List<ColumnDefDto> columns = List.of(
+            new ColumnDefDto("C1", "Col 1", Enums.ColType.WEEK, 0, null, null, 1)
+        );
+        List<ReportRowDto> rows = List.of(
+            new ReportRowDto("R1", "REP1", "Row 1", Enums.RowType.data, 
+                new MeasureDefinition("raw", null, null, null, "SUM(amount)"), 
+                null, "normal", 0, 1, Set.of("C1"), "region_id = 1")
+        );
+        
+        ReportConfigDto config = new ReportConfigDto(
+            "REP1", "Test Report", columns, rows, LocalDate.of(2026, 5, 26), 1, Enums.ReportStatus.draft,
+            "analytics.fact_sales", "weekly", null, null, false, null, null
+        );
+
+        // Act
+        String sql = service.generate(config, Collections.emptyMap());
+
+        // Assert
+        assertThat(sql).contains("AND (region_id = 1)");
+    }
+
+    @Test
+    @DisplayName("generate with row filter containing JSON array should parse and compile successfully")
+    public void generate_withJsonArrayRowFilter_shouldParseAndCompileSuccessfully() {
+        // Arrange
+        List<ColumnDefDto> columns = List.of(
+            new ColumnDefDto("C1", "Col 1", Enums.ColType.WEEK, 0, null, null, 1)
+        );
+        String rowFilterJson = "[" +
+            "{\"dimTable\":\"\",\"attribute\":\"location_id\",\"operator\":\"=\",\"value\":\"1\"}," +
+            "{\"dimTable\":\"\",\"attribute\":\"interest_rate\",\"operator\":\"<=\",\"value\":\"5\"}" +
+            "]";
+        List<ReportRowDto> rows = List.of(
+            new ReportRowDto("R1", "REP1", "Row 1", Enums.RowType.data, 
+                new MeasureDefinition("raw", null, null, null, "SUM(amount)"), 
+                null, "normal", 0, 1, Set.of("C1"), rowFilterJson)
+        );
+        
+        ReportConfigDto config = new ReportConfigDto(
+            "REP1", "Test Report", columns, rows, LocalDate.of(2026, 5, 26), 1, Enums.ReportStatus.draft,
+            "analytics.fact_sales", "weekly", null, null, false, null, null
+        );
+
+        // Act
+        String sql = service.generate(config, Collections.emptyMap());
+
+        // Assert
+        assertThat(sql).contains("AND ((location_id = '1') AND (interest_rate <= '5'))");
+    }
+}

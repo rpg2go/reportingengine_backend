@@ -32,4 +32,7 @@ public class RowMetric {
 
     @Column(name = "explore_id")
     private Integer exploreId;
+
+    @Column(name = "measure_definition")
+    private String measureDefinition;
 }

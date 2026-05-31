@@ -16,5 +16,6 @@ ALTER TABLE reporting.rpt_report ADD COLUMN IF NOT EXISTS quick_filters TEXT;
 ALTER TABLE reporting.rpt_report ADD COLUMN IF NOT EXISTS general_filters TEXT; -- Store general filters as JSON text representation
 
 -- 2. Extend row metric to support direct SQL expressions instead of measure references
-ALTER TABLE reporting.rpt_row_metric ADD COLUMN IF NOT EXISTS sql_expr VARCHAR(500);
+ALTER TABLE reporting.rpt_row_metric ADD COLUMN IF NOT EXISTS sql_expr TEXT;
 ALTER TABLE reporting.rpt_row_metric ALTER COLUMN measure_id DROP NOT NULL;
+ALTER TABLE reporting.rpt_row_metric ADD COLUMN IF NOT EXISTS measure_definition TEXT;

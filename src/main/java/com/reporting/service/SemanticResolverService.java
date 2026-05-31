@@ -26,8 +26,8 @@ public class SemanticResolverService {
         // Collect all unique measure names
         Set<String> measureNames = new HashSet<>();
         for (ReportRowDto row : dataRows) {
-            if (row.source() != null && !row.source().isBlank()) {
-                measureNames.add(row.source());
+            if (row.source() != null && row.source().getRawSql() != null && !row.source().getRawSql().isBlank()) {
+                measureNames.add(row.source().getRawSql());
             }
         }
 
@@ -54,14 +54,14 @@ public class SemanticResolverService {
         List<Map.Entry<String, String>> missing = new ArrayList<>();
 
         for (ReportRowDto row : dataRows) {
-            if (row.source() == null || row.source().isBlank()) {
+            if (row.source() == null || row.source().getRawSql() == null || row.source().getRawSql().isBlank()) {
                 missing.add(new AbstractMap.SimpleEntry<>(row.rowId(), "(empty source)"));
                 continue;
             }
 
-            Map<String, Object> measureData = measuresByName.get(row.source());
+            Map<String, Object> measureData = measuresByName.get(row.source().getRawSql());
             if (measureData == null) {
-                missing.add(new AbstractMap.SimpleEntry<>(row.rowId(), row.source()));
+                missing.add(new AbstractMap.SimpleEntry<>(row.rowId(), row.source().getRawSql()));
                 continue;
             }
 
@@ -69,7 +69,7 @@ public class SemanticResolverService {
             List<String> joinSqls = joinsByExplore.getOrDefault(exploreId, Collections.emptyList());
 
             result.put(row.rowId(), new ResolvedMetricDto(
-                row.source(),
+                row.source() != null ? row.source().getRawSql() : "",
                 (Integer) measureData.get("measure_id"),
                 (String) measureData.get("sql_expr"),
                 (String) measureData.get("agg_type"),

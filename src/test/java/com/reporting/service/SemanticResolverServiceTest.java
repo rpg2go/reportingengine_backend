@@ -44,7 +44,7 @@ public class SemanticResolverServiceTest {
     @DisplayName("resolveAll with empty source fields throws MetricNotFoundException")
     public void resolveAll_emptySourceFields_shouldThrowException() {
         List<ReportRowDto> rows = List.of(
-            new ReportRowDto("R1", "REP1", "Row 1", Enums.RowType.data, "", null, "normal", 0, 1, Set.of("C1"), null)
+            new ReportRowDto("R1", "REP1", "Row 1", Enums.RowType.data, new MeasureDefinition("raw", null, null, null, ""), null, "normal", 0, 1, Set.of("C1"), null)
         );
         ReportConfigDto config = new ReportConfigDto(
             "REP1", "Test", List.of(), rows, null, null, null, null, null, null, null, null, null, null
@@ -61,7 +61,7 @@ public class SemanticResolverServiceTest {
         // Arrange
         List<ColumnDefDto> columns = List.of(new ColumnDefDto("C1", "Col 1", Enums.ColType.WEEK, 0, null, null, 1));
         List<ReportRowDto> rows = List.of(
-            new ReportRowDto("R1", "REP1", "Sales", Enums.RowType.data, "fact_sales_amount", null, "normal", 0, 1, Set.of("C1"), null)
+            new ReportRowDto("R1", "REP1", "Sales", Enums.RowType.data, new MeasureDefinition("raw", null, null, null, "fact_sales_amount"), null, "normal", 0, 1, Set.of("C1"), null)
         );
         ReportConfigDto config = new ReportConfigDto(
             "REP1", "Test", columns, rows, null, null, null, null, null, null, null, null, null, null
@@ -115,7 +115,7 @@ public class SemanticResolverServiceTest {
         // Arrange
         List<ColumnDefDto> columns = List.of(new ColumnDefDto("C1", "Col 1", Enums.ColType.WEEK, 0, null, null, 1));
         List<ReportRowDto> rows = List.of(
-            new ReportRowDto("R1", "REP1", "Sales", Enums.RowType.data, "non_existent_measure", null, "normal", 0, 1, Set.of("C1"), null)
+            new ReportRowDto("R1", "REP1", "Sales", Enums.RowType.data, new MeasureDefinition("raw", null, null, null, "non_existent_measure"), null, "normal", 0, 1, Set.of("C1"), null)
         );
         ReportConfigDto config = new ReportConfigDto(
             "REP1", "Test", columns, rows, null, null, null, null, null, null, null, null, null, null

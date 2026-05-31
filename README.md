@@ -141,13 +141,13 @@ flowchart TD
 
 ### Backend Components (Java)
 
-All core services are located in [src/main/java/com/reporting/service/](file:///g:/workspace/ReportTemplate/src/main/java/com/reporting/service/):
+All core services are located in [src/main/java/com/reporting/service/](file:///G:/workspace/ReportTemplate_BackEnd/src/main/java/com/reporting/service/):
 
-- **[ExcelParserService.java](file:///g:/workspace/ReportTemplate/src/main/java/com/reporting/service/ExcelParserService.java)**: Parses the user-defined Excel layout workbook using **Apache POI**, extracts layout variables, and persists configuration records in a database transaction.
-- **[SqlGeneratorService.java](file:///g:/workspace/ReportTemplate/src/main/java/com/reporting/service/SqlGeneratorService.java)**: Builds dynamic, highly-optimized SQL queries using CTE structures and conditional aggregations mapped against time-intelligence intervals (MTD, YTD, WEEK, ROLLING).
-- **[PostProcessorService.java](file:///g:/workspace/ReportTemplate/src/main/java/com/reporting/service/PostProcessorService.java)**: Evaluates horizontal `CALC` columns and vertical `calc` math formulas on query results using **exp4j**.
-- **[LayoutRendererService.java](file:///g:/workspace/ReportTemplate/src/main/java/com/reporting/service/LayoutRendererService.java)**: Outputs the final results back to `.xlsx` sheets with grid formatting, indentation levels, currency styles, and headers using **Apache POI**.
-- **[ReportRunnerService.java](file:///g:/workspace/ReportTemplate/src/main/java/com/reporting/service/ReportRunnerService.java)**: Orchestrates the execution sequence.
+- **[ExcelParserService.java](file:///G:/workspace/ReportTemplate_BackEnd/src/main/java/com/reporting/service/ExcelParserService.java)**: Parses the user-defined Excel layout workbook using **Apache POI**, extracts layout variables, and persists configuration records in a database transaction.
+- **[SqlGeneratorService.java](file:///G:/workspace/ReportTemplate_BackEnd/src/main/java/com/reporting/service/SqlGeneratorService.java)**: Builds dynamic, highly-optimized SQL queries using CTE structures and conditional aggregations mapped against time-intelligence intervals (MTD, YTD, WEEK, ROLLING).
+- **[PostProcessorService.java](file:///G:/workspace/ReportTemplate_BackEnd/src/main/java/com/reporting/service/PostProcessorService.java)**: Evaluates horizontal `CALC` columns and vertical `calc` math formulas on query results using **exp4j**.
+- **[LayoutRendererService.java](file:///G:/workspace/ReportTemplate_BackEnd/src/main/java/com/reporting/service/LayoutRendererService.java)**: Outputs the final results back to `.xlsx` sheets with grid formatting, indentation levels, currency styles, and headers using **Apache POI**.
+- **[ReportRunnerService.java](file:///G:/workspace/ReportTemplate_BackEnd/src/main/java/com/reporting/service/ReportRunnerService.java)**: Orchestrates the execution sequence.
 
 ---
 

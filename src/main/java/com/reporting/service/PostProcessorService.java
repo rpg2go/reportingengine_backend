@@ -1,6 +1,7 @@
 package com.reporting.service;
 
 import com.reporting.dto.*;
+import com.reporting.exception.CircularReferenceException;
 import net.objecthunter.exp4j.Expression;
 import net.objecthunter.exp4j.ExpressionBuilder;
 import org.springframework.stereotype.Service;
@@ -11,8 +12,8 @@ import java.util.regex.*;
 @Service
 public class PostProcessorService {
 
-    public Map<String, Map<String, Double>> process(ReportConfigDto config, Map<String, Object> dbResults) {
-        // Initialize result matrix with 0.0 values
+    public Map<String, Map<String, Double>> process(ReportConfigDto config, List<Map<String, Object>> dbResults) {
+        // 1. Initialize result matrix with 0.0 values
         Map<String, Map<String, Double>> matrix = new HashMap<>();
         for (ReportRowDto row : config.getRows()) {
             Map<String, Double> colVals = new HashMap<>();
@@ -22,34 +23,29 @@ public class PostProcessorService {
             matrix.put(row.rowId().toUpperCase(), colVals);
         }
 
-        // Populate DATA rows from SQL database query results
+        // 2. Populate DATA rows from SQL database query results (flat matrix format)
         if (dbResults != null) {
-            for (Map.Entry<String, Object> entry : dbResults.entrySet()) {
-                String key = entry.getKey();
-                Object val = entry.getValue();
-                String[] parts = key.split("_");
-                if (parts.length >= 3) {
-                    String rid = parts[1].toUpperCase();
-                    String cid = parts[2].toUpperCase();
-                    if (matrix.containsKey(rid) && matrix.get(rid).containsKey(cid)) {
-                        double doubleVal = 0.0;
-                        if (val instanceof Number) {
-                            doubleVal = ((Number) val).doubleValue();
-                        } else if (val != null) {
-                            try {
-                                doubleVal = Double.parseDouble(val.toString());
-                            } catch (NumberFormatException e) {
-                                // ignore
-                            }
-                        }
-                        matrix.get(rid).put(cid, doubleVal);
+            for (Map<String, Object> map : dbResults) {
+                String rid = map.get("row_id") != null ? map.get("row_id").toString().toUpperCase() : "";
+                String cid = map.get("col_id") != null ? map.get("col_id").toString().toUpperCase() : "";
+                Object valObj = map.get("val");
+                double val = 0.0;
+                if (valObj instanceof Number) {
+                    val = ((Number) valObj).doubleValue();
+                } else if (valObj != null) {
+                    try {
+                        val = Double.parseDouble(valObj.toString());
+                    } catch (NumberFormatException e) {
+                        // ignore
                     }
+                }
+                if (matrix.containsKey(rid) && matrix.get(rid).containsKey(cid)) {
+                    matrix.get(rid).put(cid, val);
                 }
             }
         }
 
-        // 2. Execute CALC Columns (Horizontal)
-        // E.g. C3 = (C1 - C2) / C2
+        // 3. Phase 1 (Column Calculations): Evaluates sqlColumn: false metrics (horizontal column formulas)
         for (ColumnDefDto col : config.getCalcColumns()) {
             String cid = col.colId().toUpperCase();
             for (ReportRowDto row : config.getRows()) {
@@ -61,12 +57,11 @@ public class PostProcessorService {
             }
         }
 
-        // 3. Execute calc Rows (Vertical)
-        // E.g. R4 = R2 - R3
-        // We iterate 3 times to resolve nested levels
-        for (int i = 0; i < 3; i++) {
-            for (ReportRowDto row : config.getCalcRows()) {
-                String rid = row.rowId().toUpperCase();
+        // 4. Phase 2 (Cross-Row Calculations): Evaluates calculated rows vertically using topological sorting
+        List<String> evalOrder = getTopologicalOrder(config);
+        for (String rid : evalOrder) {
+            ReportRowDto row = config.getRow(rid);
+            if (row != null && row.isCalcRow()) {
                 for (ColumnDefDto col : config.getColumns()) {
                     String cid = col.colId().toUpperCase();
                     if (row.isEnabledFor(cid)) {
@@ -75,7 +70,8 @@ public class PostProcessorService {
                         for (Map.Entry<String, Map<String, Double>> mEntry : matrix.entrySet()) {
                             colContext.put(mEntry.getKey(), mEntry.getValue().getOrDefault(cid, 0.0));
                         }
-                        double val = evaluateFormula(row.source(), colContext);
+                        String formula = (row.source() != null) ? row.source().getRawSql() : "";
+                        double val = evaluateFormula(formula, colContext);
                         matrix.get(rid).put(cid, val);
                     }
                 }
@@ -83,6 +79,68 @@ public class PostProcessorService {
         }
 
         return matrix;
+    }
+
+    public List<String> getTopologicalOrder(ReportConfigDto config) {
+        Set<String> allRowIds = new HashSet<>();
+        for (ReportRowDto r : config.getRows()) {
+            allRowIds.add(r.rowId().toUpperCase());
+        }
+
+        Map<String, List<String>> adj = new HashMap<>();
+        for (ReportRowDto r : config.getRows()) {
+            String rid = r.rowId().toUpperCase();
+            adj.put(rid, new ArrayList<>());
+            if (r.isCalcRow() && r.source() != null && r.source().getRawSql() != null) {
+                List<String> refs = getReferencedRows(r.source().getRawSql(), allRowIds);
+                adj.get(rid).addAll(refs); // r depends on refs
+            }
+        }
+
+        List<String> order = new ArrayList<>();
+        Map<String, Integer> state = new HashMap<>();
+        for (String rid : allRowIds) {
+            state.put(rid, 0); // 0 = unvisited
+        }
+
+        for (String rid : allRowIds) {
+            if (state.get(rid) == 0) {
+                dfs(rid, adj, state, order);
+            }
+        }
+
+        return order;
+    }
+
+    private void dfs(String node, Map<String, List<String>> adj, Map<String, Integer> state, List<String> order) {
+        state.put(node, 1); // visiting
+        for (String dep : adj.getOrDefault(node, Collections.emptyList())) {
+            int depState = state.getOrDefault(dep, 0);
+            if (depState == 1) {
+                throw new CircularReferenceException("Circular dependency reference detected involving row: " + node + " and " + dep);
+            } else if (depState == 0) {
+                dfs(dep, adj, state, order);
+            }
+        }
+        state.put(node, 2); // visited
+        order.add(node);
+    }
+
+    private List<String> getReferencedRows(String formula, Set<String> allRowIds) {
+        List<String> refs = new ArrayList<>();
+        if (formula == null || formula.isBlank()) {
+            return refs;
+        }
+        List<String> sortedRowIds = new ArrayList<>(allRowIds);
+        sortedRowIds.sort((a, b) -> Integer.compare(b.length(), a.length()));
+        String upperFormula = formula.toUpperCase();
+        for (String rid : sortedRowIds) {
+            String regex = "\\b" + Pattern.quote(rid) + "\\b";
+            if (Pattern.compile(regex).matcher(upperFormula).find()) {
+                refs.add(rid);
+            }
+        }
+        return refs;
     }
 
     public double evaluateFormula(String formula, Map<String, Double> context) {

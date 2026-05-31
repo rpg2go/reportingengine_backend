@@ -17,15 +17,15 @@
   - [x] Frontend parallel API loading with `forkJoin` (tables + report config loaded concurrently).
   - [x] API base URL changed to `127.0.0.1` to bypass Windows DNS resolution lag.
 
-## 🔄 Phase 2: Engine Compilation & Rendering (Pending)
-- [ ] Dynamic SQL query compilation (`SqlGeneratorService.java`) — assemble fact table queries with CTE date boundaries and conditional aggregations from row `sql_expr` and `filter_expr`.
-- [ ] Row and column math formula evaluation (`PostProcessorService.java`) with `exp4j`.
-- [ ] Excel layout rendering (`LayoutRendererService.java`) — POI styling with borders, alignment, fonts, and colors.
-- [ ] Full run orchestration (`ReportRunnerService.java`) — chain SQL → PostProcess → Render into a single execution.
+## ✅ Phase 2: Engine Compilation & Rendering (Completed 2026-05-30)
+- [x] Dynamic SQL query compilation (`SqlGeneratorService.java`) — assemble fact table queries with CTE date boundaries and conditional aggregations from row `sql_expr` and `filter_expr`.
+- [x] Row and column math formula evaluation (`PostProcessorService.java`) with `exp4j`.
+- [x] Excel layout rendering (`LayoutRendererService.java`) — POI styling with borders, alignment, fonts, and colors.
+- [x] Full run orchestration (`ReportRunnerService.java`) — chain SQL → PostProcess → Render into a single execution.
 
-## ⏳ Phase 3: Validation, Verification & Polish
-- [ ] Integration testing of the full execution pipeline.
-- [ ] Unit tests for `SqlGeneratorService` and `PostProcessorService`.
+## 🔄 Phase 3: Validation, Verification & Polish (In Progress)
+- [x] Integration testing of the full execution pipeline.
+- [x] Unit tests for `SqlGeneratorService` and `PostProcessorService`.
 - [ ] Frontend report detail view: run execution spinner and live status badges.
 - [ ] Edge case handling: divide-by-zero, cyclic formula references, missing metric expressions.
 - [ ] Column setup: fix "Rolling In" field behavior in Step 2.

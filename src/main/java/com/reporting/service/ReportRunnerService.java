@@ -8,6 +8,7 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.time.LocalDate;
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 
 @Slf4j
@@ -45,19 +46,18 @@ public class ReportRunnerService {
         log.info("Loaded configuration for reportId: {}, Columns count: {}, Rows count: {}", 
             reportId, config.getColumns().size(), config.getRows().size());
 
-        // 2. Resolve Metrics
-        Map<String, ResolvedMetricDto> resolved = resolverService.resolveAll(config);
-        log.info("Resolved {} metrics mapping definitions", resolved.size());
+        // 2. Resolve Metrics (Bypassed in the new dynamic metadata architecture)
+        Map<String, ResolvedMetricDto> resolved = Collections.emptyMap();
 
         // 3. Generate SQL
         String sql = generatorService.generate(config, resolved);
         log.debug("Generated query SQL: \n{}", sql);
 
         // 4. Execute SQL
-        Map<String, Object> rawData;
+        List<Map<String, Object>> rawData;
         try {
             log.info("Executing generated DWH queries for reportId: {}", reportId);
-            rawData = jdbcTemplate.queryForMap(sql);
+            rawData = jdbcTemplate.queryForList(sql);
         } catch (Exception e) {
             log.error("Failed to execute generated report SQL query for reportId: {}. Generated SQL: \n{}", reportId, sql, e);
             throw new RuntimeException("Database execution failed for generated SQL query: " + e.getMessage(), e);

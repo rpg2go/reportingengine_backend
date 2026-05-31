@@ -3,6 +3,8 @@ package com.reporting.service;
 import com.reporting.dto.*;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.core.type.TypeReference;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
@@ -11,134 +13,436 @@ import java.util.*;
 @Service
 public class SqlGeneratorService {
 
+    private final JdbcTemplate jdbcTemplate;
+
+    @Autowired
+    public SqlGeneratorService(JdbcTemplate jdbcTemplate) {
+        this.jdbcTemplate = jdbcTemplate;
+    }
+
+    public String generateMatrixQuery(ReportConfigDto config) {
+        return generate(config, Collections.emptyMap());
+    }
+
     public String generate(ReportConfigDto config, Map<String, ResolvedMetricDto> resolved) {
-        if (resolved == null || resolved.isEmpty()) {
-            return "SELECT 'No data rows' as message";
+        List<String> selectQueries = new ArrayList<>();
+
+        // Parse Filters
+        List<FilterCondition> generalFilters = parseGeneralFilters(config.getGeneralFilters());
+        List<FilterCondition> quickFilters = parseGeneralFilters(config.getQuickFilters());
+
+        String defaultTable = config.getSourceTable();
+        if (defaultTable == null || defaultTable.isBlank()) {
+            defaultTable = "analytics.fact_sales"; // fallback default
         }
 
-        // 1. Group metrics by Explore
-        Map<Integer, List<Map.Entry<String, ResolvedMetricDto>>> explores = new HashMap<>();
-        for (Map.Entry<String, ResolvedMetricDto> entry : resolved.entrySet()) {
-            explores.computeIfAbsent(entry.getValue().exploreId(), k -> new ArrayList<>()).add(entry);
+        // 1. Determine unique tables used across all rows
+        Set<String> uniqueTables = new LinkedHashSet<>();
+        uniqueTables.add(defaultTable.trim());
+
+        if (config.getRows() != null) {
+            for (ReportRowDto row : config.getRows()) {
+                if (row.isDataRow() && row.source() != null) {
+                    String tbl = row.source().getTable();
+                    if (tbl != null && !tbl.isBlank()) {
+                        uniqueTables.add(tbl.trim());
+                    }
+                }
+            }
         }
 
-        // 2. Build CTE bodies
-        List<String> cteDefs = new ArrayList<>();
-        for (Map.Entry<Integer, List<Map.Entry<String, ResolvedMetricDto>>> entry : explores.entrySet()) {
-            cteDefs.add(buildExploreCteBody(config, entry.getKey(), entry.getValue()));
+        // 2. Build CTE definitions for each unique table
+        Map<String, String> tableToCteName = new HashMap<>();
+        List<String> cteDefinitions = new ArrayList<>();
+        Map<String, Set<String>> tableColumnsCache = new HashMap<>();
+
+        for (String table : uniqueTables) {
+            String cteName;
+            if (isSameTable(table, defaultTable)) {
+                cteName = "base_data";
+            } else {
+                String localName = table;
+                if (localName.contains(".")) {
+                    localName = localName.substring(localName.lastIndexOf(".") + 1);
+                }
+                cteName = "base_data_" + localName;
+            }
+            tableToCteName.put(normalizeTableName(table), cteName);
+
+            // Filter columns that belong to this table (or are joins/dimTables)
+            List<String> compiledFilters = new ArrayList<>();
+            for (FilterCondition cond : generalFilters) {
+                if (isSameTable(table, defaultTable)) {
+                    String sqlCond = compileFilterCondition(cond);
+                    if (sqlCond != null && !sqlCond.isBlank()) {
+                        compiledFilters.add("(" + sqlCond + ")");
+                    }
+                } else if (cond.getDimTable() != null && !cond.getDimTable().isBlank()) {
+                    String sqlCond = compileFilterCondition(cond);
+                    if (sqlCond != null && !sqlCond.isBlank()) {
+                        compiledFilters.add("(" + sqlCond + ")");
+                    }
+                } else if (columnExists(table, cond.getAttribute(), tableColumnsCache)) {
+                    String sqlCond = compileFilterCondition(cond);
+                    if (sqlCond != null && !sqlCond.isBlank()) {
+                        compiledFilters.add("(" + sqlCond + ")");
+                    }
+                }
+            }
+            for (FilterCondition cond : quickFilters) {
+                if (isSameTable(table, defaultTable)) {
+                    String sqlCond = compileFilterCondition(cond);
+                    if (sqlCond != null && !sqlCond.isBlank()) {
+                        compiledFilters.add("(" + sqlCond + ")");
+                    }
+                } else if (cond.getDimTable() != null && !cond.getDimTable().isBlank()) {
+                    String sqlCond = compileFilterCondition(cond);
+                    if (sqlCond != null && !sqlCond.isBlank()) {
+                        compiledFilters.add("(" + sqlCond + ")");
+                    }
+                } else if (columnExists(table, cond.getAttribute(), tableColumnsCache)) {
+                    String sqlCond = compileFilterCondition(cond);
+                    if (sqlCond != null && !sqlCond.isBlank()) {
+                        compiledFilters.add("(" + sqlCond + ")");
+                    }
+                }
+            }
+
+            String whereClause = "";
+            if (!compiledFilters.isEmpty()) {
+                whereClause = "\n    WHERE " + String.join(" AND ", compiledFilters);
+            }
+
+            cteDefinitions.add(String.format("  %s AS (\n    SELECT * FROM %s%s\n  )", cteName, table, whereClause));
         }
 
-        // 3. Final Query Assembly
+        // 3. Build Select Statements for Data Rows and Non-Calc Columns
+        if (config.getRows() != null && config.getColumns() != null) {
+            for (ReportRowDto row : config.getRows()) {
+                if (!row.isDataRow()) {
+                    continue;
+                }
+
+                MeasureDefinition mdef = row.source();
+                if (mdef == null) {
+                    continue;
+                }
+
+                String rowTable = mdef.getTable();
+                if (rowTable == null || rowTable.isBlank()) {
+                    rowTable = defaultTable;
+                }
+                rowTable = rowTable.trim();
+
+                String cteName = tableToCteName.get(normalizeTableName(rowTable));
+                if (cteName == null) {
+                    cteName = "base_data";
+                }
+
+                String timeKey = getTimeKeyForTable(rowTable);
+
+                String rowFilter = row.filterExpr();
+                String filterClause = "";
+                if (rowFilter != null && !rowFilter.isBlank()) {
+                    String compiledRowFilter = compileRowFilter(rowFilter);
+                    if (compiledRowFilter != null && !compiledRowFilter.isBlank()) {
+                        filterClause = " AND (" + compiledRowFilter + ")";
+                    }
+                }
+
+                for (ColumnDefDto col : config.getColumns()) {
+                    if (col.colType() == Enums.ColType.CALC) {
+                        continue;
+                    }
+                    if (!row.isEnabledFor(col.colId())) {
+                        continue;
+                    }
+
+                    LocalDate[] boundaries = DateUtils.getPeriodBoundaries(
+                        config.getReferenceDate(),
+                        col.colType(),
+                        col.periodOffset(),
+                        col.rollingN()
+                    );
+                    LocalDate start = boundaries[0];
+                    LocalDate end = boundaries[1];
+
+                    String dateConstraint = String.format("%s >= '%s' AND %s <= '%s'", timeKey, start.toString(), timeKey, end.toString());
+
+                    String clause = "";
+                    if ("visual".equalsIgnoreCase(mdef.getMode())) {
+                        String agg = mdef.getAggregation() != null ? mdef.getAggregation().trim().toUpperCase() : "SUM";
+                        String originalColName = mdef.getTargetColumn() != null ? mdef.getTargetColumn().trim() : "";
+
+                        if (("SUM".equals(agg) || "AVG".equals(agg)) && !isNumericColumn(rowTable, originalColName)) {
+                            throw new IllegalArgumentException("Column '" + originalColName + "' in table " + rowTable + " is not numeric and cannot be aggregated with " + agg);
+                        }
+
+                        String colName = originalColName;
+                        if (rowTable != null && !rowTable.isBlank()) {
+                            String shortTbl = rowTable;
+                            if (rowTable.contains(".")) {
+                                shortTbl = rowTable.substring(rowTable.lastIndexOf(".") + 1);
+                            }
+                            String escapedFull = java.util.regex.Pattern.quote(rowTable.trim()) + "\\.";
+                            String escapedShort = java.util.regex.Pattern.quote(shortTbl.trim()) + "\\.";
+                            colName = colName.replaceAll("(?i)" + escapedFull, cteName + ".");
+                            colName = colName.replaceAll("(?i)" + escapedShort, cteName + ".");
+                        }
+
+                        String fill = "SUM".equals(agg) ? "0" : "NULL";
+                        if ("COUNT_DISTINCT".equals(agg)) {
+                            clause = String.format(
+                                "COUNT(DISTINCT CASE WHEN %s%s THEN %s ELSE %s END)",
+                                dateConstraint,
+                                filterClause,
+                                colName,
+                                fill
+                            );
+                        } else {
+                            clause = String.format(
+                                "%s(CASE WHEN %s%s THEN %s ELSE %s END)",
+                                agg,
+                                dateConstraint,
+                                filterClause,
+                                colName,
+                                fill
+                            );
+                        }
+                    } else { // "raw" mode
+                        String raw = mdef.getRawSql();
+                        if (raw == null) {
+                            raw = "";
+                        }
+                        if (rowTable != null && !rowTable.isBlank()) {
+                            String shortTbl = rowTable;
+                            if (rowTable.contains(".")) {
+                                shortTbl = rowTable.substring(rowTable.lastIndexOf(".") + 1);
+                            }
+                            String escapedFull = java.util.regex.Pattern.quote(rowTable.trim()) + "\\.";
+                            String escapedShort = java.util.regex.Pattern.quote(shortTbl.trim()) + "\\.";
+                            raw = raw.replaceAll("(?i)" + escapedFull, cteName + ".");
+                            raw = raw.replaceAll("(?i)" + escapedShort, cteName + ".");
+                        }
+                        raw = makeDivisionSafe(raw);
+                        validateFilterExpr(raw);
+
+                        boolean hasAgg = false;
+                        String[] functions = {"SUM", "AVG", "COUNT", "MIN", "MAX"};
+                        String upperRaw = raw.toUpperCase();
+                        String fill = "0";
+                        for (String fn : functions) {
+                            if (upperRaw.contains(fn + "(")) {
+                                hasAgg = true;
+                                if ("SUM".equals(fn)) {
+                                    fill = "0";
+                                } else {
+                                    fill = "NULL";
+                                }
+                                break;
+                            }
+                        }
+
+                        if (hasAgg) {
+                            clause = injectConstraintsIntoRawSql(raw, dateConstraint + filterClause, fill);
+                        } else {
+                            clause = String.format(
+                                "SUM(CASE WHEN %s%s THEN (%s) ELSE 0 END)",
+                                dateConstraint,
+                                filterClause,
+                                raw
+                            );
+                        }
+                    }
+
+                    String select = String.format(
+                        "SELECT '%s' AS row_id, '%s' AS col_id, CAST(%s AS DOUBLE PRECISION) AS val FROM %s",
+                        row.rowId().toUpperCase(),
+                        col.colId().toUpperCase(),
+                        clause,
+                        cteName
+                    );
+                    selectQueries.add(select);
+                }
+            }
+        }
+
+        if (selectQueries.isEmpty()) {
+            return String.format(
+                "WITH base_data AS (\n  SELECT * FROM %s\n)\nSELECT '' AS row_id, '' AS col_id, 0.0::DOUBLE PRECISION AS val WHERE FALSE",
+                defaultTable
+            );
+        }
+
+        if (cteDefinitions.size() == 1) {
+            StringBuilder sql = new StringBuilder("WITH ");
+            sql.append(cteDefinitions.get(0).trim()).append("\n");
+            sql.append(String.join("\nUNION ALL\n", selectQueries));
+            return sql.toString();
+        }
+
         StringBuilder sql = new StringBuilder("WITH\n");
-        sql.append(String.join(",\n", cteDefs)).append("\n");
-        sql.append("SELECT\n");
-
-        List<String> selectFields = new ArrayList<>();
-        for (Integer eid : explores.keySet()) {
-            selectFields.add(String.format("  cte_%d.*", eid));
-        }
-        sql.append(String.join(",\n", selectFields)).append("\n");
-        sql.append("FROM (SELECT 1 as dummy) d\n");
-
-        for (Integer eid : explores.keySet()) {
-            sql.append(String.format("LEFT JOIN cte_%d ON TRUE\n", eid));
-        }
+        sql.append(String.join(",\n", cteDefinitions)).append("\n");
+        sql.append(String.join("\nUNION ALL\n", selectQueries));
 
         return sql.toString();
     }
 
-    private String buildExploreCteBody(ReportConfigDto config, int exploreId, List<Map.Entry<String, ResolvedMetricDto>> rowMetrics) {
-        ResolvedMetricDto firstMetric = rowMetrics.get(0).getValue();
-        String factTable = firstMetric.factTable();
-        String timeKey = firstMetric.timeKey();
-        List<String> joins = firstMetric.joinSqls();
-
-        List<String> selectClauses = new ArrayList<>();
-        for (Map.Entry<String, ResolvedMetricDto> entry : rowMetrics) {
-            String rid = entry.getKey();
-            ResolvedMetricDto metric = entry.getValue();
-            ReportRowDto row = config.getRow(rid);
-
-            for (ColumnDefDto col : config.getSqlColumns()) {
-                LocalDate[] boundaries = DateUtils.getPeriodBoundaries(
-                    config.getReferenceDate(),
-                    col.colType(),
-                    col.periodOffset(),
-                    col.rollingN()
-                );
-                LocalDate start = boundaries[0];
-                LocalDate end = boundaries[1];
-
-                String rawExpr = metric.sqlExpr().trim();
-                int startParen = rawExpr.indexOf("(");
-                int endParen = rawExpr.lastIndexOf(")");
-                String innerExpr;
-                if (startParen != -1 && endParen != -1) {
-                    innerExpr = rawExpr.substring(startParen + 1, endParen).trim();
-                } else {
-                    innerExpr = rawExpr.trim();
-                }
-
-                String aggFn = metric.aggType().toUpperCase();
-                String distinctClause = "";
-                if (innerExpr.toUpperCase().startsWith("DISTINCT ")) {
-                    distinctClause = "DISTINCT ";
-                    innerExpr = innerExpr.substring(9).trim();
-                }
-
-                String fill;
-                if (aggFn.startsWith("SUM")) {
-                    fill = "0";
-                } else {
-                    fill = "NULL";
-                }
-
-                String filterClause = "";
-                if (row.filterExpr() != null && !row.filterExpr().isBlank()) {
-                    validateFilterExpr(row.filterExpr());
-                    filterClause = " AND (" + row.filterExpr() + ")";
-                }
-
-                String clause = String.format(
-                    "%s(%sCASE WHEN %s >= '%s' AND %s <= '%s'%s THEN %s ELSE %s END)",
-                    aggFn,
-                    distinctClause,
-                    timeKey,
-                    start.toString(),
-                    timeKey,
-                    end.toString(),
-                    filterClause,
-                    innerExpr,
-                    fill
-                );
-                selectClauses.add(String.format("  %s AS metric_%s_%s", clause, rid, col.colId()));
-            }
+    private String getTimeKeyForTable(String table) {
+        try {
+            return jdbcTemplate.queryForObject(
+                "SELECT time_key FROM reporting.sem_view WHERE table_ref = ?",
+                String.class,
+                table
+            );
+        } catch (Exception e) {
+            return "reporting_date"; // Fallback to reporting_date as default for banking facts
         }
+    }
 
-        List<FilterCondition> generalFilters = parseGeneralFilters(config.getGeneralFilters());
-        List<String> compiledFilters = new ArrayList<>();
-        for (FilterCondition cond : generalFilters) {
-            String sqlCond = compileFilterCondition(cond);
-            if (sqlCond != null && !sqlCond.isBlank()) {
-                compiledFilters.add("(" + sqlCond + ")");
-            }
+    private boolean columnExists(String table, String column, Map<String, Set<String>> cache) {
+        if (table == null || column == null || column.isBlank()) {
+            return false;
         }
+        String cleanTable = table.trim().toLowerCase();
+        String cleanCol = column.trim().toLowerCase();
         
-        String whereClause = "";
-        if (!compiledFilters.isEmpty()) {
-            whereClause = "\n  WHERE " + String.join(" AND ", compiledFilters);
+        Set<String> columns = cache.computeIfAbsent(cleanTable, t -> {
+            String schema = "analytics";
+            String tableName = t;
+            if (t.contains(".")) {
+                String[] parts = t.split("\\.");
+                schema = parts[0].trim();
+                tableName = parts[1].trim();
+            }
+            String sql = "SELECT column_name FROM information_schema.columns WHERE table_schema = ? AND table_name = ?";
+            try {
+                List<String> list = jdbcTemplate.queryForList(sql, String.class, schema, tableName);
+                Set<String> set = new HashSet<>();
+                for (String col : list) {
+                    set.add(col.toLowerCase());
+                }
+                return set;
+            } catch (Exception e) {
+                return Collections.emptySet();
+            }
+        });
+        
+        return columns.contains(cleanCol);
+    }
+
+    private boolean isNumericColumn(String table, String column) {
+        if (table == null || column == null || column.isBlank()) {
+            return false;
         }
+        String schema = "analytics";
+        String tableName = table.trim();
+        if (tableName.contains(".")) {
+            String[] parts = tableName.split("\\.");
+            schema = parts[0].trim();
+            tableName = parts[1].trim();
+        }
+        String sql = "SELECT data_type FROM information_schema.columns " +
+                     "WHERE table_schema = ? AND table_name = ? AND column_name = ?";
+        try {
+            String dataType = jdbcTemplate.queryForObject(sql, String.class, schema, tableName, column);
+            if (dataType == null) {
+                return false;
+            }
+            dataType = dataType.toLowerCase();
+            return dataType.contains("int") || dataType.contains("num") || 
+                   dataType.contains("double") || dataType.contains("real") || 
+                   dataType.contains("float") || dataType.contains("decimal") || 
+                   dataType.contains("precision");
+        } catch (Exception e) {
+            return false;
+        }
+    }
 
-        String joinStr = (joins != null && !joins.isEmpty()) ? "\n" + String.join("\n", joins) : "";
+    public String makeDivisionSafe(String sql) {
+        if (sql == null || !sql.contains("/")) {
+            return sql;
+        }
+        StringBuilder sb = new StringBuilder();
+        int len = sql.length();
+        for (int i = 0; i < len; i++) {
+            char c = sql.charAt(i);
+            if (c == '/') {
+                sb.append("/ NULLIF(");
+                int start = i + 1;
+                while (start < len && Character.isWhitespace(sql.charAt(start))) {
+                    start++;
+                }
+                int end = start;
+                if (end < len && sql.charAt(end) == '(') {
+                    int open = 1;
+                    end++;
+                    while (end < len && open > 0) {
+                        char ec = sql.charAt(end);
+                        if (ec == '(') {
+                            open++;
+                        } else if (ec == ')') {
+                            open--;
+                        }
+                        end++;
+                    }
+                } else {
+                    while (end < len && (Character.isLetterOrDigit(sql.charAt(end)) || sql.charAt(end) == '_' || sql.charAt(end) == '.')) {
+                        end++;
+                    }
+                }
+                String divisor = sql.substring(start, end);
+                sb.append(divisor).append(", 0)");
+                i = end - 1;
+            } else {
+                sb.append(c);
+            }
+        }
+        return sb.toString();
+    }
 
-        return String.format(
-            "cte_%d AS (\n  SELECT\n  %s\n  FROM %s%s%s\n)",
-            exploreId,
-            String.join(",\n  ", selectClauses),
-            factTable,
-            joinStr,
-            whereClause
-        );
+    public String injectConstraintsIntoRawSql(String rawSql, String constraints, String fill) {
+        String upper = rawSql.toUpperCase();
+        String[] functions = {"SUM", "AVG", "COUNT", "MIN", "MAX"};
+        String result = rawSql;
+        boolean replaced = false;
+        for (String fn : functions) {
+            String target = fn + "(";
+            int idx = upper.indexOf(target);
+            if (idx != -1) {
+                int openParen = 1;
+                int end = idx + target.length();
+                while (end < rawSql.length() && openParen > 0) {
+                    char ec = rawSql.charAt(end);
+                    if (ec == '(') {
+                        openParen++;
+                    } else if (ec == ')') {
+                        openParen--;
+                    }
+                    end++;
+                }
+                if (openParen == 0) {
+                    String inner = rawSql.substring(idx + target.length(), end - 1);
+                    String distinctPrefix = "";
+                    String cleanedInner = inner;
+                    
+                    String innerTrim = inner.trim();
+                    if (innerTrim.toUpperCase().startsWith("DISTINCT ")) {
+                        distinctPrefix = "DISTINCT ";
+                        cleanedInner = innerTrim.substring(9).trim();
+                    }
+                    
+                    String replacedFn = fn + "(" + distinctPrefix + "CASE WHEN " + constraints + " THEN (" + cleanedInner + ") ELSE " + fill + " END)";
+                    result = result.substring(0, idx) + replacedFn + result.substring(end);
+                    upper = result.toUpperCase();
+                    replaced = true;
+                }
+            }
+        }
+        if (!replaced) {
+            result = "SUM(CASE WHEN " + constraints + " THEN (" + rawSql + ") ELSE " + fill + " END)";
+        }
+        return result;
     }
 
     private void validateFilterExpr(String expr) {
@@ -154,11 +458,11 @@ public class SqlGeneratorService {
             throw new IllegalArgumentException("Invalid or dangerous SQL sequences in filter expression: " + expr);
         }
         
-        // Match parentheses to prevent breaking out of the generated CASE WHEN statement
         int openParen = 0;
         for (int i = 0; i < expr.length(); i++) {
-            if (expr.charAt(i) == '(') openParen++;
-            else if (expr.charAt(i) == ')') {
+            if (expr.charAt(i) == '(') {
+                openParen++;
+            } else if (expr.charAt(i) == ')') {
                 openParen--;
                 if (openParen < 0) {
                     throw new IllegalArgumentException("Unmatched parentheses in filter expression: " + expr);
@@ -170,12 +474,37 @@ public class SqlGeneratorService {
         }
     }
 
+    private String compileRowFilter(String rowFilter) {
+        if (rowFilter == null || rowFilter.isBlank()) {
+            return "";
+        }
+        String trimmed = rowFilter.trim();
+        if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+            List<FilterCondition> conds = parseGeneralFilters(trimmed);
+            List<String> compiled = new ArrayList<>();
+            for (FilterCondition cond : conds) {
+                String sqlCond = compileFilterCondition(cond);
+                if (sqlCond != null && !sqlCond.isBlank()) {
+                    compiled.add("(" + sqlCond + ")");
+                }
+            }
+            if (compiled.isEmpty()) {
+                return "";
+            }
+            return String.join(" AND ", compiled);
+        } else {
+            validateFilterExpr(trimmed);
+            return trimmed;
+        }
+    }
+
     private List<FilterCondition> parseGeneralFilters(String json) {
         if (json == null || json.isBlank()) {
             return Collections.emptyList();
         }
         try {
             ObjectMapper mapper = new ObjectMapper();
+            mapper.configure(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
             return mapper.readValue(json, new TypeReference<List<FilterCondition>>() {});
         } catch (Exception e) {
             throw new IllegalArgumentException("Failed to parse general filters JSON: " + json, e);
@@ -301,11 +630,42 @@ public class SqlGeneratorService {
         return result;
     }
 
+    private boolean isSameTable(String t1, String t2) {
+        if (t1 == null || t2 == null) {
+            return false;
+        }
+        String s1 = t1.trim().toLowerCase();
+        String s2 = t2.trim().toLowerCase();
+        if (s1.equals(s2)) {
+            return true;
+        }
+        if (s1.contains(".")) {
+            s1 = s1.substring(s1.lastIndexOf(".") + 1);
+        }
+        if (s2.contains(".")) {
+            s2 = s2.substring(s2.lastIndexOf(".") + 1);
+        }
+        return s1.equals(s2);
+    }
+
+    private String normalizeTableName(String table) {
+        if (table == null) {
+            return "";
+        }
+        String s = table.trim().toLowerCase();
+        if (s.contains(".")) {
+            s = s.substring(s.lastIndexOf(".") + 1);
+        }
+        return s;
+    }
+
+    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
     public static class FilterCondition {
         private String dimTable;
         private String attribute;
         private String operator;
         private String value;
+        private String conjunction;
 
         public FilterCondition() {}
 
@@ -316,6 +676,14 @@ public class SqlGeneratorService {
             this.value = value;
         }
 
+        public FilterCondition(String dimTable, String attribute, String operator, String value, String conjunction) {
+            this.dimTable = dimTable;
+            this.attribute = attribute;
+            this.operator = operator;
+            this.value = value;
+            this.conjunction = conjunction;
+        }
+
         public String getDimTable() { return dimTable; }
         public void setDimTable(String dimTable) { this.dimTable = dimTable; }
         public String getAttribute() { return attribute; }
@@ -324,5 +692,7 @@ public class SqlGeneratorService {
         public void setOperator(String operator) { this.operator = operator; }
         public String getValue() { return value; }
         public void setValue(String value) { this.value = value; }
+        public String getConjunction() { return conjunction; }
+        public void setConjunction(String conjunction) { this.conjunction = conjunction; }
     }
 }

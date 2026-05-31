@@ -9,6 +9,7 @@ import com.reporting.repository.ReportRepository;
 import com.reporting.service.ExcelParserService;
 import com.reporting.service.ReportConfigService;
 import com.reporting.service.ReportRunnerService;
+import com.reporting.service.ReportValidationService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -49,6 +50,7 @@ public class ReportControllerTest {
     @MockBean private ReportConfigService configService;
     @MockBean private ExcelParserService parserService;
     @MockBean private ReportRunnerService runnerService;
+    @MockBean private ReportValidationService validationService;
     @MockBean private NamedParameterJdbcTemplate jdbcTemplate;
 
     @Test

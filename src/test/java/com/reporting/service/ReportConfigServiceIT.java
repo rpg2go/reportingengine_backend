@@ -5,6 +5,7 @@ import com.reporting.dto.ColumnDefDto;
 import com.reporting.dto.Enums;
 import com.reporting.dto.ReportConfigDto;
 import com.reporting.dto.ReportRowDto;
+import com.reporting.dto.MeasureDefinition;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -38,8 +39,8 @@ public class ReportConfigServiceIT extends BaseIT {
             new ColumnDefDto("C2", "Calc Growth", Enums.ColType.CALC, 0, null, "C1 * 1.1", 2)
         );
         List<ReportRowDto> rows = List.of(
-            new ReportRowDto("R1", reportId, "Gross Sales", Enums.RowType.data, "SUM(amount)", null, "normal", 0, 1, Set.of("C1", "C2"), "region_id = 1"),
-            new ReportRowDto("R2", reportId, "Spacer Row", Enums.RowType.blank, "", null, "normal", 0, 2, Set.of(), null)
+            new ReportRowDto("R1", reportId, "Gross Sales", Enums.RowType.data, new MeasureDefinition("raw", null, null, null, "SUM(amount)"), null, "normal", 0, 1, Set.of("C1", "C2"), "region_id = 1"),
+            new ReportRowDto("R2", reportId, "Spacer Row", Enums.RowType.blank, new MeasureDefinition("raw", null, null, null, ""), null, "normal", 0, 2, Set.of(), null)
         );
 
         ReportConfigDto config = new ReportConfigDto(
@@ -64,7 +65,8 @@ public class ReportConfigServiceIT extends BaseIT {
         // Assert Rows
         assertThat(loaded.getRows()).hasSize(2);
         assertThat(loaded.getRows().get(0).rowId()).isEqualTo("R1");
-        assertThat(loaded.getRows().get(0).source()).isEqualTo("SUM(amount)");
+        assertThat(loaded.getRows().get(0).source()).isNotNull();
+        assertThat(loaded.getRows().get(0).source().getRawSql()).isEqualTo("SUM(amount)");
         assertThat(loaded.getRows().get(0).filterExpr()).isEqualTo("region_id = 1");
     }
 
@@ -74,7 +76,7 @@ public class ReportConfigServiceIT extends BaseIT {
         // Arrange first save
         String reportId = "RPT_IT_CASCADE";
         List<ColumnDefDto> cols1 = List.of(new ColumnDefDto("C1", "C1", Enums.ColType.WEEK, 0, null, null, 1));
-        List<ReportRowDto> rows1 = List.of(new ReportRowDto("R1", reportId, "R1", Enums.RowType.data, "SUM(a)", null, "normal", 0, 1, Set.of("C1"), null));
+        List<ReportRowDto> rows1 = List.of(new ReportRowDto("R1", reportId, "R1", Enums.RowType.data, new MeasureDefinition("raw", null, null, null, "SUM(a)"), null, "normal", 0, 1, Set.of("C1"), null));
         ReportConfigDto config1 = new ReportConfigDto(reportId, "First save", cols1, rows1, LocalDate.now(), 1, null, "a", "w", null, null, false, null, null);
         configService.saveToDb(config1);
 
