@@ -305,5 +305,25 @@ public class ReportControllerTest {
                 .andExpect(jsonPath("$[0]").value("Gadget"))
                 .andExpect(jsonPath("$[1]").value("Widget"));
     }
+
+    @Test
+    @DisplayName("GET /api/reports/dimensions/values: maps reporting_date to date_key for dim_date")
+    public void getDimensionValues_dimDateReportingDate_shouldMapToDateKeyAndReturnValues() throws Exception {
+        JdbcOperations mockJdbcOperations = mock(JdbcOperations.class);
+        when(jdbcTemplate.getJdbcOperations()).thenReturn(mockJdbcOperations);
+        when(mockJdbcOperations.queryForObject(anyString(), eq(String.class), eq("dim_date")))
+                .thenReturn("analytics.dim_date");
+        when(mockJdbcOperations.queryForList(anyString(), eq(String.class)))
+                .thenReturn(List.of("analytics.dim_date"));
+        when(mockJdbcOperations.query(contains("date_key"), any(RowMapper.class)))
+                .thenReturn(List.of("2024-01-01", "2024-01-02"));
+
+        mockMvc.perform(get("/api/reports/dimensions/values")
+                        .param("table", "dim_date")
+                        .param("column", "reporting_date"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0]").value("2024-01-01"))
+                .andExpect(jsonPath("$[1]").value("2024-01-02"));
+    }
 }
 

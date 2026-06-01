@@ -250,9 +250,16 @@ public class ReportController {
         if (resolved == null) {
             return ResponseEntity.badRequest().build();
         }
-        log.info("Fetching dimension values for table: {} (resolved: {}), column: {}", table, resolved, column);
-        if (!resolved.startsWith("analytics.") || !column.matches("^[a-zA-Z0-9_]+$")) {
-            log.warn("Invalid table format or column regex mismatch. Table: {}, Column: {}", resolved, column);
+
+        // Map logical reporting_date column to physical date_key column for dim_date
+        String queryColumn = column;
+        if ("reporting_date".equals(column) && ("dim_date".equals(table) || "analytics.dim_date".equals(resolved))) {
+            queryColumn = "date_key";
+        }
+
+        log.info("Fetching dimension values for table: {} (resolved: {}), column: {} (queried as: {})", table, resolved, column, queryColumn);
+        if (!resolved.startsWith("analytics.") || !queryColumn.matches("^[a-zA-Z0-9_]+$")) {
+            log.warn("Invalid table format or column regex mismatch. Table: {}, Column: {}", resolved, queryColumn);
             return ResponseEntity.badRequest().build();
         }
 
@@ -264,7 +271,7 @@ public class ReportController {
         }
 
         String sql = String.format("SELECT DISTINCT %s FROM %s WHERE %s IS NOT NULL ORDER BY %s LIMIT 100", 
-            column, resolved, column, column);
+            queryColumn, resolved, queryColumn, queryColumn);
         
         List<String> values = jdbcTemplate.getJdbcOperations().query(sql, (rs, rowNum) -> {
             Object val = rs.getObject(1);

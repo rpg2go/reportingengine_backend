@@ -66,18 +66,12 @@ public class SecurityConfig {
         CorsConfiguration configuration = new CorsConfiguration();
         
         String allowedOriginsEnv = System.getenv("CORS_ALLOWED_ORIGINS");
-        List<String> allowedOrigins;
         if (allowedOriginsEnv != null && !allowedOriginsEnv.isBlank()) {
-            allowedOrigins = List.of(allowedOriginsEnv.split(","));
+            List<String> allowedOrigins = List.of(allowedOriginsEnv.split(","));
+            configuration.setAllowedOrigins(allowedOrigins);
         } else {
-            allowedOrigins = List.of(
-                "http://localhost:4200",
-                "http://127.0.0.1:4200",
-                "http://localhost:8100",
-                "http://127.0.0.1:8100"
-            );
+            configuration.setAllowedOriginPatterns(List.of("*"));
         }
-        configuration.setAllowedOrigins(allowedOrigins);
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Requested-With"));
         configuration.setExposedHeaders(List.of("Content-Disposition"));
