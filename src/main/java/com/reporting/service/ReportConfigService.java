@@ -95,7 +95,7 @@ public class ReportConfigService {
         );
 
         // 3. Row metrics — sql_expr or fallback to measure_definition JSON
-        Map<String, MeasureDefinition> measuresByRow = new HashMap<>();
+        Map<String, MeasureDefinitionDTO> measuresByRow = new HashMap<>();
         com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
         jdbcTemplate.query(
             "SELECT rm.row_id, rm.measure_definition, rm.sql_expr, sm.name AS sem_name, sm.sql_expr AS sem_sql_expr, sv.table_ref AS sem_table " +
@@ -106,10 +106,10 @@ public class ReportConfigService {
             (RowCallbackHandler) rs -> {
                 String rid = rs.getString("row_id").toUpperCase();
                 String measureDefStr = rs.getString("measure_definition");
-                MeasureDefinition mdef = null;
+                MeasureDefinitionDTO mdef = null;
                 if (measureDefStr != null && !measureDefStr.isBlank()) {
                     try {
-                        mdef = mapper.readValue(measureDefStr, MeasureDefinition.class);
+                        mdef = mapper.readValue(measureDefStr, MeasureDefinitionDTO.class);
                     } catch (Exception e) {
                         // ignore
                     }
@@ -127,10 +127,9 @@ public class ReportConfigService {
                         expr = "";
                     }
                     String table = rs.getString("sem_table");
-                    mdef = MeasureDefinition.builder()
-                        .mode("raw")
-                        .rawSql(expr)
-                        .table(table)
+                    mdef = MeasureDefinitionDTO.builder()
+                        .rawExpression(expr)
+                        .sourceTable(table)
                         .build();
                 }
 
@@ -139,10 +138,9 @@ public class ReportConfigService {
                     String cleanSql = mdef.getRawSql().trim().toLowerCase();
                     if (semMeasures.containsKey(cleanSql)) {
                         SemanticMeasureInfo info = semMeasures.get(cleanSql);
-                        mdef = MeasureDefinition.builder()
-                            .mode("raw")
-                            .rawSql(info.sqlExpr)
-                            .table(info.tableRef)
+                        mdef = MeasureDefinitionDTO.builder()
+                            .rawExpression(info.sqlExpr)
+                            .sourceTable(info.tableRef)
                             .build();
                     }
                 }
@@ -206,14 +204,13 @@ public class ReportConfigService {
             (rs, rowNum) -> {
                 String rid = rs.getString("row_id").toUpperCase();
                 String rowType = rs.getString("row_type");
-                MeasureDefinition source = null;
+                MeasureDefinitionDTO source = null;
                 if ("data".equalsIgnoreCase(rowType)) {
                     source = measuresByRow.get(rid);
                 } else if ("calc".equalsIgnoreCase(rowType)) {
                     String formula = formulasByRow.getOrDefault(rid, "");
-                    source = MeasureDefinition.builder()
-                        .mode("raw")
-                        .rawSql(formula)
+                    source = MeasureDefinitionDTO.builder()
+                        .rawExpression(formula)
                         .build();
                 }
                 Integer styleId = (Integer) rs.getObject("style_id");
@@ -241,7 +238,6 @@ public class ReportConfigService {
             referenceDate,
             report.getExploreId(),
             Enums.ReportStatus.valueOf(report.getStatus().toLowerCase()),
-            report.getSourceTable(),
             report.getGranularity(),
             report.getTimeframeStart(),
             report.getTimeframeEnd(),
@@ -278,7 +274,6 @@ public class ReportConfigService {
             r.setName(dto.getName());
             r.setExploreId(dto.getExploreId());
             r.setStatus(dto.getStatus() != null ? dto.getStatus().name() : "draft");
-            r.setSourceTable(dto.getSourceTable());
             r.setGranularity(dto.getGranularity());
             r.setTimeframeStart(dto.getTimeframeStart());
             r.setTimeframeEnd(dto.getTimeframeEnd());
@@ -294,7 +289,6 @@ public class ReportConfigService {
                 .exploreId(dto.getExploreId())
                 .version(1)
                 .status(dto.getStatus() != null ? dto.getStatus().name() : "draft")
-                .sourceTable(dto.getSourceTable())
                 .granularity(dto.getGranularity())
                 .timeframeStart(dto.getTimeframeStart())
                 .timeframeEnd(dto.getTimeframeEnd())

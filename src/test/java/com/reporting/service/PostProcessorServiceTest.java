@@ -4,7 +4,7 @@ import com.reporting.dto.ColumnDefDto;
 import com.reporting.dto.Enums;
 import com.reporting.dto.ReportConfigDto;
 import com.reporting.dto.ReportRowDto;
-import com.reporting.dto.MeasureDefinition;
+import com.reporting.dto.MeasureDefinitionDTO;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -68,9 +68,9 @@ public class PostProcessorServiceTest {
 
         // Rows: R1 (DATA), R2 (DATA), R3 (CALC formula: R1 + R2)
         List<ReportRowDto> rows = List.of(
-            new ReportRowDto("R1", "REP1", "Row 1", Enums.RowType.data, new MeasureDefinition("raw", null, null, null, "m1"), null, "normal", 0, 1, Set.of("C1", "C2", "C3"), null),
-            new ReportRowDto("R2", "REP1", "Row 2", Enums.RowType.data, new MeasureDefinition("raw", null, null, null, "m2"), null, "normal", 0, 2, Set.of("C1", "C2", "C3"), null),
-            new ReportRowDto("R3", "REP1", "Total Row", Enums.RowType.calc, new MeasureDefinition("raw", null, null, null, "R1 + R2"), null, "total", 0, 3, Set.of("C1", "C2", "C3"), null)
+            new ReportRowDto("R1", "REP1", "Row 1", Enums.RowType.data, new MeasureDefinitionDTO("raw", null, null, null, "m1"), null, "normal", 0, 1, Set.of("C1", "C2", "C3"), null),
+            new ReportRowDto("R2", "REP1", "Row 2", Enums.RowType.data, new MeasureDefinitionDTO("raw", null, null, null, "m2"), null, "normal", 0, 2, Set.of("C1", "C2", "C3"), null),
+            new ReportRowDto("R3", "REP1", "Total Row", Enums.RowType.calc, new MeasureDefinitionDTO("raw", null, null, null, "R1 + R2"), null, "total", 0, 3, Set.of("C1", "C2", "C3"), null)
         );
 
         ReportConfigDto config = new ReportConfigDto(

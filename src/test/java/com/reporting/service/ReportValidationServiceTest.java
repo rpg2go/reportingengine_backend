@@ -46,7 +46,7 @@ public class ReportValidationServiceTest {
         );
         ReportConfigDto config = new ReportConfigDto(
             "RPT1", "Test", columns, Collections.emptyList(), null, 1, Enums.ReportStatus.draft,
-            "analytics.fact_sales", "monthly", null, null, false, null, null
+            "analytics.fact_sales", "reporting_date", null, null, false, null, null
         );
 
         // Act
@@ -66,12 +66,12 @@ public class ReportValidationServiceTest {
     public void validate_circularRowReferences_shouldReportCriticalError() {
         // Arrange: R1 depends on R2, R2 depends on R1
         List<ReportRowDto> rows = List.of(
-            new ReportRowDto("R1", "RPT1", "Row 1", Enums.RowType.calc, new MeasureDefinition("raw", null, null, null, "R2"), null, "normal", 0, 1, Set.of(), null),
-            new ReportRowDto("R2", "RPT1", "Row 2", Enums.RowType.calc, new MeasureDefinition("raw", null, null, null, "R1"), null, "normal", 0, 2, Set.of(), null)
+            new ReportRowDto("R1", "RPT1", "Row 1", Enums.RowType.calc, new MeasureDefinitionDTO("raw", null, null, null, "R2"), null, "normal", 0, 1, Set.of(), null),
+            new ReportRowDto("R2", "RPT1", "Row 2", Enums.RowType.calc, new MeasureDefinitionDTO("raw", null, null, null, "R1"), null, "normal", 0, 2, Set.of(), null)
         );
         ReportConfigDto config = new ReportConfigDto(
             "RPT1", "Test", Collections.emptyList(), rows, null, 1, Enums.ReportStatus.draft,
-            "analytics.fact_sales", "monthly", null, null, false, null, null
+            "analytics.fact_sales", "reporting_date", null, null, false, null, null
         );
 
         // Act
@@ -95,7 +95,7 @@ public class ReportValidationServiceTest {
         );
         ReportConfigDto config = new ReportConfigDto(
             "RPT1", "Test", columns, Collections.emptyList(), null, 1, Enums.ReportStatus.draft,
-            "analytics.fact_sales", "monthly", null, null, false, null, null
+            "analytics.fact_sales", "reporting_date", null, null, false, null, null
         );
 
         // Act
@@ -118,7 +118,7 @@ public class ReportValidationServiceTest {
         );
         ReportConfigDto config = new ReportConfigDto(
             "RPT1", "Test", columns, Collections.emptyList(), null, 1, Enums.ReportStatus.draft,
-            "analytics.fact_sales", "monthly", null, null, false, null, null
+            "analytics.fact_sales", "reporting_date", null, null, false, null, null
         );
 
         // Act
@@ -142,7 +142,7 @@ public class ReportValidationServiceTest {
         );
         ReportConfigDto config = new ReportConfigDto(
             "RPT1", "Test", columns, Collections.emptyList(), null, 1, Enums.ReportStatus.draft,
-            "analytics.fact_sales", "monthly", null, null, false, null, null
+            "analytics.fact_sales", "reporting_date", null, null, false, null, null
         );
 
         // Act
@@ -162,13 +162,13 @@ public class ReportValidationServiceTest {
         // Row 2: numeric aggregation on non-numeric (varchar) column -> should fail
         List<ReportRowDto> rows = List.of(
             new ReportRowDto("R1", "RPT1", "Row 1", Enums.RowType.data, 
-                new MeasureDefinition("visual", "SUM", "non_existent_col", "analytics.fact_sales", null), null, "normal", 0, 1, Set.of(), null),
+                new MeasureDefinitionDTO("visual", "SUM", "non_existent_col", "analytics.fact_sales", null), null, "normal", 0, 1, Set.of(), null),
             new ReportRowDto("R2", "RPT1", "Row 2", Enums.RowType.data, 
-                new MeasureDefinition("visual", "SUM", "product_id", "analytics.fact_sales", null), null, "normal", 0, 2, Set.of(), null)
+                new MeasureDefinitionDTO("visual", "SUM", "product_id", "analytics.fact_sales", null), null, "normal", 0, 2, Set.of(), null)
         );
         ReportConfigDto config = new ReportConfigDto(
             "RPT1", "Test", Collections.emptyList(), rows, null, 1, Enums.ReportStatus.draft,
-            "analytics.fact_sales", "monthly", null, null, false, null, null
+            "analytics.fact_sales", "reporting_date", null, null, false, null, null
         );
 
         // Act
@@ -195,13 +195,13 @@ public class ReportValidationServiceTest {
         // Row 2: raw sql referencing nonexistent table or column -> should fail
         List<ReportRowDto> rows = List.of(
             new ReportRowDto("R1", "RPT1", "Row 1", Enums.RowType.data, 
-                new MeasureDefinition("raw", null, null, "analytics.fact_sales", "SUM(product_id)"), null, "normal", 0, 1, Set.of(), null),
+                new MeasureDefinitionDTO("raw", null, null, "analytics.fact_sales", "SUM(product_id)"), null, "normal", 0, 1, Set.of(), null),
             new ReportRowDto("R2", "RPT1", "Row 2", Enums.RowType.data, 
-                new MeasureDefinition("raw", null, null, "analytics.fact_sales", "SUM(non_existent)"), null, "normal", 0, 2, Set.of(), null)
+                new MeasureDefinitionDTO("raw", null, null, "analytics.fact_sales", "SUM(non_existent)"), null, "normal", 0, 2, Set.of(), null)
         );
         ReportConfigDto config = new ReportConfigDto(
             "RPT1", "Test", Collections.emptyList(), rows, null, 1, Enums.ReportStatus.draft,
-            "analytics.fact_sales", "monthly", null, null, false, null, null
+            "analytics.fact_sales", "reporting_date", null, null, false, null, null
         );
 
         // Act
@@ -226,12 +226,12 @@ public class ReportValidationServiceTest {
     public void validate_circularReferenceThrowsCircularReferenceException() {
         PostProcessorService postProcessorService = new PostProcessorService();
         List<ReportRowDto> rows = List.of(
-            new ReportRowDto("R3", "RPT1", "Row 3", Enums.RowType.calc, new MeasureDefinition("raw", null, null, null, "R4"), null, "normal", 0, 1, Set.of("C1"), null),
-            new ReportRowDto("R4", "RPT1", "Row 4", Enums.RowType.calc, new MeasureDefinition("raw", null, null, null, "R3"), null, "normal", 0, 2, Set.of("C1"), null)
+            new ReportRowDto("R3", "RPT1", "Row 3", Enums.RowType.calc, new MeasureDefinitionDTO("raw", null, null, null, "R4"), null, "normal", 0, 1, Set.of("C1"), null),
+            new ReportRowDto("R4", "RPT1", "Row 4", Enums.RowType.calc, new MeasureDefinitionDTO("raw", null, null, null, "R3"), null, "normal", 0, 2, Set.of("C1"), null)
         );
         ReportConfigDto config = new ReportConfigDto(
             "RPT1", "Test", List.of(new ColumnDefDto("C1", "C1", Enums.ColType.WEEK, 0, null, null, 1)), rows, null, 1, Enums.ReportStatus.draft,
-            "analytics.fact_sales", "monthly", null, null, false, null, null
+            "analytics.fact_sales", "reporting_date", null, null, false, null, null
         );
 
         org.junit.jupiter.api.Assertions.assertThrows(com.reporting.exception.CircularReferenceException.class, () -> {
@@ -253,7 +253,7 @@ public class ReportValidationServiceTest {
         );
         ReportConfigDto config = new ReportConfigDto(
             "RPT1", "Test", columns, Collections.emptyList(), null, 1, Enums.ReportStatus.draft,
-            "analytics.fact_sales", "monthly", null, null, false, null, null
+            "analytics.fact_sales", "reporting_date", null, null, false, null, null
         );
 
         ValidationResult result = validationService.validateConfiguration(config);
@@ -272,5 +272,75 @@ public class ReportValidationServiceTest {
         String rawFormula = "amount / target_value";
         String safeFormula = sqlGen.makeDivisionSafe(rawFormula);
         assertThat(safeFormula).isEqualTo("amount / NULLIF(target_value, 0)");
+    }
+
+    @Test
+    @DisplayName("validateConfiguration - invalid granularity attribute should report critical error")
+    public void validate_invalidGranularity_shouldReportCriticalError() {
+        ReportConfigDto config = new ReportConfigDto(
+            "RPT1", "Test", Collections.emptyList(), Collections.emptyList(), null, 1, Enums.ReportStatus.draft,
+            "analytics.fact_sales", "invalid_granularity", null, null, false, null, null
+        );
+
+        ValidationResult result = validationService.validateConfiguration(config);
+
+        assertThat(result.isValid()).isFalse();
+        Optional<ValidationError> err = result.getErrors().stream()
+            .filter(e -> e.getFieldContext().equals("granularity") && e.getErrorSeverity().equals("CRITICAL"))
+            .findFirst();
+        assertThat(err).isPresent();
+        assertThat(err.get().getDisplayMessage()).contains("Report granularity must be strictly one of");
+    }
+
+    @Test
+    @DisplayName("validateConfiguration - conformed and unconformed general filters validation")
+    public void validate_generalFiltersDimensions_shouldEnforceConformedDimensionsOnly() {
+        // Stub exact loadSchemaCache query
+        String schemaSql = "SELECT table_name, column_name, data_type FROM information_schema.columns WHERE table_schema = 'analytics'";
+        lenient().when(jdbcTemplate.queryForList(schemaSql)).thenReturn(List.of(
+            Map.of("table_name", "fact_sales", "column_name", "amount", "data_type", "numeric")
+        ));
+
+        // Stub dimensions query for fact_sales
+        String joinSql = "SELECT tv.name AS dimView " +
+                         "FROM reporting.sem_join j " +
+                         "JOIN reporting.sem_explore e ON e.explore_id = j.explore_id " +
+                         "JOIN reporting.sem_view fv ON fv.view_id = e.fact_view_id " +
+                         "JOIN reporting.sem_view tv ON tv.view_id = j.to_view_id " +
+                         "WHERE fv.table_ref IN ('analytics.fact_sales', 'fact_sales') " +
+                         "   OR fv.name IN ('analytics.fact_sales', 'fact_sales')";
+        lenient().when(jdbcTemplate.queryForList(joinSql)).thenReturn(List.of(
+            Map.of("dimView", "dim_customers"),
+            Map.of("dimView", "dim_location")
+        ));
+
+        // Case A: Valid conformed dimension filter (dim_customers)
+        List<ReportRowDto> rows = List.of(
+            new ReportRowDto("R1", "RPT1", "Row 1", Enums.RowType.data, 
+                new MeasureDefinitionDTO("visual", "SUM", "amount", "analytics.fact_sales", null), null, "normal", 0, 1, Set.of(), null)
+        );
+        String validGenFilters = "[{\"dimTable\":\"dim_customers\",\"attribute\":\"id\",\"operator\":\"=\",\"value\":\"1\"}]";
+        ReportConfigDto validConfig = new ReportConfigDto(
+            "RPT1", "Test", Collections.emptyList(), rows, null, 1, Enums.ReportStatus.draft,
+            "analytics.fact_sales", "reporting_date", null, null, false, null, validGenFilters
+        );
+
+        ValidationResult validResult = validationService.validateConfiguration(validConfig);
+        assertThat(validResult.isValid()).isTrue();
+
+        // Case B: Unconformed dimension filter (dim_products)
+        String invalidGenFilters = "[{\"dimTable\":\"dim_products\",\"attribute\":\"id\",\"operator\":\"=\",\"value\":\"1\"}]";
+        ReportConfigDto invalidConfig = new ReportConfigDto(
+            "RPT1", "Test", Collections.emptyList(), rows, null, 1, Enums.ReportStatus.draft,
+            "analytics.fact_sales", "reporting_date", null, null, false, null, invalidGenFilters
+        );
+
+        ValidationResult invalidResult = validationService.validateConfiguration(invalidConfig);
+        assertThat(invalidResult.isValid()).isFalse();
+        Optional<ValidationError> err = invalidResult.getErrors().stream()
+            .filter(e -> e.getFieldContext().equals("generalFilters") && e.getErrorSeverity().equals("CRITICAL"))
+            .findFirst();
+        assertThat(err).isPresent();
+        assertThat(err.get().getDisplayMessage()).contains("Filter references unconformed dimension table 'dim_products'");
     }
 }

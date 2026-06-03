@@ -62,7 +62,7 @@ public class SqlGeneratorServiceTest {
         );
         List<ReportRowDto> rows = List.of(
             new ReportRowDto("R1", "REP1", "Row 1", Enums.RowType.data, 
-                new MeasureDefinition("visual", "SUM", "amount", "analytics.fact_sales", null), 
+                new MeasureDefinitionDTO("visual", "SUM", "amount", "analytics.fact_sales", null), 
                 null, "normal", 0, 1, Set.of("C1"), "region = 'North'")
         );
         ReportConfigDto config = new ReportConfigDto(
@@ -74,9 +74,9 @@ public class SqlGeneratorServiceTest {
         String sql = service.generate(config, Collections.emptyMap());
 
         // Assert
-        assertThat(sql).contains("WITH base_data AS (");
-        assertThat(sql).contains("SELECT * FROM analytics.fact_sales");
-        assertThat(sql).contains("SELECT 'R1' AS row_id, 'C1' AS col_id, CAST(SUM(CASE WHEN order_date >= '2026-05-25' AND order_date <= '2026-05-26' AND (region = 'North') THEN amount ELSE 0 END) AS DOUBLE PRECISION) AS val FROM base_data");
+        assertThat(sql).contains("cte_fact_sales AS (");
+        assertThat(sql).contains("FROM analytics.fact_sales");
+        assertThat(sql).contains("SELECT 'R1' AS row_id, 'C1' AS col_id, CAST(SUM(val_r1_c1) AS DOUBLE PRECISION) AS val FROM combined_data");
     }
 
     @Test
@@ -88,7 +88,7 @@ public class SqlGeneratorServiceTest {
         );
         List<ReportRowDto> rows = List.of(
             new ReportRowDto("R1", "REP1", "Row 1", Enums.RowType.data, 
-                new MeasureDefinition("raw", null, null, null, "COUNT(DISTINCT user_id)"), 
+                new MeasureDefinitionDTO("raw", null, null, null, "COUNT(DISTINCT user_id)"), 
                 null, "normal", 0, 1, Set.of("C1"), null)
         );
         ReportConfigDto config = new ReportConfigDto(
@@ -100,7 +100,7 @@ public class SqlGeneratorServiceTest {
         String sql = service.generate(config, Collections.emptyMap());
 
         // Assert
-        assertThat(sql).contains("COUNT(DISTINCT CASE WHEN order_date >= '2026-05-25' AND order_date <= '2026-05-26' THEN (user_id) ELSE NULL END)");
+        assertThat(sql).contains("COUNT(DISTINCT CASE WHEN analytics.fact_sales.order_date >= '2026-05-25' AND analytics.fact_sales.order_date <= '2026-05-26' THEN (user_id) ELSE NULL END)");
     }
 
     @Test
@@ -111,7 +111,7 @@ public class SqlGeneratorServiceTest {
         // UNION injection
         List<ReportRowDto> rowsUnion = List.of(
             new ReportRowDto("R1", "REP1", "Row 1", Enums.RowType.data, 
-                new MeasureDefinition("raw", null, null, null, "SUM(amount)"), 
+                new MeasureDefinitionDTO("raw", null, null, null, "SUM(amount)"), 
                 null, "normal", 0, 1, Set.of("C1"), "region = 'North' UNION SELECT * FROM users")
         );
         ReportConfigDto configUnion = new ReportConfigDto("REP1", "Test", columns, rowsUnion, LocalDate.now(), 1, null, "a", "w", null, null, false, null, null);
@@ -123,7 +123,7 @@ public class SqlGeneratorServiceTest {
         // Comment block injection (--)
         List<ReportRowDto> rowsComment = List.of(
             new ReportRowDto("R1", "REP1", "Row 1", Enums.RowType.data, 
-                new MeasureDefinition("raw", null, null, null, "SUM(amount)"), 
+                new MeasureDefinitionDTO("raw", null, null, null, "SUM(amount)"), 
                 null, "normal", 0, 1, Set.of("C1"), "region = 'North' -- comment")
         );
         ReportConfigDto configComment = new ReportConfigDto("REP1", "Test", columns, rowsComment, LocalDate.now(), 1, null, "a", "w", null, null, false, null, null);
@@ -140,7 +140,7 @@ public class SqlGeneratorServiceTest {
         // Unmatched open parenthesis
         List<ReportRowDto> rowsOpen = List.of(
             new ReportRowDto("R1", "REP1", "Row 1", Enums.RowType.data, 
-                new MeasureDefinition("raw", null, null, null, "SUM(amount)"), 
+                new MeasureDefinitionDTO("raw", null, null, null, "SUM(amount)"), 
                 null, "normal", 0, 1, Set.of("C1"), "(region = 'North'")
         );
         ReportConfigDto configOpen = new ReportConfigDto("REP1", "Test", columns, rowsOpen, LocalDate.now(), 1, null, "a", "w", null, null, false, null, null);
@@ -151,7 +151,7 @@ public class SqlGeneratorServiceTest {
         // Unmatched close parenthesis
         List<ReportRowDto> rowsClose = List.of(
             new ReportRowDto("R1", "REP1", "Row 1", Enums.RowType.data, 
-                new MeasureDefinition("raw", null, null, null, "SUM(amount)"), 
+                new MeasureDefinitionDTO("raw", null, null, null, "SUM(amount)"), 
                 null, "normal", 0, 1, Set.of("C1"), "region = 'North')")
         );
         ReportConfigDto configClose = new ReportConfigDto("REP1", "Test", columns, rowsClose, LocalDate.now(), 1, null, "a", "w", null, null, false, null, null);
@@ -169,7 +169,7 @@ public class SqlGeneratorServiceTest {
         );
         List<ReportRowDto> rows = List.of(
             new ReportRowDto("R1", "REP1", "Row 1", Enums.RowType.data, 
-                new MeasureDefinition("raw", null, null, null, "SUM(amount)"), 
+                new MeasureDefinitionDTO("raw", null, null, null, "SUM(amount)"), 
                 null, "normal", 0, 1, Set.of("C1"), null)
         );
         
@@ -187,7 +187,7 @@ public class SqlGeneratorServiceTest {
         String sql = service.generate(config, Collections.emptyMap());
 
         // Assert
-        assertThat(sql).contains("WHERE (amount = '100') AND (dim_rm.status = 'active')");
+        assertThat(sql).contains("WHERE (spine_raw.amount = '100') AND (dim_rm.status = 'active')");
     }
 
     @Test
@@ -199,7 +199,7 @@ public class SqlGeneratorServiceTest {
         );
         List<ReportRowDto> rows = List.of(
             new ReportRowDto("R1", "REP1", "Row 1", Enums.RowType.data, 
-                new MeasureDefinition("raw", null, null, null, "SUM(amount)"), 
+                new MeasureDefinitionDTO("raw", null, null, null, "SUM(amount)"), 
                 null, "normal", 0, 1, Set.of("C1"), null)
         );
         
@@ -218,9 +218,9 @@ public class SqlGeneratorServiceTest {
         String sql = service.generate(config, Collections.emptyMap());
 
         // Assert
-        assertThat(sql).contains("WHERE ((region <> 'West' OR region IS NULL)) " +
-            "AND ((category <> 'Furniture' OR category IS NULL)) " +
-            "AND ((name NOT LIKE '%John%' ESCAPE '\\' OR name IS NULL))");
+        assertThat(sql).contains("WHERE ((spine_raw.region <> 'West' OR spine_raw.region IS NULL)) " +
+            "AND ((spine_raw.category <> 'Furniture' OR spine_raw.category IS NULL)) " +
+            "AND ((spine_raw.name NOT LIKE '%John%' ESCAPE '\\' OR spine_raw.name IS NULL))");
     }
 
     @Test
@@ -232,7 +232,7 @@ public class SqlGeneratorServiceTest {
         );
         List<ReportRowDto> rows = List.of(
             new ReportRowDto("R1", "REP1", "Row 1", Enums.RowType.data, 
-                new MeasureDefinition("raw", null, null, null, "SUM(amount)"), 
+                new MeasureDefinitionDTO("raw", null, null, null, "SUM(amount)"), 
                 null, "normal", 0, 1, Set.of("C1"), null)
         );
         
@@ -249,7 +249,7 @@ public class SqlGeneratorServiceTest {
         String sql = service.generate(config, Collections.emptyMap());
 
         // Assert
-        assertThat(sql).contains("WHERE (country IN ('US', 'CA', 'FR'))");
+        assertThat(sql).contains("WHERE (spine_raw.country IN ('US', 'CA', 'FR'))");
     }
 
     @Test
@@ -261,7 +261,7 @@ public class SqlGeneratorServiceTest {
         );
         List<ReportRowDto> rows = List.of(
             new ReportRowDto("R1", "REP1", "Row 1", Enums.RowType.data, 
-                new MeasureDefinition("raw", null, null, null, "SUM(amount)"), 
+                new MeasureDefinitionDTO("raw", null, null, null, "SUM(amount)"), 
                 null, "normal", 0, 1, Set.of("C1"), null)
         );
         
@@ -281,10 +281,10 @@ public class SqlGeneratorServiceTest {
         String sql = service.generate(config, Collections.emptyMap());
 
         // Assert
-        assertThat(sql).contains("WHERE ((region IS NULL OR TRIM(region) = '')) " +
-            "AND ((category IS NOT NULL AND TRIM(category) <> '')) " +
-            "AND (name IS NULL) " +
-            "AND (status IS NOT NULL)");
+        assertThat(sql).contains("WHERE ((spine_raw.region IS NULL OR TRIM(spine_raw.region) = '')) " +
+            "AND ((spine_raw.category IS NOT NULL AND TRIM(spine_raw.category) <> '')) " +
+            "AND (spine_raw.name IS NULL) " +
+            "AND (spine_raw.status IS NOT NULL)");
     }
 
     @Test
@@ -296,7 +296,7 @@ public class SqlGeneratorServiceTest {
         );
         List<ReportRowDto> rows = List.of(
             new ReportRowDto("R1", "REP1", "Row 1", Enums.RowType.data, 
-                new MeasureDefinition("raw", null, null, null, "SUM(amount)"), 
+                new MeasureDefinitionDTO("raw", null, null, null, "SUM(amount)"), 
                 null, "normal", 0, 1, Set.of("C1"), null)
         );
         
@@ -315,9 +315,9 @@ public class SqlGeneratorServiceTest {
         String sql = service.generate(config, Collections.emptyMap());
 
         // Assert
-        assertThat(sql).contains("WHERE (code LIKE '%10\\%\\_\\\\%' ESCAPE '\\') " +
-            "AND (prefix LIKE 'abc\\%%' ESCAPE '\\') " +
-            "AND (suffix LIKE '%\\_xyz' ESCAPE '\\')");
+        assertThat(sql).contains("WHERE (spine_raw.code LIKE '%10\\%\\_\\\\%' ESCAPE '\\') " +
+            "AND (spine_raw.prefix LIKE 'abc\\%%' ESCAPE '\\') " +
+            "AND (spine_raw.suffix LIKE '%\\_xyz' ESCAPE '\\')");
     }
 
     @Test
@@ -329,7 +329,7 @@ public class SqlGeneratorServiceTest {
         );
         List<ReportRowDto> rows = List.of(
             new ReportRowDto("R1", "REP1", "Row 1", Enums.RowType.data, 
-                new MeasureDefinition("raw", null, null, null, "SUM(amount)"), 
+                new MeasureDefinitionDTO("raw", null, null, null, "SUM(amount)"), 
                 null, "normal", 0, 1, Set.of("C1"), null)
         );
         
@@ -349,10 +349,10 @@ public class SqlGeneratorServiceTest {
         String sql = service.generate(config, Collections.emptyMap());
 
         // Assert
-        assertThat(sql).contains("WHERE (amount > '100') " +
-            "AND (amount >= '150') " +
-            "AND (quantity < '10') " +
-            "AND (quantity <= '20')");
+        assertThat(sql).contains("WHERE (spine_raw.amount > '100') " +
+            "AND (spine_raw.amount >= '150') " +
+            "AND (spine_raw.quantity < '10') " +
+            "AND (spine_raw.quantity <= '20')");
     }
 
     @Test
@@ -364,7 +364,7 @@ public class SqlGeneratorServiceTest {
         );
         List<ReportRowDto> rows = List.of(
             new ReportRowDto("R1", "REP1", "Row 1", Enums.RowType.data, 
-                new MeasureDefinition("raw", null, null, null, "SUM(amount)"), 
+                new MeasureDefinitionDTO("raw", null, null, null, "SUM(amount)"), 
                 null, "normal", 0, 1, Set.of("C1"), null)
         );
         
@@ -381,7 +381,7 @@ public class SqlGeneratorServiceTest {
         String sql = service.generate(config, Collections.emptyMap());
 
         // Assert
-        assertThat(sql).contains("WHERE (interest_rate IS NOT NULL)");
+        assertThat(sql).contains("WHERE (spine_raw.interest_rate IS NOT NULL)");
     }
 
     @Test
@@ -393,7 +393,7 @@ public class SqlGeneratorServiceTest {
         );
         List<ReportRowDto> rows = List.of(
             new ReportRowDto("R1", "REP1", "Row 1", Enums.RowType.data, 
-                new MeasureDefinition("raw", null, null, null, "SUM(amount)"), 
+                new MeasureDefinitionDTO("raw", null, null, null, "SUM(amount)"), 
                 null, "normal", 0, 1, Set.of("C1"), "region_id = 1")
         );
         
@@ -422,7 +422,7 @@ public class SqlGeneratorServiceTest {
             "]";
         List<ReportRowDto> rows = List.of(
             new ReportRowDto("R1", "REP1", "Row 1", Enums.RowType.data, 
-                new MeasureDefinition("raw", null, null, null, "SUM(amount)"), 
+                new MeasureDefinitionDTO("raw", null, null, null, "SUM(amount)"), 
                 null, "normal", 0, 1, Set.of("C1"), rowFilterJson)
         );
         

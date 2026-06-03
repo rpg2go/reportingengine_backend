@@ -21,7 +21,7 @@ public record ReportRowDto(
     @NotNull(message = "Row type is required")
     Enums.RowType rowType,
 
-    MeasureDefinition source,
+    MeasureDefinitionDTO source,
 
     @Size(max = 50, message = "Parent Row ID must be at most 50 characters")
     String parentRowId,

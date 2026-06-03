@@ -6,7 +6,7 @@ import com.reporting.dto.ColumnDefDto;
 import com.reporting.dto.Enums;
 import com.reporting.dto.ReportConfigDto;
 import com.reporting.dto.ReportRowDto;
-import com.reporting.dto.MeasureDefinition;
+import com.reporting.dto.MeasureDefinitionDTO;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -44,7 +44,7 @@ public class SqlGeneratorServiceIT extends BaseIT {
         );
         List<ReportRowDto> rows = List.of(
             new ReportRowDto("R1", "RPT_IT", "GBS gross", Enums.RowType.data, 
-                new MeasureDefinition("visual", "SUM", "amount", "analytics.fact_sales", null), null, "normal", 0, 1, Set.of("C1"), null)
+                new MeasureDefinitionDTO("visual", "SUM", "amount", "analytics.fact_sales", null), null, "normal", 0, 1, Set.of("C1"), null)
         );
         ReportConfigDto config = new ReportConfigDto(
             "RPT_IT", "IT Test", columns, rows, null, 1, Enums.ReportStatus.draft,
@@ -74,7 +74,7 @@ public class SqlGeneratorServiceIT extends BaseIT {
         // reporting_date is a DATE column in fact_sales, using SUM on it should trigger a validation error
         List<ReportRowDto> rows = List.of(
             new ReportRowDto("R2", "RPT_IT", "Row 2", Enums.RowType.data, 
-                new MeasureDefinition("visual", "SUM", "reporting_date", "analytics.fact_sales", null), null, "normal", 0, 1, Set.of("C1"), null)
+                new MeasureDefinitionDTO("visual", "SUM", "reporting_date", "analytics.fact_sales", null), null, "normal", 0, 1, Set.of("C1"), null)
         );
         ReportConfigDto config = new ReportConfigDto(
             "RPT_IT", "IT Test", Collections.emptyList(), rows, null, 1, Enums.ReportStatus.draft,

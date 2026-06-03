@@ -31,8 +31,6 @@ public class ReportConfigDto {
     @NotNull(message = "Status cannot be null")
     private Enums.ReportStatus status;
 
-    @Size(max = 150, message = "Source table must be at most 150 characters")
-    private String sourceTable;
 
     @Size(max = 100, message = "Granularity must be at most 100 characters")
     private String granularity;
@@ -55,7 +53,7 @@ public class ReportConfigDto {
 
     public ReportConfigDto(String reportId, String name, List<ColumnDefDto> columns, List<ReportRowDto> rows, 
                            LocalDate referenceDate, Integer exploreId, Enums.ReportStatus status,
-                           String sourceTable, String granularity, String timeframeStart, String timeframeEnd,
+                           String granularity, String timeframeStart, String timeframeEnd,
                            Boolean timeframeToday, String quickFilters, String generalFilters) {
         this.reportId = reportId;
         this.name = name;
@@ -64,13 +62,27 @@ public class ReportConfigDto {
         this.referenceDate = referenceDate != null ? referenceDate : LocalDate.now();
         this.exploreId = exploreId;
         this.status = status != null ? status : Enums.ReportStatus.draft;
-        this.sourceTable = sourceTable;
         this.granularity = granularity;
         this.timeframeStart = timeframeStart;
         this.timeframeEnd = timeframeEnd;
         this.timeframeToday = timeframeToday != null ? timeframeToday : false;
         this.quickFilters = quickFilters;
         this.generalFilters = generalFilters;
+    }
+
+    @Deprecated
+    public ReportConfigDto(String reportId, String name, List<ColumnDefDto> columns, List<ReportRowDto> rows, 
+                           LocalDate referenceDate, Integer exploreId, Enums.ReportStatus status,
+                           String sourceTable, String granularity, String timeframeStart, String timeframeEnd,
+                           Boolean timeframeToday, String quickFilters, String generalFilters) {
+        this(reportId, name, columns, rows, referenceDate, exploreId, status, granularity, timeframeStart, timeframeEnd, timeframeToday, quickFilters, generalFilters);
+        if (rows != null && sourceTable != null && !sourceTable.isBlank()) {
+            for (ReportRowDto r : rows) {
+                if (r.source() != null && (r.source().getSourceTable() == null || r.source().getSourceTable().isBlank())) {
+                    r.source().setSourceTable(sourceTable);
+                }
+            }
+        }
     }
 
     public String getReportId() { return reportId; }
@@ -94,8 +106,6 @@ public class ReportConfigDto {
     public Enums.ReportStatus getStatus() { return status; }
     public void setStatus(Enums.ReportStatus status) { this.status = status; }
 
-    public String getSourceTable() { return sourceTable; }
-    public void setSourceTable(String sourceTable) { this.sourceTable = sourceTable; }
 
     public String getGranularity() { return granularity; }
     public void setGranularity(String granularity) { this.granularity = granularity; }

@@ -80,6 +80,9 @@ public class ReportValidationService {
         // 5. Database Schema & Data Type Mismatch Linters
         validateDatabaseMappings(config, schemaCache, errors);
 
+        // 6. Global Filters and Granularity Conformed Dimension Linters
+        validateGlobalFiltersAndGranularity(config, errors);
+
         return new ValidationResult(errors.isEmpty(), errors);
     }
 
@@ -396,25 +399,20 @@ public class ReportValidationService {
     private void validateDatabaseMappings(ReportConfigDto config, Map<String, Map<String, String>> schemaCache, List<ValidationError> errors) {
         if (config.getRows() == null) return;
 
-        String defaultTable = config.getSourceTable();
-
         for (ReportRowDto row : config.getRows()) {
             if (!row.isDataRow() || row.source() == null) {
                 continue;
             }
 
-            MeasureDefinition source = row.source();
+            MeasureDefinitionDTO source = row.source();
             String rowTable = source.getTable();
-            if (rowTable == null || rowTable.isBlank()) {
-                rowTable = defaultTable;
-            }
 
             if (rowTable == null || rowTable.isBlank()) {
                 errors.add(ValidationError.builder()
                     .elementId(row.rowId())
                     .fieldContext("measure_definition")
                     .errorSeverity("CRITICAL")
-                    .displayMessage("No source table defined for this data row, and no default table is defined on the report.")
+                    .displayMessage("No source table defined for this data row.")
                     .build());
                 continue;
             }
@@ -585,5 +583,133 @@ public class ReportValidationService {
                lower.contains("double") || lower.contains("real") || lower.contains("float") ||
                lower.contains("decimal") || lower.contains("precision") || lower.contains("smallint") ||
                lower.contains("serial");
+    }
+
+    private void validateGlobalFiltersAndGranularity(ReportConfigDto config, List<ValidationError> errors) {
+        // 1. Validate Granularity
+        String granularity = config.getGranularity();
+        if (granularity != null && !granularity.isBlank()) {
+            String normGran = granularity.trim().toLowerCase();
+            if (!normGran.equals("customer_id") && !normGran.equals("location_id") && !normGran.equals("reporting_date")) {
+                errors.add(ValidationError.builder()
+                    .elementId("GLOBAL")
+                    .fieldContext("granularity")
+                    .errorSeverity("CRITICAL")
+                    .displayMessage("Report granularity must be strictly one of: customer_id, location_id, reporting_date")
+                    .build());
+            }
+        }
+
+        // 2. Identify the active fact tables used by the report's active data rows
+        Set<String> activeFactTables = new LinkedHashSet<>();
+        if (config.getRows() != null) {
+            for (ReportRowDto row : config.getRows()) {
+                if (row.isDataRow() && row.source() != null) {
+                    String tbl = row.source().getTable();
+                    if (tbl != null && !tbl.isBlank()) {
+                        activeFactTables.add(tbl.trim().toLowerCase());
+                    }
+                }
+            }
+        }
+
+        // 3. Compute conformed dimensions
+        Set<String> conformedDimensions = null;
+        for (String factTable : activeFactTables) {
+            Set<String> dims = getDimensionsForFactTable(factTable);
+            if (conformedDimensions == null) {
+                conformedDimensions = new HashSet<>(dims);
+            } else {
+                conformedDimensions.retainAll(dims);
+            }
+        }
+        if (conformedDimensions == null) {
+            conformedDimensions = Collections.emptySet();
+        }
+
+        // 4. Validate General Filters
+        validateFilterTables(config.getGeneralFilters(), "generalFilters", conformedDimensions, errors);
+        // 5. Validate Quick Filters
+        validateFilterTables(config.getQuickFilters(), "quickFilters", conformedDimensions, errors);
+    }
+
+    private Set<String> getDimensionsForFactTable(String factTable) {
+        Set<String> dims = new HashSet<>();
+        try {
+            String norm = factTable.trim().toLowerCase();
+            String withSchema = norm.contains(".") ? norm : "analytics." + norm;
+            String withoutSchema = norm.contains(".") ? norm.substring(norm.indexOf(".") + 1) : norm;
+
+            String sql = "SELECT tv.name AS dimView " +
+                         "FROM reporting.sem_join j " +
+                         "JOIN reporting.sem_explore e ON e.explore_id = j.explore_id " +
+                         "JOIN reporting.sem_view fv ON fv.view_id = e.fact_view_id " +
+                         "JOIN reporting.sem_view tv ON tv.view_id = j.to_view_id " +
+                         "WHERE fv.table_ref IN ('" + withSchema + "', '" + withoutSchema + "') " +
+                         "   OR fv.name IN ('" + withSchema + "', '" + withoutSchema + "')";
+            List<Map<String, Object>> rows = jdbcTemplate.queryForList(sql);
+            if (rows != null) {
+                for (Map<String, Object> r : rows) {
+                    Object val = r.get("dimView");
+                    if (val == null) {
+                        val = r.get("dimview");
+                    }
+                    if (val != null) {
+                        dims.add(val.toString().trim().toLowerCase());
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.error("Failed to query dimensions for fact table: " + factTable, e);
+        }
+        return dims;
+    }
+
+    private void validateFilterTables(String filtersJson, String fieldName, Set<String> conformedDimensions, List<ValidationError> errors) {
+        if (filtersJson == null || filtersJson.isBlank()) {
+            return;
+        }
+        try {
+            List<SqlGeneratorService.FilterCondition> filters = parseGeneralFilters(filtersJson);
+            if (filters != null) {
+                for (SqlGeneratorService.FilterCondition cond : filters) {
+                    String dimTable = cond.getDimTable();
+                    if (dimTable != null && !dimTable.isBlank()) {
+                        String normDim = dimTable.trim().toLowerCase();
+                        if (normDim.contains(".")) {
+                            normDim = normDim.substring(normDim.lastIndexOf(".") + 1);
+                        }
+                        if (!conformedDimensions.contains(normDim)) {
+                            errors.add(ValidationError.builder()
+                                .elementId("GLOBAL")
+                                .fieldContext(fieldName)
+                                .errorSeverity("CRITICAL")
+                                .displayMessage("Filter references unconformed dimension table '" + dimTable + "'. Valid conformed dimensions for this report layout are: " + conformedDimensions)
+                                .build());
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            errors.add(ValidationError.builder()
+                .elementId("GLOBAL")
+                .fieldContext(fieldName)
+                .errorSeverity("CRITICAL")
+                .displayMessage("Invalid JSON format for " + fieldName + ": " + e.getMessage())
+                .build());
+        }
+    }
+
+    private List<SqlGeneratorService.FilterCondition> parseGeneralFilters(String json) {
+        if (json == null || json.isBlank()) {
+            return Collections.emptyList();
+        }
+        try {
+            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+            mapper.configure(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+            return mapper.readValue(json, new com.fasterxml.jackson.core.type.TypeReference<List<SqlGeneratorService.FilterCondition>>() {});
+        } catch (Exception e) {
+            return Collections.emptyList();
+        }
     }
 }

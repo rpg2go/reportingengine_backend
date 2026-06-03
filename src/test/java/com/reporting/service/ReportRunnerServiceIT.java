@@ -5,7 +5,7 @@ import com.reporting.dto.ColumnDefDto;
 import com.reporting.dto.Enums;
 import com.reporting.dto.ReportConfigDto;
 import com.reporting.dto.ReportRowDto;
-import com.reporting.dto.MeasureDefinition;
+import com.reporting.dto.MeasureDefinitionDTO;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.junit.jupiter.api.DisplayName;
@@ -49,8 +49,8 @@ public class ReportRunnerServiceIT extends BaseIT {
         );
         // R1 points to 'total_revenue' which resolves to SUM(analytics.fact_sales.amount)
         List<ReportRowDto> rows = List.of(
-            new ReportRowDto("R1", reportId, "Revenue Row", Enums.RowType.data, new MeasureDefinition("raw", null, null, null, "SUM(amount)"), null, "normal", 0, 1, Set.of("C1"), null),
-            new ReportRowDto("R2", reportId, "Double Revenue", Enums.RowType.calc, new MeasureDefinition("raw", null, null, null, "R1 * 2"), null, "total", 0, 2, Set.of("C1"), null)
+            new ReportRowDto("R1", reportId, "Revenue Row", Enums.RowType.data, new MeasureDefinitionDTO("raw", null, null, null, "SUM(amount)"), null, "normal", 0, 1, Set.of("C1"), null),
+            new ReportRowDto("R2", reportId, "Double Revenue", Enums.RowType.calc, new MeasureDefinitionDTO("raw", null, null, null, "R1 * 2"), null, "total", 0, 2, Set.of("C1"), null)
         );
 
         ReportConfigDto config = new ReportConfigDto(
