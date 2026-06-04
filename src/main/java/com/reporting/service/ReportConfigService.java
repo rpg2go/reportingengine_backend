@@ -54,7 +54,7 @@ public class ReportConfigService {
         // 2. Columns — direct JDBC avoids JPA JOIN on parent Report entity
         List<ColumnDefDto> columns = jdbcTemplate.query(
             "SELECT col_id, label, col_type, COALESCE(period_offset,0) AS period_offset, " +
-            "rolling_n, formula_expr, display_order " +
+            "rolling_n, rolling_grain, formula_expr, display_order " +
             "FROM reporting.rpt_column_def WHERE report_id = ? ORDER BY display_order",
             (rs, rowNum) -> new ColumnDefDto(
                 rs.getString("col_id"),
@@ -62,6 +62,7 @@ public class ReportConfigService {
                 Enums.ColType.valueOf(rs.getString("col_type").toUpperCase()),
                 rs.getInt("period_offset"),
                 (Integer) rs.getObject("rolling_n"),
+                rs.getString("rolling_grain"),
                 rs.getString("formula_expr"),
                 rs.getInt("display_order")
             ), reportId);
@@ -312,6 +313,7 @@ public class ReportConfigService {
                     .colType(cdDto.colType().name())
                     .periodOffset(cdDto.periodOffset())
                     .rollingN(cdDto.rollingN())
+                    .rollingGrain(cdDto.rollingGrain())
                     .formulaExpr(cdDto.formulaExpr())
                     .displayOrder(i + 1)
                     .build();

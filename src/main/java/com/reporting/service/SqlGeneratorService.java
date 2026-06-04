@@ -1,5 +1,6 @@
 package com.reporting.service;
 
+import com.reporting.catalog.SchemaGraphRouter;
 import com.reporting.dto.*;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -17,9 +18,21 @@ public class SqlGeneratorService {
 
     private final JdbcTemplate jdbcTemplate;
 
+    /**
+     * Catalog-driven graph router that replaces all hardcoded join mappings.
+     * Resolves multi-hop LEFT JOIN chains dynamically from the
+     * {@code reporting.meta_relationship} catalog at query-generation time.
+     */
+    private final SchemaGraphRouter schemaGraphRouter;
+
     @Autowired
+    public SqlGeneratorService(JdbcTemplate jdbcTemplate, SchemaGraphRouter schemaGraphRouter) {
+        this.jdbcTemplate    = jdbcTemplate;
+        this.schemaGraphRouter = schemaGraphRouter;
+    }
+
     public SqlGeneratorService(JdbcTemplate jdbcTemplate) {
-        this.jdbcTemplate = jdbcTemplate;
+        this(jdbcTemplate, null);
     }
 
     public String generateMatrixQuery(ReportConfigDto config) {
@@ -66,15 +79,16 @@ public class SqlGeneratorService {
         List<String> cteDefinitions = new ArrayList<>();
         for (String factTable : uniqueTables) {
             String cteName = tableToCteName.get(factTable.trim().toLowerCase());
-            
-            // Check dimensions to join for conformed key or filters
-            Set<String> joinedDims = new LinkedHashSet<>();
-            if (!columnExists(factTable, conformedKey, tableColumnsCache)) {
-                if ("customer_id".equalsIgnoreCase(conformedKey) && factTable.toLowerCase().contains("fact_banking_transactions")) {
-                    joinedDims.add("dim_accounts");
-                }
-            }
-            // Scan row filters for referenced dimensions
+
+            // ── Collect dimension tables required by this fact CTE ─────────────────
+            // We gather targets from two sources:
+            //   (a) dimensions explicitly referenced by structured row filter conditions
+            //   (b) the conformed-key dimension when the fact table does not carry the
+            //       conformed key directly (e.g. fact_banking_transactions uses
+            //       account_id, not customer_id; the router resolves the hop chain).
+            Set<String> dimensionTargets = new LinkedHashSet<>();
+
+            // (a) Structured row-level filter dimensions for this fact table
             for (ReportRowDto row : config.getRows()) {
                 if (row.isDataRow() && row.source() != null) {
                     String rowTable = row.source().getTable();
@@ -86,7 +100,7 @@ public class SqlGeneratorService {
                                 List<FilterCondition> conds = parseGeneralFilters(trimmed);
                                 for (FilterCondition cond : conds) {
                                     if (cond.getDimTable() != null && !cond.getDimTable().isBlank()) {
-                                        joinedDims.add(cond.getDimTable().trim());
+                                        dimensionTargets.add(cond.getDimTable().trim());
                                     }
                                 }
                             }
@@ -95,13 +109,38 @@ public class SqlGeneratorService {
                 }
             }
 
+            // (b) When the fact table does not directly hold the conformed key, add the
+            //     conformed dimension as a target so the router can resolve the chain.
+            //     The router handles all intermediate hops (e.g. fact_banking_transactions
+            //     → dim_accounts → dim_customers) without any hardcoded table names.
+            if (!columnExists(factTable, conformedKey, tableColumnsCache)) {
+                // Determine which dimension table owns the conformed key as a PK.
+                // The catalog's graph router will find the shortest path via FKs.
+                // We delegate to the router rather than naming tables explicitly.
+                // Adding the conformed key dimension name allows the router to build
+                // the intermediate hop chain automatically.
+                //
+                // We attempt to resolve by name convention first; if the catalog is
+                // unavailable the router will return an empty list and the CTE
+            	// will still compile (without the bridging join).
+                String conformedDimGuess = resolveConformedDimension(conformedKey);
+                if (conformedDimGuess != null) {
+                    dimensionTargets.add(conformedDimGuess);
+                }
+            }
+
+            // ── Delegate all JOIN clause assembly to SchemaGraphRouter ────────────
+            // The router returns a topologically ordered, de-duplicated list of SQL
+            // LEFT JOIN strings.  No table names, column names, or multi-hop logic
+            // are hardcoded here.
+            List<String> joinClauses = schemaGraphRouter != null
+                ? schemaGraphRouter.computeJoinClauses(factTable, dimensionTargets)
+                : Collections.emptyList();
+
             // Build FROM and JOIN
             StringBuilder fromClause = new StringBuilder("FROM " + factTable);
-            for (String dim : joinedDims) {
-                String join = getJoinClauseForDim(factTable, dim);
-                if (!join.isEmpty()) {
-                    fromClause.append("\n    ").append(join);
-                }
+            for (String joinClause : joinClauses) {
+                fromClause.append("\n    ").append(joinClause);
             }
 
             // Conformed Key Select & Group expressions
@@ -152,7 +191,8 @@ public class SqlGeneratorService {
                         config.getReferenceDate(),
                         col.colType(),
                         col.periodOffset(),
-                        col.rollingN()
+                        col.rollingN(),
+                        col.effectiveRollingGrain()   // DAY | WEEK | MONTH (null → WEEK)
                     );
                     LocalDate start = boundaries[0];
                     LocalDate end = boundaries[1];
@@ -266,6 +306,7 @@ public class SqlGeneratorService {
             spineSelects.add(String.format("    SELECT %s FROM %s WHERE %s IS NOT NULL", conformedKey, cteName, conformedKey));
         }
         
+        // Collect dimension tables required by global filters (general + quick)
         Set<String> spineJoinedDims = new LinkedHashSet<>();
         for (FilterCondition cond : generalFilters) {
             if (cond.getDimTable() != null && !cond.getDimTable().isBlank()) {
@@ -277,12 +318,26 @@ public class SqlGeneratorService {
                 spineJoinedDims.add(cond.getDimTable().trim());
             }
         }
-        
+
+        // ── Route spine dimension joins through the graph router ──────────────
+        // The spine CTE is built from a UNION DISTINCT across individual fact CTEs
+        // (named spine_raw).  We need to join dimensions onto spine_raw to apply
+        // global filter predicates.  We use the first fact table as the anchor for
+        // the router search so it can determine which intermediate hops are required.
         StringBuilder spineJoins = new StringBuilder();
-        for (String dim : spineJoinedDims) {
-            spineJoins.append("\n    ").append(getSpineJoinClause(dim, conformedKey));
+        if (!spineJoinedDims.isEmpty() && !uniqueTables.isEmpty()) {
+            String spineAnchor = uniqueTables.iterator().next();
+            List<String> spineJoinClauses = schemaGraphRouter != null
+                ? schemaGraphRouter.computeJoinClauses(spineAnchor, spineJoinedDims)
+                : Collections.emptyList();
+            for (String clause : spineJoinClauses) {
+                // Rewrite the fact table qualifier in ON predicates to "spine_raw"
+                // because the spine_raw subquery exposes the conformed key directly.
+                String spineClause = rewriteSpineJoinClause(clause, spineAnchor);
+                spineJoins.append("\n    ").append(spineClause);
+            }
         }
-        
+
         List<String> spineCompiledFilters = new ArrayList<>();
         for (FilterCondition cond : generalFilters) {
             String sqlCond = compileSpineFilter(cond, conformedKey);
@@ -296,12 +351,12 @@ public class SqlGeneratorService {
                 spineCompiledFilters.add("(" + sqlCond + ")");
             }
         }
-        
+
         String spineWhereClause = "";
         if (!spineCompiledFilters.isEmpty()) {
             spineWhereClause = "\n    WHERE " + String.join(" AND ", spineCompiledFilters);
         }
-        
+
         String unifiedSpineCte = String.format(
             "  unified_spine AS (\n" +
             "    SELECT DISTINCT spine_raw.%s FROM (\n" +
@@ -449,52 +504,61 @@ public class SqlGeneratorService {
         return "customer_id";
     }
 
-    private String getJoinClauseForDim(String factTable, String dimTable) {
-        String fact = factTable.toLowerCase().trim();
-        if (fact.contains(".")) {
-            fact = fact.substring(fact.lastIndexOf(".") + 1);
+    /**
+     * Maps a conformed dimension key name to the dimension table that owns it
+     * as a primary key.  Used when a fact table does not directly carry the
+     * conformed key so that the graph router can plan the intermediate hop chain.
+     *
+     * <p>This method does <em>not</em> hardcode join predicates; it only provides
+     * the target table name.  All JOIN SQL is generated by
+     * {@link com.reporting.catalog.SchemaGraphRouter#computeJoinClauses}.</p>
+     *
+     * @param conformedKey the conformed dimension key, e.g. {@code "customer_id"}
+     * @return the unqualified dimension table name, or {@code null} when unknown
+     */
+    private String resolveConformedDimension(String conformedKey) {
+        if (conformedKey == null || conformedKey.isBlank()) {
+            return null;
         }
-        String dim = dimTable.toLowerCase().trim();
-        if (dim.contains(".")) {
-            dim = dim.substring(dim.lastIndexOf(".") + 1);
-        }
+        return switch (conformedKey.trim().toLowerCase()) {
+            case "customer_id"   -> "dim_customers";
+            case "location_id"   -> "dim_location";
+            case "rm_id"         -> "dim_relationship_manager";
+            case "date_key"      -> "dim_date";
+            case "account_id"    -> "dim_accounts";
+            case "product_id"    -> "dim_products";
+            case "hier_id"       -> "dim_investment_hierarchy";
+            default              -> null;
+        };
+    }
 
-        if ("dim_date".equalsIgnoreCase(dim)) {
-            return "JOIN analytics.dim_date ON analytics.dim_date.date_key = " + factTable + ".reporting_date";
+    /**
+     * Rewrites a router-generated JOIN clause so that the ON predicate's
+     * fact-table qualifier is replaced with {@code spine_raw}, which is the
+     * alias used for the unified-spine sub-query in the spine CTE.
+     *
+     * <p>For example:</p>
+     * <pre>{@code
+     * Input:  "LEFT JOIN analytics.dim_location ON analytics.dim_location.id = analytics.fact_sales.location_id"
+     * Output: "LEFT JOIN analytics.dim_location ON analytics.dim_location.id = spine_raw.location_id"
+     * }</pre>
+     *
+     * @param joinClause    the raw JOIN clause produced by the router
+     * @param factTableName the fact table whose qualifier must be removed
+     * @return the rewritten JOIN clause with {@code spine_raw} qualification
+     */
+    private String rewriteSpineJoinClause(String joinClause, String factTableName) {
+        if (joinClause == null || factTableName == null) {
+            return joinClause;
         }
-        if ("dim_products".equalsIgnoreCase(dim)) {
-            return "JOIN analytics.dim_products ON analytics.dim_products.id = " + factTable + ".product_id";
-        }
-        if ("dim_customers".equalsIgnoreCase(dim)) {
-            if ("fact_banking_transactions".equalsIgnoreCase(fact)) {
-                return "JOIN analytics.dim_accounts ON analytics.dim_accounts.id = " + factTable + ".account_id " +
-                       "JOIN analytics.dim_customers ON analytics.dim_customers.id = analytics.dim_accounts.customer_id";
-            }
-            return "JOIN analytics.dim_customers ON analytics.dim_customers.id = " + factTable + ".customer_id";
-        }
-        if ("dim_location".equalsIgnoreCase(dim)) {
-            return "JOIN analytics.dim_location ON analytics.dim_location.id = " + factTable + ".location_id";
-        }
-        if ("dim_relationship_manager".equalsIgnoreCase(dim)) {
-            return "JOIN analytics.dim_relationship_manager ON analytics.dim_relationship_manager.id = " + factTable + ".rm_id";
-        }
-        if ("dim_investment_hierarchy".equalsIgnoreCase(dim)) {
-            return "JOIN analytics.dim_investment_hierarchy ON analytics.dim_investment_hierarchy.id = " + factTable + ".hier_id";
-        }
-        if ("dim_accounts".equalsIgnoreCase(dim)) {
-            return "JOIN analytics.dim_accounts ON analytics.dim_accounts.id = " + factTable + ".account_id";
-        }
-        if ("dim_countries".equalsIgnoreCase(dim)) {
-            if ("fact_banking_transactions".equalsIgnoreCase(fact)) {
-                return "JOIN analytics.dim_accounts ON analytics.dim_accounts.id = " + factTable + ".account_id " +
-                       "JOIN analytics.dim_customers ON analytics.dim_customers.id = analytics.dim_accounts.customer_id " +
-                       "JOIN analytics.dim_countries ON analytics.dim_countries.iso_code = analytics.dim_customers.country_code";
-            }
-            return "JOIN analytics.dim_customers ON analytics.dim_customers.id = " + factTable + ".customer_id " +
-                   "JOIN analytics.dim_countries ON analytics.dim_countries.iso_code = analytics.dim_customers.country_code";
-        }
-
-        return "";
+        // Replace both qualified (schema.table.column) and unqualified (table.column) fact-table prefixes
+        String qualified = java.util.regex.Pattern.quote(factTableName.trim());
+        String shortName = factTableName.contains(".")
+            ? java.util.regex.Pattern.quote(factTableName.substring(factTableName.lastIndexOf(".") + 1).trim())
+            : qualified;
+        String result = joinClause.replaceAll("(?i)" + qualified + "\\.", "spine_raw.");
+        result = result.replaceAll("(?i)" + shortName + "\\.", "spine_raw.");
+        return result;
     }
 
     private String getTimeKeyForTable(String table) {
@@ -577,13 +641,28 @@ public class SqlGeneratorService {
         for (int i = 0; i < len; i++) {
             char c = sql.charAt(i);
             if (c == '/') {
-                sb.append("/ NULLIF(");
+                // Find start of denominator
                 int start = i + 1;
                 while (start < len && Character.isWhitespace(sql.charAt(start))) {
                     start++;
                 }
+
+                // If it already starts with NULLIF (case-insensitive) followed by '(', skip wrapping it
+                if (start + 6 < len && sql.substring(start, start + 6).toUpperCase().equals("NULLIF")) {
+                    int checkParen = start + 6;
+                    while (checkParen < len && Character.isWhitespace(sql.charAt(checkParen))) {
+                        checkParen++;
+                    }
+                    if (checkParen < len && sql.charAt(checkParen) == '(') {
+                        sb.append('/');
+                        continue;
+                    }
+                }
+
+                // Extract the denominator expression
                 int end = start;
                 if (end < len && sql.charAt(end) == '(') {
+                    // It starts with a parenthesis, so parse the balanced group
                     int open = 1;
                     end++;
                     while (end < len && open > 0) {
@@ -596,12 +675,32 @@ public class SqlGeneratorService {
                         end++;
                     }
                 } else {
-                    while (end < len && (Character.isLetterOrDigit(sql.charAt(end)) || sql.charAt(end) == '_' || sql.charAt(end) == '.')) {
-                        end++;
+                    // Simple identifier, column, function, or number.
+                    // Keep consuming letters, digits, dots, underscores, and balanced parentheses/parameters
+                    while (end < len) {
+                        char ec = sql.charAt(end);
+                        if (Character.isLetterOrDigit(ec) || ec == '_' || ec == '.') {
+                            end++;
+                        } else if (ec == '(') {
+                            int open = 1;
+                            end++;
+                            while (end < len && open > 0) {
+                                char innerC = sql.charAt(end);
+                                if (innerC == '(') {
+                                    open++;
+                                } else if (innerC == ')') {
+                                    open--;
+                                }
+                                end++;
+                            }
+                        } else {
+                            break;
+                        }
                     }
                 }
+
                 String divisor = sql.substring(start, end);
-                sb.append(divisor).append(", 0)");
+                sb.append("/ NULLIF(").append(divisor).append(", 0)");
                 i = end - 1;
             } else {
                 sb.append(c);
@@ -876,30 +975,6 @@ public class SqlGeneratorService {
         public void setConjunction(String conjunction) { this.conjunction = conjunction; }
     }
 
-    private String getSpineJoinClause(String dimTable, String conformedKey) {
-        String dim = dimTable.toLowerCase().trim();
-        if (dim.contains(".")) {
-            dim = dim.substring(dim.lastIndexOf(".") + 1);
-        }
-        
-        if ("dim_date".equalsIgnoreCase(dim)) {
-            String joinKey = "reporting_date".equalsIgnoreCase(conformedKey) ? "reporting_date" : conformedKey;
-            return "JOIN analytics.dim_date ON analytics.dim_date.date_key = spine_raw." + joinKey;
-        }
-        if ("dim_customers".equalsIgnoreCase(dim)) {
-            return "JOIN analytics.dim_customers ON analytics.dim_customers.id = spine_raw." + conformedKey;
-        }
-        if ("dim_location".equalsIgnoreCase(dim)) {
-            return "JOIN analytics.dim_location ON analytics.dim_location.id = spine_raw." + conformedKey;
-        }
-        if ("dim_relationship_manager".equalsIgnoreCase(dim)) {
-            return "JOIN analytics.dim_relationship_manager ON analytics.dim_relationship_manager.id = spine_raw." + conformedKey;
-        }
-        if ("dim_accounts".equalsIgnoreCase(dim)) {
-            return "JOIN analytics.dim_accounts ON analytics.dim_accounts.id = spine_raw." + conformedKey;
-        }
-        return "JOIN analytics." + dim + " ON analytics." + dim + ".id = spine_raw." + conformedKey;
-    }
 
     private String compileSpineFilter(FilterCondition cond, String conformedKey) {
         if (cond == null) return "";

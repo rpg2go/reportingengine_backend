@@ -91,6 +91,30 @@ public class DateUtilsTest {
     }
 
     @Test
+    @DisplayName("ROLLING with Grain: should compute correct boundaries for DAY, WEEK, and MONTH")
+    public void getPeriodBoundaries_rollingWithGrain_shouldReturnCorrectBoundaries() {
+        // DAY grain
+        LocalDate[] dayBoundaries = DateUtils.getPeriodBoundaries(refDate, ColType.ROLLING, 0, 5, "DAY");
+        assertThat(dayBoundaries[0]).isEqualTo(refDate.minusDays(5).plusDays(1));
+        assertThat(dayBoundaries[1]).isEqualTo(refDate);
+
+        // WEEK grain
+        LocalDate[] weekBoundaries = DateUtils.getPeriodBoundaries(refDate, ColType.ROLLING, 0, 3, "WEEK");
+        assertThat(weekBoundaries[0]).isEqualTo(refDate.minusWeeks(3).plusDays(1));
+        assertThat(weekBoundaries[1]).isEqualTo(refDate);
+
+        // MONTH grain
+        LocalDate[] monthBoundaries = DateUtils.getPeriodBoundaries(refDate, ColType.ROLLING, 0, 2, "MONTH");
+        assertThat(monthBoundaries[0]).isEqualTo(refDate.minusMonths(2).plusDays(1));
+        assertThat(monthBoundaries[1]).isEqualTo(refDate);
+
+        // Default / null fallback to WEEK
+        LocalDate[] defaultBoundaries = DateUtils.getPeriodBoundaries(refDate, ColType.ROLLING, 0, 3, null);
+        assertThat(defaultBoundaries[0]).isEqualTo(refDate.minusWeeks(3).plusDays(1));
+        assertThat(defaultBoundaries[1]).isEqualTo(refDate);
+    }
+
+    @Test
     @DisplayName("Unsupported Period Type: CALC should throw IllegalArgumentException")
     public void getPeriodBoundaries_unsupportedType_shouldThrowException() {
         assertThatThrownBy(() -> DateUtils.getPeriodBoundaries(refDate, ColType.CALC, 0, null))

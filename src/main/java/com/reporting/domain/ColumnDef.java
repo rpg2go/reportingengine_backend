@@ -37,6 +37,9 @@ public class ColumnDef {
     @Column(name = "rolling_n")
     private Integer rollingN;
 
+    @Column(name = "rolling_grain", length = 10)
+    private String rollingGrain;
+
     @Column(name = "formula_expr")
     private String formulaExpr;
 

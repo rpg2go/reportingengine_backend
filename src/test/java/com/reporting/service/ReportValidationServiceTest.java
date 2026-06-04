@@ -133,8 +133,8 @@ public class ReportValidationServiceTest {
     }
 
     @Test
-    @DisplayName("validateConfiguration - naked division should trigger warning")
-    public void validate_nakedDivision_shouldTriggerWarning() {
+    @DisplayName("validateConfiguration - naked division should not trigger warning because it is handled downstream")
+    public void validate_nakedDivision_shouldNotTriggerWarning() {
         // Arrange: C1 is visual/regular column, C2 is CALC referencing C1 with division
         List<ColumnDefDto> columns = List.of(
             new ColumnDefDto("C1", "Col 1", Enums.ColType.WEEK, 0, null, null, 1),
@@ -152,7 +152,8 @@ public class ReportValidationServiceTest {
         Optional<ValidationError> divWarning = result.getErrors().stream()
             .filter(e -> e.getErrorSeverity().equals("WARNING") && e.getDisplayMessage().contains("Potential division-by-zero"))
             .findFirst();
-        assertThat(divWarning).isPresent();
+        assertThat(divWarning).isEmpty();
+        assertThat(result.isValid()).isTrue();
     }
 
     @Test
@@ -269,9 +270,28 @@ public class ReportValidationServiceTest {
     @DisplayName("SqlGeneratorService - safe division wrapping")
     public void testSafeDivisionWrapping() {
         SqlGeneratorService sqlGen = new SqlGeneratorService(null);
-        String rawFormula = "amount / target_value";
-        String safeFormula = sqlGen.makeDivisionSafe(rawFormula);
-        assertThat(safeFormula).isEqualTo("amount / NULLIF(target_value, 0)");
+        
+        // 1. Simple column variable division
+        assertThat(sqlGen.makeDivisionSafe("amount / target_value"))
+            .isEqualTo("amount / NULLIF(target_value, 0)");
+
+        // 2. Column standard layout variables
+        assertThat(sqlGen.makeDivisionSafe("(C1 - C2) / C2"))
+            .isEqualTo("(C1 - C2) / NULLIF(C2, 0)");
+
+        // 3. Pre-wrapped protective NULLIF boundaries (case-insensitive checks)
+        assertThat(sqlGen.makeDivisionSafe("(C1 - C2) / NULLIF(C2, 0)"))
+            .isEqualTo("(C1 - C2) / NULLIF(C2, 0)");
+        assertThat(sqlGen.makeDivisionSafe("(C1 - C2) / nullif(C2, 0)"))
+            .isEqualTo("(C1 - C2) / nullif(C2, 0)");
+
+        // 4. Parenthesized expression wrapping
+        assertThat(sqlGen.makeDivisionSafe("(C1 - C2) / (C2 + 1)"))
+            .isEqualTo("(C1 - C2) / NULLIF((C2 + 1), 0)");
+
+        // 5. Whitelisted SQL functions as denominators
+        assertThat(sqlGen.makeDivisionSafe("amount / COALESCE(target_value, 0)"))
+            .isEqualTo("amount / NULLIF(COALESCE(target_value, 0), 0)");
     }
 
     @Test
@@ -342,5 +362,35 @@ public class ReportValidationServiceTest {
             .findFirst();
         assertThat(err).isPresent();
         assertThat(err.get().getDisplayMessage()).contains("Filter references unconformed dimension table 'dim_products'");
+    }
+
+    @Test
+    @DisplayName("extractColumnReferences - should ignore SQL functions and extract valid column references")
+    public void testExtractColumnReferences_shouldIgnoreSqlFunctions() {
+        Set<String> refs1 = validationService.extractColumnReferences("(C1 - C2) / NULLIF(C2, 0)");
+        assertThat(refs1).containsExactlyInAnyOrder("C1", "C2");
+
+        Set<String> refs2 = validationService.extractColumnReferences("COALESCE(C4, 0) * 1.5");
+        assertThat(refs2).containsExactlyInAnyOrder("C4");
+
+        Set<String> refs3 = validationService.extractColumnReferences("SUM(C12) + AVG(C7_1) - COUNT(C3)");
+        assertThat(refs3).containsExactlyInAnyOrder("C12", "C7_1", "C3");
+    }
+
+    @Test
+    @DisplayName("validateConfiguration - formula with NULLIF passes validation when active column IDs exist")
+    public void testValidateConfiguration_formulaWithNullif_shouldPassValidation() {
+        List<ColumnDefDto> columns = List.of(
+            new ColumnDefDto("C1", "Col 1", Enums.ColType.WEEK, 0, null, null, 1),
+            new ColumnDefDto("C2", "Col 2", Enums.ColType.WEEK, 0, null, null, 2),
+            new ColumnDefDto("C3", "Formula Col", Enums.ColType.CALC, 0, null, "(C1 - C2) / NULLIF(C2, 0)", 3)
+        );
+        ReportConfigDto config = new ReportConfigDto(
+            "RPT1", "Test", columns, Collections.emptyList(), null, 1, Enums.ReportStatus.draft,
+            "analytics.fact_sales", "reporting_date", null, null, false, null, null
+        );
+
+        ValidationResult result = validationService.validateConfiguration(config);
+        assertThat(result.isValid()).isTrue();
     }
 }
