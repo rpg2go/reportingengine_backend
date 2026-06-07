@@ -45,12 +45,16 @@ Run the following commands in their respective environments to check quality met
 ## Test Categories
 
 ### 1. Unit Tests
-- **Backend**: Test formula parsing calculations inside `PostProcessorService` with sample expressions (e.g., `R2 / R3` or `C1 - C2`) and assert expected outputs.
+- **Backend**:
+  - Test formula parsing calculations inside `PostProcessorService` with sample expressions (e.g., `R2 / R3` or `C1 - C2`) and assert expected outputs.
+  - Test parameter sanitization in `MetadataControllerTest` to ensure dynamic table/column queries reject injection patterns (e.g., SQL statements appended via semicolons).
 - **Frontend**: Verify authentication guards block page access, and components emit events when layout coordinates change.
 
 ### 2. Integration Tests
 - **API Endpoint Checks**: Bootstrap mock MVC web context and test `/api/reports` returns listing payloads with valid HTTP status codes (`200 OK` or `201 Created`).
-- **SQL Generation Checks**: Run `SqlGeneratorService` with config mocks and verify output SQL contains required Common Table Expressions (`WITH cte_...`).
+- **SQL Generation Checks**: Run `SqlGeneratorService` with config mocks and verify output SQL contains required Common Table Expressions (`WITH cte_...`). Also verify in `SqlGeneratorServiceTest` that filters are pushed down into the respective fact table CTEs instead of being applied at the unified spine level.
+- **JDBC Persistence Writes**: Test cascade deletion and JDBC Template saves under `ReportConfigServiceTest` to ensure database configurations are cleanly written and updated.
+
 
 ### 3. Manual Verification
 To manually test REST APIs, you can run these simple PowerShell commands (ensure headers are passed for Basic Auth):
