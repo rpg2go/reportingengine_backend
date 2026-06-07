@@ -231,7 +231,7 @@ public class ReportConfigService {
                 );
             }, reportId);
 
-        return new ReportConfigDto(
+        ReportConfigDto dto = new ReportConfigDto(
             report.getReportId(),
             report.getName(),
             columns,
@@ -246,6 +246,8 @@ public class ReportConfigService {
             report.getQuickFilters(),
             report.getGeneralFilters()
         );
+        dto.setVersion(report.getVersion());
+        return dto;
     }
 
     @Transactional
@@ -267,62 +269,103 @@ public class ReportConfigService {
             styleIdMap.put(style.getName().toLowerCase(), style.getStyleId());
         }
 
-        // 3. Save or Update Report Header (without session deletion issues)
-        Report r;
-        if (reportRepository.existsById(reportId)) {
-            r = reportRepository.findById(reportId)
-                .orElseThrow(() -> new IllegalArgumentException("Report not found: " + reportId));
-            r.setName(dto.getName());
-            r.setExploreId(dto.getExploreId());
-            r.setStatus(dto.getStatus() != null ? dto.getStatus().name() : "draft");
-            r.setGranularity(dto.getGranularity());
-            r.setTimeframeStart(dto.getTimeframeStart());
-            r.setTimeframeEnd(dto.getTimeframeEnd());
-            r.setTimeframeToday(dto.getTimeframeToday() != null ? dto.getTimeframeToday() : false);
-            r.setQuickFilters(dto.getQuickFilters());
-            r.setGeneralFilters(dto.getGeneralFilters());
-            r.setUpdatedAt(java.time.LocalDateTime.now());
-        } else {
-            r = Report.builder()
-                .reportId(reportId)
-                .name(dto.getName())
-                .description("Report defined via UI builder")
-                .exploreId(dto.getExploreId())
-                .version(1)
-                .status(dto.getStatus() != null ? dto.getStatus().name() : "draft")
-                .granularity(dto.getGranularity())
-                .timeframeStart(dto.getTimeframeStart())
-                .timeframeEnd(dto.getTimeframeEnd())
-                .timeframeToday(dto.getTimeframeToday() != null ? dto.getTimeframeToday() : false)
-                .quickFilters(dto.getQuickFilters())
-                .generalFilters(dto.getGeneralFilters())
-                .createdAt(java.time.LocalDateTime.now())
-                .updatedAt(java.time.LocalDateTime.now())
-                .build();
-        }
-        r = reportRepository.save(r);
+        // 3. Save or Update Report Header
+        boolean exists = jdbcTemplate.queryForObject(
+            "SELECT EXISTS(SELECT 1 FROM reporting.rpt_report WHERE report_id = ?)",
+            Boolean.class,
+            reportId
+        );
 
-        // 4. Save Column Definitions
+        String incomingStatus = dto.getStatus() != null ? dto.getStatus().name() : "draft";
+        Integer newVersion = 1;
+
+        if (exists) {
+            // Retrieve current version and status from DB
+            Map<String, Object> currentRecord = jdbcTemplate.queryForMap(
+                "SELECT version, status FROM reporting.rpt_report WHERE report_id = ?",
+                reportId
+            );
+            int currentVersion = ((Number) currentRecord.get("version")).intValue();
+            String currentStatus = (String) currentRecord.get("status");
+
+            // Validate status transitions and version integrity
+            if ("draft".equalsIgnoreCase(currentStatus) && "published".equalsIgnoreCase(incomingStatus)) {
+                if (dto.getVersion() == null || dto.getVersion() != currentVersion + 1) {
+                    throw new IllegalArgumentException("Version mismatch. To publish, version must be exactly " + (currentVersion + 1) + " (incoming: " + dto.getVersion() + ").");
+                }
+                newVersion = dto.getVersion();
+            } else {
+                newVersion = dto.getVersion() != null ? dto.getVersion() : currentVersion;
+            }
+
+            jdbcTemplate.update(
+                "UPDATE reporting.rpt_report SET name = ?, explore_id = ?, version = ?, status = ?, granularity = ?, " +
+                "timeframe_start = ?, timeframe_end = ?, timeframe_today = ?, quick_filters = ?, general_filters = ?, " +
+                "updated_at = NOW() WHERE report_id = ?",
+                dto.getName(),
+                dto.getExploreId(),
+                newVersion,
+                incomingStatus,
+                dto.getGranularity(),
+                dto.getTimeframeStart(),
+                dto.getTimeframeEnd(),
+                dto.getTimeframeToday() != null ? dto.getTimeframeToday() : false,
+                dto.getQuickFilters(),
+                dto.getGeneralFilters(),
+                reportId
+            );
+        } else {
+            newVersion = dto.getVersion() != null ? dto.getVersion() : 1;
+            jdbcTemplate.update(
+                "INSERT INTO reporting.rpt_report (report_id, name, description, explore_id, version, status, granularity, " +
+                "timeframe_start, timeframe_end, timeframe_today, quick_filters, general_filters, created_at, updated_at) " +
+                "VALUES (?, ?, 'Report defined via UI builder', ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())",
+                reportId,
+                dto.getName(),
+                dto.getExploreId(),
+                newVersion,
+                incomingStatus,
+                dto.getGranularity(),
+                dto.getTimeframeStart(),
+                dto.getTimeframeEnd(),
+                dto.getTimeframeToday() != null ? dto.getTimeframeToday() : false,
+                dto.getQuickFilters(),
+                dto.getGeneralFilters()
+            );
+        }
+
+        // 4. Save Column Definitions via JDBC
         if (dto.getColumns() != null) {
+            String insertColSql = "INSERT INTO reporting.rpt_column_def (report_id, col_id, label, col_type, period_offset, rolling_n, rolling_grain, formula_expr, display_order) " +
+                                  "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
             for (int i = 0; i < dto.getColumns().size(); i++) {
                 ColumnDefDto cdDto = dto.getColumns().get(i);
-                ColumnDef cd = ColumnDef.builder()
-                    .report(r)
-                    .colId(cdDto.colId())
-                    .label(cdDto.label())
-                    .colType(cdDto.colType().name())
-                    .periodOffset(cdDto.periodOffset())
-                    .rollingN(cdDto.rollingN())
-                    .rollingGrain(cdDto.rollingGrain())
-                    .formulaExpr(cdDto.formulaExpr())
-                    .displayOrder(i + 1)
-                    .build();
-                columnDefRepository.save(cd);
+                jdbcTemplate.update(
+                    insertColSql,
+                    reportId,
+                    cdDto.colId(),
+                    cdDto.label(),
+                    cdDto.colType().name(),
+                    cdDto.periodOffset(),
+                    cdDto.rollingN(),
+                    cdDto.rollingGrain(),
+                    cdDto.formulaExpr(),
+                    i + 1
+                );
             }
         }
 
-        // 5. Save Report Rows
+        // 5. Save Report Rows via JDBC
         if (dto.getRows() != null) {
+            String insertRowSql = "INSERT INTO reporting.rpt_row (row_id, report_id, parent_row_id, label, row_type, display_order, indent_level, style_id, filter_expr) " +
+                                  "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
+            String insertMetricSql = "INSERT INTO reporting.rpt_row_metric (report_id, row_id, sql_expr, measure_definition, explore_id) " +
+                                     "VALUES (?, ?, ?, ?, ?)";
+            String insertFormulaSql = "INSERT INTO reporting.rpt_row_formula (report_id, row_id, formula_expr) " +
+                                      "VALUES (?, ?, ?)";
+            String insertColMapSql = "INSERT INTO reporting.rpt_row_column_map (report_id, row_id, col_id, is_enabled) " +
+                                     "VALUES (?, ?, ?, ?)";
+
             for (int i = 0; i < dto.getRows().size(); i++) {
                 ReportRowDto rrDto = dto.getRows().get(i);
                 Integer styleId = styleIdMap.getOrDefault(rrDto.style().toLowerCase(), null);
@@ -330,18 +373,21 @@ public class ReportConfigService {
                     styleId = styleIdMap.get("normal");
                 }
 
-                ReportRow rr = ReportRow.builder()
-                    .rowId(rrDto.rowId())
-                    .reportId(reportId)
-                    .parentRowId(rrDto.parentRowId() != null && !rrDto.parentRowId().isBlank() ? rrDto.parentRowId() : null)
-                    .label(rrDto.label())
-                    .rowType(rrDto.rowType().name())
-                    .displayOrder(i + 1)
-                    .indentLevel(rrDto.indentLevel())
-                    .styleId(styleId)
-                    .filterExpr(rrDto.filterExpr() != null && !rrDto.filterExpr().isBlank() ? rrDto.filterExpr() : null)
-                    .build();
-                reportRowRepository.save(rr);
+                String parentRowId = rrDto.parentRowId() != null && !rrDto.parentRowId().isBlank() ? rrDto.parentRowId() : null;
+                String filterExpr = rrDto.filterExpr() != null && !rrDto.filterExpr().isBlank() ? rrDto.filterExpr() : null;
+
+                jdbcTemplate.update(
+                    insertRowSql,
+                    rrDto.rowId(),
+                    reportId,
+                    parentRowId,
+                    rrDto.label(),
+                    rrDto.rowType().name(),
+                    i + 1,
+                    rrDto.indentLevel(),
+                    styleId,
+                    filterExpr
+                );
 
                 // Row Metric (DATA rows)
                 if (rrDto.rowType() == Enums.RowType.data && rrDto.source() != null) {
@@ -359,37 +405,38 @@ public class ReportConfigService {
                     } catch (Exception e) {
                         // ignore
                     }
-                    RowMetric rm = RowMetric.builder()
-                        .reportId(reportId)
-                        .rowId(rrDto.rowId())
-                        .sqlExpr(sqlExpr)
-                        .measureDefinition(defJson)
-                        .exploreId(dto.getExploreId())
-                        .build();
-                    rowMetricRepository.save(rm);
+                    jdbcTemplate.update(
+                        insertMetricSql,
+                        reportId,
+                        rrDto.rowId(),
+                        sqlExpr,
+                        defJson,
+                        dto.getExploreId()
+                    );
                 }
 
                 // Row Formula (CALC rows)
                 if (rrDto.rowType() == Enums.RowType.calc && rrDto.source() != null) {
-                    RowFormula rf = RowFormula.builder()
-                        .reportId(reportId)
-                        .rowId(rrDto.rowId())
-                        .formulaExpr(rrDto.source().getRawSql() != null ? rrDto.source().getRawSql() : "")
-                        .build();
-                    rowFormulaRepository.save(rf);
+                    String formulaExpr = rrDto.source().getRawSql() != null ? rrDto.source().getRawSql() : "";
+                    jdbcTemplate.update(
+                        insertFormulaSql,
+                        reportId,
+                        rrDto.rowId(),
+                        formulaExpr
+                    );
                 }
 
                 // Column flags mapping (enablement grid)
                 if (dto.getColumns() != null) {
                     for (ColumnDefDto col : dto.getColumns()) {
                         boolean isEnabled = rrDto.activeCols() != null && rrDto.activeCols().contains(col.colId().toUpperCase());
-                        RowColumnMap rcm = RowColumnMap.builder()
-                            .reportId(reportId)
-                            .rowId(rrDto.rowId())
-                            .colId(col.colId())
-                            .isEnabled(isEnabled)
-                            .build();
-                        rowColumnMapRepository.save(rcm);
+                        jdbcTemplate.update(
+                            insertColMapSql,
+                            reportId,
+                            rrDto.rowId(),
+                            col.colId(),
+                            isEnabled
+                        );
                     }
                 }
             }

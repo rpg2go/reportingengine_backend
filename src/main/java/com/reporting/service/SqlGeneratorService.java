@@ -109,6 +109,22 @@ public class SqlGeneratorService {
                 }
             }
 
+            // Add global filter dimensions that are applicable to this fact table
+            for (FilterCondition cond : generalFilters) {
+                if (cond.getDimTable() != null && !cond.getDimTable().isBlank()) {
+                    if (isFilterApplicable(factTable, cond, tableColumnsCache)) {
+                        dimensionTargets.add(cond.getDimTable().trim());
+                    }
+                }
+            }
+            for (FilterCondition cond : quickFilters) {
+                if (cond.getDimTable() != null && !cond.getDimTable().isBlank()) {
+                    if (isFilterApplicable(factTable, cond, tableColumnsCache)) {
+                        dimensionTargets.add(cond.getDimTable().trim());
+                    }
+                }
+            }
+
             // (b) When the fact table does not directly hold the conformed key, add the
             //     conformed dimension as a target so the router can resolve the chain.
             //     The router handles all intermediate hops (e.g. fact_banking_transactions
@@ -157,7 +173,28 @@ public class SqlGeneratorService {
                 groupByExpr = "1";
             }
 
+            List<String> factCompiledFilters = new ArrayList<>();
+            for (FilterCondition cond : generalFilters) {
+                if (isFilterApplicable(factTable, cond, tableColumnsCache)) {
+                    String sqlCond = compileFactFilter(factTable, cond);
+                    if (sqlCond != null && !sqlCond.isBlank()) {
+                        factCompiledFilters.add("(" + sqlCond + ")");
+                    }
+                }
+            }
+            for (FilterCondition cond : quickFilters) {
+                if (isFilterApplicable(factTable, cond, tableColumnsCache)) {
+                    String sqlCond = compileFactFilter(factTable, cond);
+                    if (sqlCond != null && !sqlCond.isBlank()) {
+                        factCompiledFilters.add("(" + sqlCond + ")");
+                    }
+                }
+            }
+
             String whereClause = "";
+            if (!factCompiledFilters.isEmpty()) {
+                whereClause = "\n    WHERE " + String.join(" AND ", factCompiledFilters);
+            }
 
             // Build aggregations for each active data row + column for this table
             List<String> selectList = new ArrayList<>();
@@ -299,74 +336,21 @@ public class SqlGeneratorService {
             cteDefinitions.add(cteSql);
         }
 
-        // 4. Build unified_spine CTE using UNION DISTINCT and applying global filters
+        // 4. Build unified_spine CTE using UNION DISTINCT
         List<String> spineSelects = new ArrayList<>();
         for (String table : uniqueTables) {
             String cteName = tableToCteName.get(table.trim().toLowerCase());
             spineSelects.add(String.format("    SELECT %s FROM %s WHERE %s IS NOT NULL", conformedKey, cteName, conformedKey));
-        }
-        
-        // Collect dimension tables required by global filters (general + quick)
-        Set<String> spineJoinedDims = new LinkedHashSet<>();
-        for (FilterCondition cond : generalFilters) {
-            if (cond.getDimTable() != null && !cond.getDimTable().isBlank()) {
-                spineJoinedDims.add(cond.getDimTable().trim());
-            }
-        }
-        for (FilterCondition cond : quickFilters) {
-            if (cond.getDimTable() != null && !cond.getDimTable().isBlank()) {
-                spineJoinedDims.add(cond.getDimTable().trim());
-            }
-        }
-
-        // ── Route spine dimension joins through the graph router ──────────────
-        // The spine CTE is built from a UNION DISTINCT across individual fact CTEs
-        // (named spine_raw).  We need to join dimensions onto spine_raw to apply
-        // global filter predicates.  We use the first fact table as the anchor for
-        // the router search so it can determine which intermediate hops are required.
-        StringBuilder spineJoins = new StringBuilder();
-        if (!spineJoinedDims.isEmpty() && !uniqueTables.isEmpty()) {
-            String spineAnchor = uniqueTables.iterator().next();
-            List<String> spineJoinClauses = schemaGraphRouter != null
-                ? schemaGraphRouter.computeJoinClauses(spineAnchor, spineJoinedDims)
-                : Collections.emptyList();
-            for (String clause : spineJoinClauses) {
-                // Rewrite the fact table qualifier in ON predicates to "spine_raw"
-                // because the spine_raw subquery exposes the conformed key directly.
-                String spineClause = rewriteSpineJoinClause(clause, spineAnchor);
-                spineJoins.append("\n    ").append(spineClause);
-            }
-        }
-
-        List<String> spineCompiledFilters = new ArrayList<>();
-        for (FilterCondition cond : generalFilters) {
-            String sqlCond = compileSpineFilter(cond, conformedKey);
-            if (sqlCond != null && !sqlCond.isBlank()) {
-                spineCompiledFilters.add("(" + sqlCond + ")");
-            }
-        }
-        for (FilterCondition cond : quickFilters) {
-            String sqlCond = compileSpineFilter(cond, conformedKey);
-            if (sqlCond != null && !sqlCond.isBlank()) {
-                spineCompiledFilters.add("(" + sqlCond + ")");
-            }
-        }
-
-        String spineWhereClause = "";
-        if (!spineCompiledFilters.isEmpty()) {
-            spineWhereClause = "\n    WHERE " + String.join(" AND ", spineCompiledFilters);
         }
 
         String unifiedSpineCte = String.format(
             "  unified_spine AS (\n" +
             "    SELECT DISTINCT spine_raw.%s FROM (\n" +
             "%s\n" +
-            "    ) spine_raw%s%s\n" +
+            "    ) spine_raw\n" +
             "  )",
             conformedKey,
-            String.join("\n    UNION DISTINCT\n", spineSelects),
-            spineJoins.toString(),
-            spineWhereClause
+            String.join("\n    UNION DISTINCT\n", spineSelects)
         );
         cteDefinitions.add(unifiedSpineCte);
 
@@ -976,7 +960,33 @@ public class SqlGeneratorService {
     }
 
 
-    private String compileSpineFilter(FilterCondition cond, String conformedKey) {
+    private boolean isFilterApplicable(String factTable, FilterCondition cond, Map<String, Set<String>> cache) {
+        if (cond == null) {
+            return false;
+        }
+        String dimTable = cond.getDimTable();
+        String attribute = cond.getAttribute();
+        
+        if (dimTable == null || dimTable.isBlank()) {
+            return columnExists(factTable, attribute, cache);
+        }
+        
+        if (schemaGraphRouter != null) {
+            try {
+                String resolvedDim = resolveConformedDimension(findConformedKey(Set.of(factTable), cache));
+                if (resolvedDim != null && resolvedDim.trim().equalsIgnoreCase(dimTable.trim())) {
+                    return true;
+                }
+                List<String> joins = schemaGraphRouter.computeJoinClauses(factTable, Set.of(dimTable.trim()));
+                return joins != null && !joins.isEmpty();
+            } catch (Exception e) {
+                return false;
+            }
+        }
+        return false;
+    }
+
+    private String compileFactFilter(String factTable, FilterCondition cond) {
         if (cond == null) return "";
         String dimTable = cond.getDimTable();
         String attribute = cond.getAttribute();
@@ -986,7 +996,7 @@ public class SqlGeneratorService {
         }
         
         FilterCondition clone = new FilterCondition(
-            "spine_raw",
+            factTable,
             attribute,
             cond.getOperator(),
             cond.getValue()

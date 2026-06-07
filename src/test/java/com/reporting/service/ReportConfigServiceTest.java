@@ -41,4 +41,29 @@ public class ReportConfigServiceTest {
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("Report not found");
     }
+
+    @Test
+    @DisplayName("saveToDb throws IllegalArgumentException on status transition from draft to published if version is not exactly +1")
+    public void saveToDb_versionMismatchOnPublish_shouldThrowException() {
+        ReportConfigDto dto = new ReportConfigDto();
+        dto.setReportId("RPT_1");
+        dto.setStatus(Enums.ReportStatus.published);
+        dto.setVersion(1); // Mismatch: existing is 1, so publishing requires version 2
+
+        when(jdbcTemplate.queryForObject(
+            org.mockito.ArgumentMatchers.eq("SELECT EXISTS(SELECT 1 FROM reporting.rpt_report WHERE report_id = ?)"),
+            org.mockito.ArgumentMatchers.eq(Boolean.class),
+            org.mockito.ArgumentMatchers.eq("RPT_1")
+        )).thenReturn(true);
+
+        java.util.Map<String, Object> mockRecord = java.util.Map.of("version", 1, "status", "draft");
+        when(jdbcTemplate.queryForMap(
+            org.mockito.ArgumentMatchers.eq("SELECT version, status FROM reporting.rpt_report WHERE report_id = ?"),
+            org.mockito.ArgumentMatchers.eq("RPT_1")
+        )).thenReturn(mockRecord);
+
+        assertThatThrownBy(() -> service.saveToDb(dto))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("Version mismatch. To publish, version must be exactly 2");
+    }
 }

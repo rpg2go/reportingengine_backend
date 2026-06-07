@@ -41,11 +41,14 @@ The platform is designed to run in containerized environments. There are two pri
 
 ## Prerequisites
 
-To deploy this project, ensure you have the following installed:
+To package and deploy this project, your environment must meet the core runtime dependencies:
 
-- **Docker Desktop** (or Docker Engine with Docker Compose CLI)
-- **Java JDK 17** (for backend packaging)
-- **Node.js v18+ and npm** (for frontend packaging)
+- **Java JDK 17** (to compile the Spring Boot backend)
+- **Node.js (v24+) & npm** (to build the Angular frontend bundle)
+- **Docker & Docker Compose** (to orchestrate and run local containers)
+
+> [!NOTE]
+> For complete, step-by-step installation instructions for macOS, Ubuntu/Debian, and Windows, please refer to the **[Prerequisites Section in the Main README](../README.md#prerequisites)**.
 
 ---
 

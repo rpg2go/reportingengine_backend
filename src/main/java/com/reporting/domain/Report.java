@@ -34,8 +34,6 @@ public class Report {
     @Column(name = "status", nullable = false, length = 20)
     private String status = "draft"; // draft | published
 
-    @Column(name = "source_table", length = 150)
-    private String sourceTable;
 
     @Column(name = "granularity", length = 100)
     private String granularity;

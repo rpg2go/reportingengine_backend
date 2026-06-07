@@ -30,8 +30,8 @@ public class ReportValidationServiceTest {
     public void setUp() {
         // Setup mock response for information_schema query
         List<Map<String, Object>> mockColumns = List.of(
-            Map.of("table_name", "fact_sales", "column_name", "amount", "data_type", "numeric"),
-            Map.of("table_name", "fact_sales", "column_name", "product_id", "data_type", "varchar")
+            Map.of("table_schema", "analytics", "table_name", "fact_sales", "column_name", "amount", "data_type", "numeric"),
+            Map.of("table_schema", "analytics", "table_name", "fact_sales", "column_name", "product_id", "data_type", "varchar")
         );
         lenient().when(jdbcTemplate.queryForList(anyString())).thenReturn(mockColumns);
     }
@@ -315,11 +315,7 @@ public class ReportValidationServiceTest {
     @Test
     @DisplayName("validateConfiguration - conformed and unconformed general filters validation")
     public void validate_generalFiltersDimensions_shouldEnforceConformedDimensionsOnly() {
-        // Stub exact loadSchemaCache query
-        String schemaSql = "SELECT table_name, column_name, data_type FROM information_schema.columns WHERE table_schema = 'analytics'";
-        lenient().when(jdbcTemplate.queryForList(schemaSql)).thenReturn(List.of(
-            Map.of("table_name", "fact_sales", "column_name", "amount", "data_type", "numeric")
-        ));
+        // Schema cache is loaded from default setUp() mock
 
         // Stub dimensions query for fact_sales
         String joinSql = "SELECT tv.name AS dimView " +
