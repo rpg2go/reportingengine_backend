@@ -5,6 +5,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
+import com.reporting.catalog.SchemaGraphRouter;
 
 import java.time.LocalDate;
 import java.util.Collections;
@@ -20,11 +21,13 @@ import static org.mockito.Mockito.*;
 public class SqlGeneratorServiceTest {
 
     private JdbcTemplate jdbcTemplate;
+    private SchemaGraphRouter schemaGraphRouter;
     private SqlGeneratorService service;
 
     @BeforeEach
     public void setUp() {
         jdbcTemplate = mock(JdbcTemplate.class);
+        schemaGraphRouter = mock(SchemaGraphRouter.class);
         
         // Mock getTimeKeyForTable
         when(jdbcTemplate.queryForObject(
@@ -42,7 +45,21 @@ public class SqlGeneratorServiceTest {
             any(Object.class)
         )).thenReturn("numeric");
 
-        service = new SqlGeneratorService(jdbcTemplate);
+        // Mock queryForList for columnExists
+        when(jdbcTemplate.queryForList(
+            any(String.class),
+            eq(String.class),
+            any(Object.class),
+            any(Object.class)
+        )).thenReturn(List.of(
+            "customer_id", "amount", "order_date", "quantity", "region", "category", "name", "status", "country", "code", "prefix", "suffix", "interest_rate"
+        ));
+
+        // Mock SchemaGraphRouter
+        when(schemaGraphRouter.computeJoinClauses(anyString(), anySet()))
+            .thenReturn(List.of("LEFT JOIN dim_rm ON dim_rm.id = analytics.fact_sales.rm_id"));
+
+        service = new SqlGeneratorService(jdbcTemplate, schemaGraphRouter);
     }
 
     @Test
@@ -187,7 +204,7 @@ public class SqlGeneratorServiceTest {
         String sql = service.generate(config, Collections.emptyMap());
 
         // Assert
-        assertThat(sql).contains("WHERE (spine_raw.amount = '100') AND (dim_rm.status = 'active')");
+        assertThat(sql).contains("WHERE (analytics.fact_sales.amount = '100') AND (dim_rm.status = 'active')");
     }
 
     @Test
@@ -218,9 +235,9 @@ public class SqlGeneratorServiceTest {
         String sql = service.generate(config, Collections.emptyMap());
 
         // Assert
-        assertThat(sql).contains("WHERE ((spine_raw.region <> 'West' OR spine_raw.region IS NULL)) " +
-            "AND ((spine_raw.category <> 'Furniture' OR spine_raw.category IS NULL)) " +
-            "AND ((spine_raw.name NOT LIKE '%John%' ESCAPE '\\' OR spine_raw.name IS NULL))");
+        assertThat(sql).contains("WHERE ((analytics.fact_sales.region <> 'West' OR analytics.fact_sales.region IS NULL)) " +
+            "AND ((analytics.fact_sales.category <> 'Furniture' OR analytics.fact_sales.category IS NULL)) " +
+            "AND ((analytics.fact_sales.name NOT LIKE '%John%' ESCAPE '\\' OR analytics.fact_sales.name IS NULL))");
     }
 
     @Test
@@ -249,7 +266,7 @@ public class SqlGeneratorServiceTest {
         String sql = service.generate(config, Collections.emptyMap());
 
         // Assert
-        assertThat(sql).contains("WHERE (spine_raw.country IN ('US', 'CA', 'FR'))");
+        assertThat(sql).contains("WHERE (analytics.fact_sales.country IN ('US', 'CA', 'FR'))");
     }
 
     @Test
@@ -281,10 +298,10 @@ public class SqlGeneratorServiceTest {
         String sql = service.generate(config, Collections.emptyMap());
 
         // Assert
-        assertThat(sql).contains("WHERE ((spine_raw.region IS NULL OR TRIM(spine_raw.region) = '')) " +
-            "AND ((spine_raw.category IS NOT NULL AND TRIM(spine_raw.category) <> '')) " +
-            "AND (spine_raw.name IS NULL) " +
-            "AND (spine_raw.status IS NOT NULL)");
+        assertThat(sql).contains("WHERE ((analytics.fact_sales.region IS NULL OR TRIM(analytics.fact_sales.region) = '')) " +
+            "AND ((analytics.fact_sales.category IS NOT NULL AND TRIM(analytics.fact_sales.category) <> '')) " +
+            "AND (analytics.fact_sales.name IS NULL) " +
+            "AND (analytics.fact_sales.status IS NOT NULL)");
     }
 
     @Test
@@ -315,9 +332,9 @@ public class SqlGeneratorServiceTest {
         String sql = service.generate(config, Collections.emptyMap());
 
         // Assert
-        assertThat(sql).contains("WHERE (spine_raw.code LIKE '%10\\%\\_\\\\%' ESCAPE '\\') " +
-            "AND (spine_raw.prefix LIKE 'abc\\%%' ESCAPE '\\') " +
-            "AND (spine_raw.suffix LIKE '%\\_xyz' ESCAPE '\\')");
+        assertThat(sql).contains("WHERE (analytics.fact_sales.code LIKE '%10\\%\\_\\\\%' ESCAPE '\\') " +
+            "AND (analytics.fact_sales.prefix LIKE 'abc\\%%' ESCAPE '\\') " +
+            "AND (analytics.fact_sales.suffix LIKE '%\\_xyz' ESCAPE '\\')");
     }
 
     @Test
@@ -349,10 +366,10 @@ public class SqlGeneratorServiceTest {
         String sql = service.generate(config, Collections.emptyMap());
 
         // Assert
-        assertThat(sql).contains("WHERE (spine_raw.amount > '100') " +
-            "AND (spine_raw.amount >= '150') " +
-            "AND (spine_raw.quantity < '10') " +
-            "AND (spine_raw.quantity <= '20')");
+        assertThat(sql).contains("WHERE (analytics.fact_sales.amount > '100') " +
+            "AND (analytics.fact_sales.amount >= '150') " +
+            "AND (analytics.fact_sales.quantity < '10') " +
+            "AND (analytics.fact_sales.quantity <= '20')");
     }
 
     @Test
@@ -381,7 +398,7 @@ public class SqlGeneratorServiceTest {
         String sql = service.generate(config, Collections.emptyMap());
 
         // Assert
-        assertThat(sql).contains("WHERE (spine_raw.interest_rate IS NOT NULL)");
+        assertThat(sql).contains("WHERE (analytics.fact_sales.interest_rate IS NOT NULL)");
     }
 
     @Test

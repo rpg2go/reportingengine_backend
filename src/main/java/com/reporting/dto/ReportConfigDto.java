@@ -44,6 +44,7 @@ public class ReportConfigDto {
     private Boolean timeframeToday;
     private String quickFilters;
     private String generalFilters;
+    private Integer version;
 
     public ReportConfigDto() {
         this.referenceDate = LocalDate.now();
@@ -124,6 +125,9 @@ public class ReportConfigDto {
 
     public String getGeneralFilters() { return generalFilters; }
     public void setGeneralFilters(String generalFilters) { this.generalFilters = generalFilters; }
+
+    public Integer getVersion() { return version; }
+    public void setVersion(Integer version) { this.version = version; }
 
     // Convenience Getters
     @JsonIgnore

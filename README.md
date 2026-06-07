@@ -157,11 +157,179 @@ Follow these steps to run the Reporting Engine backend locally:
 
 ### Prerequisites
 
-Ensure you have the following installed on your machine:
+To run, build, and validate the complete Reporting Engine stack (including both the backend and frontend components), your development environment must have the following software runtimes, dependencies, and packages installed:
 
-- **Docker & Docker Compose**: To run the PostgreSQL database.
-- **Java Development Kit (JDK) 17**: Required for building and running the backend.
-- **Python (v3.10+)**: Required for running the ADK validation agent.
+#### 1. Software Runtimes & Platforms
+* **Java Development Kit (JDK) 17**: Needed to compile and run the Spring Boot backend. OpenJDK 17 or Eclipse Temurin 17 are recommended.
+* **Node.js (v24+) & npm**: Needed to build and run the Angular 21 frontend.
+* **Docker & Docker Compose**: Needed to orchestrate and run the PostgreSQL 16 database container.
+* **Python (v3.10+) & pip**: Needed to execute the ADK validation agents for automated code verification.
+* **Git**: Needed to clone and manage the repository code.
+
+---
+
+#### 2. Step-by-Step Installation Instructions
+
+Choose the appropriate command line instructions for your operating system:
+
+##### 🍎 macOS (using Homebrew, SDKMAN!, and NVM)
+
+1. **Install Git**:
+   ```bash
+   brew install git
+   ```
+
+2. **Install Java 17 (OpenJDK)**:
+   You can install Java using Homebrew or via SDKMAN! (recommended for managing multiple Java versions):
+   * *Option A: Via Homebrew*
+     ```bash
+     brew install openjdk@17
+     # Link the system wrapper so macOS recognizes it
+     sudo ln -sfn /opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk /Library/Java/JavaVirtualMachines/openjdk-17.jdk
+     export JAVA_HOME="/Library/Java/JavaVirtualMachines/openjdk-17.jdk/Contents/Home"
+     ```
+   * *Option B: Via SDKMAN!*
+     ```bash
+     curl -s "https://get.sdkman.io" | bash
+     source "$HOME/.sdkman/bin/sdkman-init.sh"
+     sdk install java 17.0.10-tem
+     ```
+
+3. **Install Node.js & npm (via NVM)**:
+   ```bash
+   curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
+   source ~/.zshrc # or ~/.bashrc depending on your shell
+   nvm install 24
+   nvm use 24
+   ```
+
+4. **Install Docker & Docker Compose**:
+   The easiest way is to install Docker Desktop:
+   ```bash
+   brew install --cask docker
+   ```
+   *Alternatively, start Docker from your Applications folder once installed.*
+
+5. **Install Python & Pip**:
+   macOS usually comes with Python, but installing via Homebrew is recommended:
+   ```bash
+   brew install python@3.11
+   # Validate version and ensure pip is linked
+   python3 --version
+   pip3 --version
+   ```
+
+---
+
+##### 🐧 Ubuntu / Debian Linux (using apt, NodeSource, and Docker Repository)
+
+1. **Install Git & Java 17**:
+   ```bash
+   sudo apt update
+   sudo apt install -y git openjdk-17-jdk
+   # Verify Java installation
+   java -version
+   ```
+
+2. **Install Node.js & npm (v24 via NodeSource)**:
+   ```bash
+   sudo apt install -y curl
+   curl -fsSL https://deb.nodesource.com/setup_24.x | sudo -E bash -
+   sudo apt install -y nodejs
+   # Verify versions
+   node -v
+   npm -v
+   ```
+
+3. **Install Docker & Docker Compose**:
+   Avoid installing Docker via the default apt repository as it is often outdated. Setup the official Docker engine repository:
+   ```bash
+   # Add Docker's official GPG key:
+   sudo apt update
+   sudo apt install -y ca-certificates gnupg
+   sudo install -m 0755 -d /etc/apt/keyrings
+   curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+   sudo chmod a+r /etc/apt/keyrings/docker.gpg
+
+   # Add the repository to Apt sources:
+   echo \
+     "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
+     $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+     sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+   
+   sudo apt update
+   sudo apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+   
+   # Add your user to the docker group to run without sudo (optional but recommended)
+   sudo usermod -aG docker $USER
+   # Apply group changes
+   newgrp docker
+   ```
+
+4. **Install Python 3 & Pip**:
+   ```bash
+   sudo apt install -y python3 python3-pip python3-venv
+   ```
+
+---
+
+##### 🪟 Windows (using winget or manual packages)
+
+We highly recommend using Windows Package Manager (`winget`) via PowerShell (Run as Administrator):
+
+1. **Install Git**:
+   ```powershell
+   winget install --id Git.Git -e --source winget
+   ```
+
+2. **Install Java 17 (Eclipse Temurin)**:
+   ```powershell
+   winget install --id EclipseAdoptium.Temurin.17.JDK -e --source winget
+   # Restart PowerShell to load the new JAVA_HOME environment variable
+   ```
+
+3. **Install Node.js & npm**:
+   ```powershell
+   winget install --id OpenJS.NodeJS.LTS -e --source winget
+   ```
+
+4. **Install Docker Desktop**:
+   ```powershell
+   winget install --id Docker.DockerDesktop -e --source winget
+   # Restart your computer after Docker Desktop installation to enable WSL2 backend integration
+   ```
+
+5. **Install Python & Pip**:
+   ```powershell
+   winget install --id Python.Python.3.11 -e --source winget
+   ```
+
+---
+
+#### 3. Verification Command Cheat Sheet
+
+After installing the prerequisites, run the following commands to verify that your environment is fully set up:
+
+```bash
+# Verify Git
+git --version
+
+# Verify Java Compiler and Runtime
+java -version
+javac -version
+
+# Verify Node.js and npm
+node -v
+npm -v
+
+# Verify Docker and Docker Compose
+docker --version
+docker compose version
+
+# Verify Python and pip
+python3 --version || python --version
+pip3 --version || pip --version
+```
 
 ### One-Time Setup
 

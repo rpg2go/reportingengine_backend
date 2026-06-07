@@ -39,11 +39,26 @@ public class ReportExecutionController {
         try {
             log.info("Executing report execution endpoint for reportId: {} with date: {}", reportId, request.getReportingDate());
 
-            LocalDate refDate = request.getReportingDate() != null 
-                ? LocalDate.parse(request.getReportingDate()) 
-                : LocalDate.now();
+            LocalDate refDate;
+            if (request.getReportingDate() != null && !request.getReportingDate().isBlank()) {
+                // 1. Validate Date Format (standard PostgreSQL date formats YYYY-MM-DD)
+                try {
+                    refDate = LocalDate.parse(request.getReportingDate());
+                } catch (Exception e) {
+                    return ResponseEntity.badRequest().body(Map.of("message", "Invalid reportingDate format. Must be YYYY-MM-DD."));
+                }
+                
+                // 2. Validate Presence in DWH (dim_date catalog check)
+                String checkSql = "SELECT EXISTS(SELECT 1 FROM analytics.dim_date WHERE date_key = CAST(? AS DATE))";
+                Boolean exists = jdbcTemplate.queryForObject(checkSql, Boolean.class, request.getReportingDate());
+                if (exists == null || !exists) {
+                    return ResponseEntity.badRequest().body(Map.of("message", "The reportingDate '" + request.getReportingDate() + "' does not exist in the DWH dim_date catalog."));
+                }
+            } else {
+                refDate = LocalDate.now();
+            }
 
-            // 1. Load the master template config DTO
+            // 3. Load the master template config DTO
             ReportConfigDto config = configService.loadFromDb(reportId, refDate);
 
             // 2. Inject consumer's runtime quick filter overrides

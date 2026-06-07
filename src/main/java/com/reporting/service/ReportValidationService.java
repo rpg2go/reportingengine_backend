@@ -81,7 +81,7 @@ public class ReportValidationService {
         validateDatabaseMappings(config, schemaCache, errors);
 
         // 6. Global Filters and Granularity Conformed Dimension Linters
-        validateGlobalFiltersAndGranularity(config, errors);
+        validateGlobalFiltersAndGranularity(config, schemaCache, errors);
 
         return new ValidationResult(errors.isEmpty(), errors);
     }
@@ -89,15 +89,18 @@ public class ReportValidationService {
     private Map<String, Map<String, String>> loadSchemaCache() {
         Map<String, Map<String, String>> cache = new HashMap<>();
         try {
-            String sql = "SELECT table_name, column_name, data_type FROM information_schema.columns WHERE table_schema = 'analytics'";
+            String sql = "SELECT table_schema, table_name, column_name, data_type FROM information_schema.columns " +
+                         "WHERE table_schema NOT IN ('pg_catalog', 'information_schema')";
             List<Map<String, Object>> columns = jdbcTemplate.queryForList(sql);
             for (Map<String, Object> colRow : columns) {
+                String schema = (String) colRow.get("table_schema");
                 String tblName = (String) colRow.get("table_name");
                 String colName = (String) colRow.get("column_name");
                 String dataType = (String) colRow.get("data_type");
-                if (tblName != null && colName != null && dataType != null) {
+                if (schema != null && tblName != null && colName != null && dataType != null) {
+                    String normSchema = schema.toLowerCase().trim();
                     String normTblShort = tblName.toLowerCase().trim();
-                    String normTblFull = "analytics." + normTblShort;
+                    String normTblFull = normSchema + "." + normTblShort;
                     String normCol = colName.toLowerCase().trim();
 
                     cache.computeIfAbsent(normTblShort, k -> new HashMap<>()).put(normCol, dataType);
@@ -630,17 +633,43 @@ public class ReportValidationService {
                lower.contains("serial");
     }
 
-    private void validateGlobalFiltersAndGranularity(ReportConfigDto config, List<ValidationError> errors) {
+    private void validateGlobalFiltersAndGranularity(ReportConfigDto config, Map<String, Map<String, String>> schemaCache, List<ValidationError> errors) {
         // 1. Validate Granularity
         String granularity = config.getGranularity();
         if (granularity != null && !granularity.isBlank()) {
             String normGran = granularity.trim().toLowerCase();
-            if (!normGran.equals("customer_id") && !normGran.equals("location_id") && !normGran.equals("reporting_date")) {
+            boolean isValid = false;
+            
+            // Check whitelist first
+            if (normGran.equals("customer_id") || normGran.equals("location_id") || normGran.equals("reporting_date")) {
+                isValid = true;
+            } else {
+                // Dynamic DWH check: verify if the granularity exists as a valid column in the DWH schema catalog
+                if (normGran.contains(".")) {
+                    String[] parts = normGran.split("\\.");
+                    String col = parts[parts.length - 1];
+                    String tbl = parts[parts.length - 2];
+                    Map<String, String> tblCols = schemaCache.get(tbl);
+                    if (tblCols != null && tblCols.containsKey(col)) {
+                        isValid = true;
+                    }
+                } else {
+                    // Check if it exists in any of the schema catalog tables
+                    for (Map<String, String> tblCols : schemaCache.values()) {
+                        if (tblCols.containsKey(normGran)) {
+                            isValid = true;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (!isValid) {
                 errors.add(ValidationError.builder()
                     .elementId("GLOBAL")
                     .fieldContext("granularity")
                     .errorSeverity("CRITICAL")
-                    .displayMessage("Report granularity must be strictly one of: customer_id, location_id, reporting_date")
+                    .displayMessage("Report granularity must be strictly one of: customer_id, location_id, reporting_date, or a valid column from the DWH catalog (e.g. table.column). Got: " + granularity)
                     .build());
             }
         }

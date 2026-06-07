@@ -2,7 +2,7 @@
 # Local Development Startup Script — Report Template Engine (Backend)
 # =============================================================================
 # Starts the full local stack in the correct order:
-#   1. PostgreSQL Docker container  (port 5432)
+#   1. PostgreSQL Docker container  (port 5433)
 #   2. Spring Boot backend          (port 8101)
 #
 # Run from anywhere:
@@ -57,7 +57,7 @@ while ($true) {
     Start-Sleep -Seconds 2
 }
 Write-Host ""
-Write-Host "[OK]    PostgreSQL is healthy on localhost:5432  (DB: agentic_ai | user: user | pass: password)" -ForegroundColor Green
+Write-Host "[OK]    PostgreSQL is healthy on localhost:5433  (DB: agentic_ai | user: user | pass: password)" -ForegroundColor Green
 
 # ── Step 2: Build and start Spring Boot ───────────────────────────────────────
 Write-Host ""
