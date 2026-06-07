@@ -3,6 +3,8 @@ package com.reporting.service;
 import com.reporting.dto.*;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.*;
+import org.apache.poi.xssf.streaming.SXSSFWorkbook;
+import org.apache.poi.xssf.streaming.SXSSFSheet;
 import org.springframework.stereotype.Service;
 
 import java.io.ByteArrayOutputStream;
@@ -13,46 +15,53 @@ import java.util.Map;
 public class LayoutRendererService {
 
     public byte[] render(ReportConfigDto config, Map<String, Map<String, Double>> data) throws IOException {
-        try (XSSFWorkbook workbook = new XSSFWorkbook()) {
-            XSSFSheet sheet = workbook.createSheet("Report");
+        try (SXSSFWorkbook workbook = new SXSSFWorkbook(100)) {
+            Sheet sheet = workbook.createSheet("Report");
+            // Enable column tracking for auto-sizing in streaming sheet
+            if (sheet instanceof SXSSFSheet) {
+                ((SXSSFSheet) sheet).trackAllColumnsForAutoSizing();
+            }
+
+            XSSFWorkbook xssfWorkbook = workbook.getXSSFWorkbook();
 
             // Setup styles
-            CellStyle headerStyle = createHeaderStyle(workbook);
-            CellStyle sectionStyle = createSectionStyle(workbook);
-            CellStyle totalStyle = createTotalStyle(workbook);
-            CellStyle normalStyle = createNormalStyle(workbook);
-            CellStyle highlightStyle = createHighlightStyle(workbook);
+            CellStyle headerStyle = createHeaderStyle(xssfWorkbook);
+            CellStyle sectionStyle = createSectionStyle(xssfWorkbook);
+            CellStyle totalStyle = createTotalStyle(xssfWorkbook);
+            CellStyle normalStyle = createNormalStyle(xssfWorkbook);
+            CellStyle highlightStyle = createHighlightStyle(xssfWorkbook);
 
             // Row 1: Column Headers
-            XSSFRow headerRow = sheet.createRow(0);
-            headerRow.createCell(0).setCellValue("Report Line");
-            headerRow.getCell(0).setCellStyle(headerStyle);
+            Row headerRow = sheet.createRow(0);
+            Cell headerLabelCell = headerRow.createCell(0);
+            headerLabelCell.setCellValue("Report Line");
+            headerLabelCell.setCellStyle(headerStyle);
 
             int colIdx = 1;
             for (ColumnDefDto col : config.getColumns()) {
-                XSSFCell cell = headerRow.createCell(colIdx++);
+                Cell cell = headerRow.createCell(colIdx++);
                 cell.setCellValue(col.label());
                 cell.setCellStyle(headerStyle);
             }
 
             // Create Number Formats
-            XSSFDataFormat format = workbook.createDataFormat();
+            DataFormat format = workbook.createDataFormat();
             short numFormat = format.getFormat("#,##0.00_);(#,##0.00)");
 
             // Create column styles with number format applied
-            CellStyle headerNumStyle = cloneWithFormat(workbook, headerStyle, numFormat);
-            CellStyle sectionNumStyle = cloneWithFormat(workbook, sectionStyle, numFormat);
-            CellStyle totalNumStyle = cloneWithFormat(workbook, totalStyle, numFormat);
-            CellStyle normalNumStyle = cloneWithFormat(workbook, normalStyle, numFormat);
-            CellStyle highlightNumStyle = cloneWithFormat(workbook, highlightStyle, numFormat);
+            CellStyle headerNumStyle = cloneWithFormat(xssfWorkbook, headerStyle, numFormat);
+            CellStyle sectionNumStyle = cloneWithFormat(xssfWorkbook, sectionStyle, numFormat);
+            CellStyle totalNumStyle = cloneWithFormat(xssfWorkbook, totalStyle, numFormat);
+            CellStyle normalNumStyle = cloneWithFormat(xssfWorkbook, normalStyle, numFormat);
+            CellStyle highlightNumStyle = cloneWithFormat(xssfWorkbook, highlightStyle, numFormat);
 
             // Render Body Rows
             int rowIdx = 1;
             for (ReportRowDto reportRow : config.getRows()) {
-                XSSFRow row = sheet.createRow(rowIdx++);
+                Row row = sheet.createRow(rowIdx++);
                 
                 // Col A: Label
-                XSSFCell labelCell = row.createCell(0);
+                Cell labelCell = row.createCell(0);
                 String labelText = reportRow.label();
                 if (reportRow.indentLevel() > 0) {
                     labelText = "  ".repeat(reportRow.indentLevel()) + labelText;
@@ -89,7 +98,7 @@ public class LayoutRendererService {
                 if (reportRow.rowType() != Enums.RowType.blank) {
                     int dataColIdx = 1;
                     for (ColumnDefDto col : config.getColumns()) {
-                        XSSFCell dataCell = row.createCell(dataColIdx++);
+                        Cell dataCell = row.createCell(dataColIdx++);
                         dataCell.setCellStyle(numStyle);
                         if (reportRow.isEnabledFor(col.colId())) {
                             double val = data.getOrDefault(reportRow.rowId().toUpperCase(), Map.of())

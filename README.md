@@ -1,8 +1,8 @@
-# Reporting Engine Back-End
+# Reporting Engine Back-End — Enterprise Developer Guide
 
-A robust, enterprise-grade, metadata-driven report configuration and execution engine. This repository contains the **Java 17 (Spring Boot v3.2.4) backend** and database migrations. The frontend is split into the [ReportTemplate_FrontEnd](file:///G:/workspace/ReportTemplate_FrontEnd) repository.
+A robust, enterprise-grade, metadata-driven report configuration and execution engine. This repository contains the **Java 17 (Spring Boot v3.2.4) backend** and PostgreSQL database migrations. The frontend is split into the [ReportTemplate_FrontEnd](file:///G:/workspace/ReportTemplate_FrontEnd) repository.
 
-The backend ingests Excel layout templates, normalizes their configuration into metadata tables, resolves logical metrics against a semantic data model, generates high-performance SQL query structures with conditional aggregation, evaluates math formulas, and renders final styled Excel workbooks using Apache POI.
+The backend ingests Excel layout templates, normalizes their configuration into metadata tables, resolves logical metrics against a semantic data model, generates high-performance SQL query structures with conditional aggregation, evaluates math formulas, and renders final styled Excel workbooks.
 
 ---
 
@@ -20,7 +20,8 @@ The backend ingests Excel layout templates, normalizes their configuration into 
 - [Key Project Documentation](#key-project-documentation)
 - [Key Links](#key-links)
 - [Project Structure](#project-structure)
-- [Architecture and Tech Stack - at a Glance](#architecture-and-tech-stack---at-a-glance)
+- [Architectural Stack & Key Optimizations](#architectural-stack--key-optimizations)
+- [Architecture Diagram](#architecture-diagram)
 - [Quick Start: Working With This Repo](#quick-start-working-with-this-repo)
     - [Prerequisites](#prerequisites)
     - [One-Time Setup](#one-time-setup)
@@ -33,18 +34,18 @@ The backend ingests Excel layout templates, normalizes their configuration into 
 
 ## Key Project Documentation
 
-| Document                                                                           | Description                                                                |
-| :--------------------------------------------------------------------------------- | :------------------------------------------------------------------------- |
-| [README.md](README.md)                                                             | This file - the developer front door                                       |
-| [TODO.md](TODO.md)                                                                 | Project plan, completed milestones, and development backlog                |
-| [docs/DESIGN.md](docs/DESIGN.md)                                                   | Visual design tokens, color guidelines, and UX guidelines                  |
-| [docs/architecture-and-walkthrough.md](docs/architecture-and-walkthrough.md)       | System design decisions (ADRs), solution architecture, and user journeys   |
-| [docs/testing.md](docs/testing.md)                                                 | Quality assurance guidelines, testing commands, and manual REST API checks |
-| [deployment/README.md](deployment/README.md)                                       | Application packaging, Docker compose guidelines, and CI/CD stages         |
-| [.agents/agents/validation_agents.md](.agents/agents/validation_agents.md)         | Back-end validation agents specification and execution guide               |
-| [documentation/report_authoring_guide.md](documentation/report_authoring_guide.md) | Business user guide on how to design layout templates in Excel             |
-| [documentation/implementation_plan.md](documentation/implementation_plan.md)       | Base implementation plan for platform migration and dynamic filters        |
-| [GEMINI.md](GEMINI.md)                                                             | Handoff state, schema layout, API endpoints, and phase 2 roadmap           |
+| Document | Description |
+| :--- | :--- |
+| [README.md](README.md) | This file - the developer front door |
+| [TODO.md](TODO.md) | Project plan, completed milestones, and development backlog |
+| [docs/DESIGN.md](docs/DESIGN.md) | Visual design tokens, color guidelines, and UX guidelines |
+| [docs/architecture-and-walkthrough.md](docs/architecture-and-walkthrough.md) | System design decisions (ADRs), solution architecture, and user journeys |
+| [docs/testing.md](docs/testing.md) | Quality assurance guidelines, testing commands, and manual REST API checks |
+| [deployment/README.md](deployment/README.md) | Application packaging, Docker compose guidelines, and CI/CD stages |
+| [.agents/agents/validation_agents.md](.agents/agents/validation_agents.md) | Back-end validation agents specification and execution guide |
+| [documentation/report_authoring_guide.md](documentation/report_authoring_guide.md) | Business user guide on how to design layout templates in Excel |
+| [documentation/implementation_plan.md](documentation/implementation_plan.md) | Base implementation plan for platform migration and dynamic filters |
+| [GEMINI.md](GEMINI.md) | Handoff state, schema layout, API endpoints, and phase 2 roadmap |
 
 ---
 
@@ -52,9 +53,9 @@ The backend ingests Excel layout templates, normalizes their configuration into 
 
 - **Spring Boot Backend API**: [http://127.0.0.1:8101](http://127.0.0.1:8101)
 - **Angular Frontend UI**: [http://127.0.0.1:4200](http://127.0.0.1:4200)
-- **PostgreSQL Database**: `127.0.0.1:5432` (DB: `agentic_ai`, User: `user`, Pass: `password`)
+- **PostgreSQL Database**: `127.0.0.1:5433` (DB: `agentic_ai`, User: `user`, Pass: `password` - maps to container port `5432`)
 
-> **Windows note**: Use `127.0.0.1` instead of `localhost` to avoid IPv6 DNS resolution delay (saves 1–2 s per request on Windows).
+> **Windows/macOS Performance Note**: Use `127.0.0.1` instead of `localhost` to avoid IPv6 DNS resolution delay (saves 1–2 s per request on Windows).
 
 ---
 
@@ -72,15 +73,16 @@ ReportTemplate_BackEnd/
 │   ├── main/
 │   │   ├── java/com/reporting/
 │   │   │   ├── Application.java # Bootloader application class
-+   │   │   ├── config/         # Security & CORS settings
-+   │   │   ├── controller/     # REST Endpoints (Auth, Reports)
-+   │   │   ├── domain/         # JPA Entities (rpt_* tables)
-+   │   │   ├── dto/            # Data Transfer Objects
-+   │   │   ├── repository/     # Data repositories
-+   │   │   ├── service/        # Core services (Parser, SQL, POI, formulas)
-+   │   │   └── util/           # MigrationRunner, DbDumper utilities
+│   │   │   ├── config/         # Security & CORS settings
+│   │   │   ├── controller/     # REST Endpoints (Auth, Reports, Metadata)
+│   │   │   ├── domain/         # JPA Entities (rpt_* tables)
+│   │   │   ├── dto/            # Data Transfer Objects
+│   │   │   ├── repository/     # Data repositories
+│   │   │   ├── service/        # Core services (Parser, SQL, POI, formulas)
+│   │   │   └── util/           # MigrationRunner, DbDumper utilities
 │   │   └── resources/
 │   │       └── application.properties # Server and datasource config
+│   └── test/                   # JUnit unit & integration tests
 ├── documentation/              # Design plans and authoring guides
 ├── maven/                      # Embedded Apache Maven 3.9.6 wrapper
 ├── docker-compose.yml          # Container composition orchestration
@@ -90,41 +92,26 @@ ReportTemplate_BackEnd/
 
 ---
 
-## Architecture and Tech Stack - at a Glance
+## Architectural Stack & Key Optimizations
+
+The backend is architected as a high-performance Spring Boot application prioritizing low-latency reads, structured data layers, and safe mathematical evaluation.
+
+### Core Technologies
+*   **Java Runtime:** Java 17 (LTS)
+*   **Framework:** Spring Boot v3.2.4
+*   **Persistence:** Spring Data JPA (Hibernate v6.x) for configuration CRUD operations.
+*   **Direct JDBC Optimization:** Direct JDBC Template with `RowCallbackHandler` bypassing Hibernate hydration for the critical read hot-path (`loadFromDb()`). This optimization reduces report configuration latency from ~163ms to ~59ms.
+*   **Direct JDBC Save Path:** Report row/column configurations are persisted using direct `JdbcTemplate` updates in `ReportConfigService`, resolving Hibernate cascade overhead and preventing orphan rows.
+*   **Pushed-Down SQL Filters:** Pushes general and quick filters into the individual fact table CTEs inside `SqlGeneratorService`, allowing PostgreSQL to optimize execution plans by filtering early during the scan.
+*   **Excel Engine:** Apache POI (v5.2.5) for cell-level layout extraction and styled spreadsheet generation.
+*   **Formula Engine:** `exp4j` (v0.4.8) for fast, isolated, sandbox-safe mathematical evaluation of cell and row formulas (preventing SQL or script injection).
+*   **Database:** PostgreSQL 16 (hosted via Docker container locally; Neon Serverless Postgres in production).
+
+---
+
+## Architecture Diagram
 
 The architecture is built for clean separation of concerns:
-
-### Unified Architecture View
-
-```text
-                       ┌─────────────────────────┐
-                       │   Angular Frontend      │
-                       │   (UI / SPA on :4200)   │
-                       └────────────┬────────────┘
-                                    │ HTTP / REST APIs
-                                    ▼
-                       ┌─────────────────────────┐
-                       │   Spring Boot Backend   │
-                       │   (REST APIs on :8101)  │
-                       └────────────┬────────────┘
-                                    │
-         ┌──────────────────────────┼──────────────────────────┐
-         ▼                          ▼                          ▼
-┌─────────────────┐        ┌──────────────────┐       ┌──────────────────┐
-│  Excel Parser   │        │  SQL Generator   │       │  Post-Processor  │
-│  (Apache POI)   │        │  (Conditional    │       │  (exp4j Formula  │
-│                 │        │  Aggregation)    │       │  Evaluation)     │
-└────────┬────────┘        └────────┬─────────┘       └────────┬─────────┘
-         │                          │                          │
-         └──────────────────────────┼──────────────────────────┘
-                                    ▼
-                       ┌─────────────────────────┐
-                       │    PostgreSQL Container │
-                       │    (Docker port :5432)  │
-                       └─────────────────────────┘
-```
-
-### Visual Component Dependency Flow (Mermaid)
 
 ```mermaid
 flowchart TD
@@ -133,21 +120,11 @@ flowchart TD
     B --> D["SQL Generator (Conditional Aggregation)"]
     B --> E["Post-Processor (exp4j Formula Evaluation)"]
     B --> F["Layout Renderer (Apache POI)"]
-    C --> G[("PostgreSQL Database (Docker port :5432)")]
+    C --> G[("PostgreSQL Database (Docker port :5433)")]
     D --> G
     E --> G
     F --> G
 ```
-
-### Backend Components (Java)
-
-All core services are located in [src/main/java/com/reporting/service/](file:///G:/workspace/ReportTemplate_BackEnd/src/main/java/com/reporting/service/):
-
-- **[ExcelParserService.java](file:///G:/workspace/ReportTemplate_BackEnd/src/main/java/com/reporting/service/ExcelParserService.java)**: Parses the user-defined Excel layout workbook using **Apache POI**, extracts layout variables, and persists configuration records in a database transaction.
-- **[SqlGeneratorService.java](file:///G:/workspace/ReportTemplate_BackEnd/src/main/java/com/reporting/service/SqlGeneratorService.java)**: Builds dynamic, highly-optimized SQL queries using CTE structures and conditional aggregations mapped against time-intelligence intervals (MTD, YTD, WEEK, ROLLING).
-- **[PostProcessorService.java](file:///G:/workspace/ReportTemplate_BackEnd/src/main/java/com/reporting/service/PostProcessorService.java)**: Evaluates horizontal `CALC` columns and vertical `calc` math formulas on query results using **exp4j**.
-- **[LayoutRendererService.java](file:///G:/workspace/ReportTemplate_BackEnd/src/main/java/com/reporting/service/LayoutRendererService.java)**: Outputs the final results back to `.xlsx` sheets with grid formatting, indentation levels, currency styles, and headers using **Apache POI**.
-- **[ReportRunnerService.java](file:///G:/workspace/ReportTemplate_BackEnd/src/main/java/com/reporting/service/ReportRunnerService.java)**: Orchestrates the execution sequence.
 
 ---
 
@@ -157,11 +134,11 @@ Follow these steps to run the Reporting Engine backend locally:
 
 ### Prerequisites
 
-To run, build, and validate the complete Reporting Engine stack (including both the backend and frontend components), your development environment must have the following software runtimes, dependencies, and packages installed:
+Your development environment must have the following software runtimes, dependencies, and packages installed:
 
 #### 1. Software Runtimes & Platforms
 * **Java Development Kit (JDK) 17**: Needed to compile and run the Spring Boot backend. OpenJDK 17 or Eclipse Temurin 17 are recommended.
-* **Node.js (v24+) & npm**: Needed to build and run the Angular 21 frontend.
+* **Node.js (v24+) & npm**: Needed to build and run the Angular frontend.
 * **Docker & Docker Compose**: Needed to orchestrate and run the PostgreSQL 16 database container.
 * **Python (v3.10+) & pip**: Needed to execute the ADK validation agents for automated code verification.
 * **Git**: Needed to clone and manage the repository code.
@@ -169,8 +146,6 @@ To run, build, and validate the complete Reporting Engine stack (including both 
 ---
 
 #### 2. Step-by-Step Installation Instructions
-
-Choose the appropriate command line instructions for your operating system:
 
 ##### 🍎 macOS (using Homebrew, SDKMAN!, and NVM)
 
@@ -193,6 +168,7 @@ Choose the appropriate command line instructions for your operating system:
      curl -s "https://get.sdkman.io" | bash
      source "$HOME/.sdkman/bin/sdkman-init.sh"
      sdk install java 17.0.10-tem
+     sdk default java 17.0.10-tem
      ```
 
 3. **Install Node.js & npm (via NVM)**:
@@ -211,7 +187,6 @@ Choose the appropriate command line instructions for your operating system:
    *Alternatively, start Docker from your Applications folder once installed.*
 
 5. **Install Python & Pip**:
-   macOS usually comes with Python, but installing via Homebrew is recommended:
    ```bash
    brew install python@3.11
    # Validate version and ensure pip is linked
@@ -226,7 +201,7 @@ Choose the appropriate command line instructions for your operating system:
 1. **Install Git & Java 17**:
    ```bash
    sudo apt update
-   sudo apt install -y git openjdk-17-jdk
+   sudo apt install -y git openjdk-17-jdk python3 python3-pip python3-venv
    # Verify Java installation
    java -version
    ```
@@ -242,16 +217,12 @@ Choose the appropriate command line instructions for your operating system:
    ```
 
 3. **Install Docker & Docker Compose**:
-   Avoid installing Docker via the default apt repository as it is often outdated. Setup the official Docker engine repository:
    ```bash
-   # Add Docker's official GPG key:
-   sudo apt update
    sudo apt install -y ca-certificates gnupg
    sudo install -m 0755 -d /etc/apt/keyrings
    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
    sudo chmod a+r /etc/apt/keyrings/docker.gpg
 
-   # Add the repository to Apt sources:
    echo \
      "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
      $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
@@ -260,15 +231,9 @@ Choose the appropriate command line instructions for your operating system:
    sudo apt update
    sudo apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
    
-   # Add your user to the docker group to run without sudo (optional but recommended)
+   # Add user to the docker group
    sudo usermod -aG docker $USER
-   # Apply group changes
    newgrp docker
-   ```
-
-4. **Install Python 3 & Pip**:
-   ```bash
-   sudo apt install -y python3 python3-pip python3-venv
    ```
 
 ---
@@ -285,7 +250,6 @@ We highly recommend using Windows Package Manager (`winget`) via PowerShell (Run
 2. **Install Java 17 (Eclipse Temurin)**:
    ```powershell
    winget install --id EclipseAdoptium.Temurin.17.JDK -e --source winget
-   # Restart PowerShell to load the new JAVA_HOME environment variable
    ```
 
 3. **Install Node.js & npm**:
@@ -296,7 +260,6 @@ We highly recommend using Windows Package Manager (`winget`) via PowerShell (Run
 4. **Install Docker Desktop**:
    ```powershell
    winget install --id Docker.DockerDesktop -e --source winget
-   # Restart your computer after Docker Desktop installation to enable WSL2 backend integration
    ```
 
 5. **Install Python & Pip**:
@@ -307,8 +270,6 @@ We highly recommend using Windows Package Manager (`winget`) via PowerShell (Run
 ---
 
 #### 3. Verification Command Cheat Sheet
-
-After installing the prerequisites, run the following commands to verify that your environment is fully set up:
 
 ```bash
 # Verify Git
@@ -335,41 +296,38 @@ pip3 --version || pip --version
 
 1. **Spin up the Database Container**:
    Build the custom database image containing the pre-seeded SQL migrations and start it:
-
-    ```bash
-    docker-compose down -v
-    docker-compose up --build -d
-    ```
-
-    _Note: This will expose PostgreSQL on port `5432` with database `agentic_ai`._
+   ```bash
+   docker-compose down -v
+   docker-compose up --build -d
+   ```
+   _Note: This will expose PostgreSQL on host port `5433` (container port `5432`) with database `agentic_ai`._
 
 2. **Initialize ADK Validation Environment**:
    Ensure `google-adk` is installed:
-    ```bash
-    pip install google-adk
-    ```
+   ```bash
+   pip install google-adk
+   ```
 
 ### Per Dev Session
 
 1. **Start the Java Backend**:
    Clean compile and launch the Spring Boot application server on port `8101` using the embedded Maven wrapper:
-    - **On Windows (PowerShell/Cmd)**:
-        ```cmd
-        maven\apache-maven-3.9.6\bin\mvn.cmd clean compile
-        maven\apache-maven-3.9.6\bin\mvn.cmd spring-boot:run
-        ```
-    - **On macOS/Linux**:
-        ```bash
-        ./maven/apache-maven-3.9.6/bin/mvn clean compile
-        ./maven/apache-maven-3.9.6/bin/mvn spring-boot:run
-        ```
+   - **On Windows (PowerShell/Cmd)**:
+     ```cmd
+     maven\apache-maven-3.9.6\bin\mvn.cmd clean compile
+     maven\apache-maven-3.9.6\bin\mvn.cmd spring-boot:run
+     ```
+   - **On macOS/Linux**:
+     ```bash
+     ./maven/apache-maven-3.9.6/bin/mvn clean compile
+     ./maven/apache-maven-3.9.6/bin/mvn spring-boot:run
+     ```
 
 2. **Run ADK Validation Agent**:
    To validate backend changes (compiling, running JUnit tests, and checking code quality/security):
-    ```bash
-    adk run .agents/validation
-    ```
-    Prompt the agent with: `"Validate the codebase changes"` or `"Audit code and run tests"`.
+   ```bash
+   adk run .agents/validation
+   ```
 
 ---
 
@@ -377,15 +335,18 @@ pip3 --version || pip --version
 
 Below is a summary of the most useful commands for building and running the backend components:
 
-| Category     | Command                                                | Target/CWD   | Description                                                    |
-| :----------- | :----------------------------------------------------- | :----------- | :------------------------------------------------------------- |
-| **Database** | `docker-compose up --build -d`                         | Project Root | Builds and starts database container in detached mode          |
-| **Database** | `docker-compose down -v`                               | Project Root | Stops the database container and deletes the persistent volume |
-| **Backend**  | `maven\apache-maven-3.9.6\bin\mvn.cmd clean compile`   | Project Root | Clean compile Spring Boot application (Windows)                |
-| **Backend**  | `maven\apache-maven-3.9.6\bin\mvn.cmd spring-boot:run` | Project Root | Runs the backend server on port 8101 (Windows)                 |
-| **Backend**  | `maven\apache-maven-3.9.6\bin\mvn.cmd test`            | Project Root | Runs JUnit unit and integration tests                          |
-| **ADK Agent**| `adk run .agents/validation`                           | Project Root | Runs the backend validation agent interactively                |
-| **ADK Agent**| `adk web .agents/validation`                           | Project Root | Launches the Web UI to chat/run backend validation tasks       |
+| Category | Command | Target/CWD | Description |
+| :--- | :--- | :--- | :--- |
+| **Database** | `docker-compose up --build -d` | Project Root | Builds and starts database container in detached mode (exposes port `5433`) |
+| **Database** | `docker-compose down -v` | Project Root | Stops the database container and deletes the persistent volume |
+| **Backend** | `maven\apache-maven-3.9.6\bin\mvn.cmd clean compile` | Project Root | Clean compile Spring Boot application (Windows) |
+| **Backend** | `./maven/apache-maven-3.9.6/bin/mvn clean compile` | Project Root | Clean compile Spring Boot application (macOS/Linux) |
+| **Backend** | `maven\apache-maven-3.9.6\bin\mvn.cmd spring-boot:run` | Project Root | Runs the backend server on port 8101 (Windows) |
+| **Backend** | `./maven/apache-maven-3.9.6/bin/mvn spring-boot:run` | Project Root | Runs the backend server on port 8101 (macOS/Linux) |
+| **Backend** | `maven\apache-maven-3.9.6\bin\mvn.cmd test` | Project Root | Runs JUnit unit and integration tests (Windows) |
+| **Backend** | `./maven/apache-maven-3.9.6/bin/mvn test` | Project Root | Runs JUnit unit and integration tests (macOS/Linux) |
+| **ADK Agent**| `adk run .agents/validation` | Project Root | Runs the backend validation agent interactively |
+| **ADK Agent**| `adk web .agents/validation` | Project Root | Launches the Web UI to chat/run backend validation tasks |
 
 ---
 

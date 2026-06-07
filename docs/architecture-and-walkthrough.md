@@ -9,7 +9,11 @@
 | **Angular Standalone Architecture** | Frontend utilizes Angular 21 standalone components without `NgModules`. Each component declares its imports directly, making code cleaner and improving module load speeds. |
 | **exp4j Math Evaluation** | Used `exp4j` for mathematical calculations in formula cells. It performs rapid, safe evaluations of mathematical expressions (e.g., `R2 / R3`) without executing raw JavaScript or SQL-injection-prone scripts. |
 | **Direct JDBC over JPA for Hot Paths** | `loadFromDb()` uses raw JDBC queries with `RowCallbackHandler` instead of JPA repository calls. This eliminates entity hydration overhead and JOIN inflation from Hibernate, reducing report load latency from ~163ms to ~59ms. |
+| **Direct JDBC Save Path** | Refactored row, column, and metric persistence in `ReportConfigService` to use raw `JdbcTemplate` updates. This resolves Hibernate cascade overhead, eliminates hydrations, and prevents orphan rows during report saves. |
+| **Pushed-Down SQL Filters** | Refactored `SqlGeneratorService` to push general and quick filters directly down into individual fact CTE subqueries instead of applying them at the `unified_spine` level. This allows PostgreSQL to filter rows early, optimizing query execution plans. |
+| **Security-Validated Autocomplete** | Implemented `/api/metadata/distinct-values` with direct JDBC queries and regex sanitization (`^[a-zA-Z0-9_]+$`) on dynamic table/column parameters to block SQL injection while supporting dynamic dimension autocomplete lookups. |
 | **Parallel Frontend Data Fetching** | Angular `ngOnInit` uses RxJS `forkJoin` to fire `/api/reports/tables` and `/api/reports/{id}` concurrently. Total perceived load time equals the slower of the two requests instead of their sum. |
+
 
 ---
 
