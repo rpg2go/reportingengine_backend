@@ -46,6 +46,7 @@ echo "Deploying Backend Service (${BACKEND_SERVICE_NAME}) to Cloud Run..."
 gcloud run deploy ${BACKEND_SERVICE_NAME} \
   --source "${SCRIPT_DIR}/.." \
   --region ${GCP_REGION} \
+  --port 8080 \
   --set-env-vars="SPRING_DATASOURCE_URL=${SPRING_DATASOURCE_URL},SPRING_DATASOURCE_USERNAME=${SPRING_DATASOURCE_USERNAME},SPRING_DATASOURCE_PASSWORD=${SPRING_DATASOURCE_PASSWORD}" \
   --allow-unauthenticated \
   --quiet
@@ -56,7 +57,7 @@ echo "Backend URL: ${BACKEND_URL}"
 
 echo "Deploying Frontend Service (${FRONTEND_SERVICE_NAME}) to Cloud Run..."
 gcloud run deploy ${FRONTEND_SERVICE_NAME} \
-  --source "${SCRIPT_DIR}/../../ReportTemplate_FrontEnd" \
+  --source "${SCRIPT_DIR}/../../reportingengine_frontend" \
   --region ${GCP_REGION} \
   --set-env-vars="BACKEND_URL=${BACKEND_URL}" \
   --allow-unauthenticated \

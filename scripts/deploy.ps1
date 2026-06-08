@@ -67,7 +67,7 @@ Write-Host "Backend URL: $BACKEND_URL" -ForegroundColor Green
 
 Write-Host "Deploying Frontend Service ($FRONTEND_SERVICE_NAME) to Cloud Run..." -ForegroundColor Cyan
 gcloud run deploy $FRONTEND_SERVICE_NAME `
-  --source "$PSScriptRoot/../../ReportTemplate_FrontEnd" `
+  --source "$PSScriptRoot/../../reportingengine_frontend" `
   --region $GCP_REGION `
   --set-env-vars="BACKEND_URL=$BACKEND_URL" `
   --allow-unauthenticated `
