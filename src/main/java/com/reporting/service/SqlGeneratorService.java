@@ -173,22 +173,15 @@ public class SqlGeneratorService {
                 groupByExpr = "1";
             }
 
+            String generalFilterExpr = compileFilterList(factTable, generalFilters, tableColumnsCache);
+            String quickFilterExpr = compileFilterList(factTable, quickFilters, tableColumnsCache);
+
             List<String> factCompiledFilters = new ArrayList<>();
-            for (FilterCondition cond : generalFilters) {
-                if (isFilterApplicable(factTable, cond, tableColumnsCache)) {
-                    String sqlCond = compileFactFilter(factTable, cond);
-                    if (sqlCond != null && !sqlCond.isBlank()) {
-                        factCompiledFilters.add("(" + sqlCond + ")");
-                    }
-                }
+            if (!generalFilterExpr.isEmpty()) {
+                factCompiledFilters.add(generalFilterExpr);
             }
-            for (FilterCondition cond : quickFilters) {
-                if (isFilterApplicable(factTable, cond, tableColumnsCache)) {
-                    String sqlCond = compileFactFilter(factTable, cond);
-                    if (sqlCond != null && !sqlCond.isBlank()) {
-                        factCompiledFilters.add("(" + sqlCond + ")");
-                    }
-                }
+            if (!quickFilterExpr.isEmpty()) {
+                factCompiledFilters.add(quickFilterExpr);
             }
 
             String whereClause = "";
@@ -766,6 +759,35 @@ public class SqlGeneratorService {
         }
     }
 
+    private String compileFilterList(String factTable, List<FilterCondition> filters, Map<String, Set<String>> cache) {
+        if (filters == null || filters.isEmpty()) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder();
+        FilterCondition lastApplicable = null;
+        
+        for (FilterCondition cond : filters) {
+            if (isFilterApplicable(factTable, cond, cache)) {
+                String sqlCond = compileFactFilter(factTable, cond);
+                if (sqlCond != null && !sqlCond.isBlank()) {
+                    if (sb.length() > 0) {
+                        String conj = "AND";
+                        if (lastApplicable != null && lastApplicable.getConjunction() != null) {
+                            String c = lastApplicable.getConjunction().trim().toUpperCase();
+                            if ("AND".equals(c) || "OR".equals(c)) {
+                                conj = c;
+                            }
+                        }
+                        sb.append(" ").append(conj).append(" ");
+                    }
+                    sb.append("(").append(sqlCond).append(")");
+                    lastApplicable = cond;
+                }
+            }
+        }
+        return sb.toString();
+    }
+
     private String compileRowFilter(String rowFilter) {
         if (rowFilter == null || rowFilter.isBlank()) {
             return "";
@@ -773,17 +795,26 @@ public class SqlGeneratorService {
         String trimmed = rowFilter.trim();
         if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
             List<FilterCondition> conds = parseGeneralFilters(trimmed);
-            List<String> compiled = new ArrayList<>();
+            StringBuilder sb = new StringBuilder();
+            FilterCondition lastCond = null;
             for (FilterCondition cond : conds) {
                 String sqlCond = compileFilterCondition(cond);
                 if (sqlCond != null && !sqlCond.isBlank()) {
-                    compiled.add("(" + sqlCond + ")");
+                    if (sb.length() > 0) {
+                        String conj = "AND";
+                        if (lastCond != null && lastCond.getConjunction() != null) {
+                            String c = lastCond.getConjunction().trim().toUpperCase();
+                            if ("AND".equals(c) || "OR".equals(c)) {
+                                conj = c;
+                            }
+                        }
+                        sb.append(" ").append(conj).append(" ");
+                    }
+                    sb.append("(").append(sqlCond).append(")");
+                    lastCond = cond;
                 }
             }
-            if (compiled.isEmpty()) {
-                return "";
-            }
-            return String.join(" AND ", compiled);
+            return sb.toString();
         } else {
             validateFilterExpr(trimmed);
             return trimmed;
