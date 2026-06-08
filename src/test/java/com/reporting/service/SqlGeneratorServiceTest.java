@@ -204,7 +204,7 @@ public class SqlGeneratorServiceTest {
         String sql = service.generate(config, Collections.emptyMap());
 
         // Assert
-        assertThat(sql).contains("WHERE (analytics.fact_sales.amount = '100') AND (dim_rm.status = 'active')");
+        assertThat(sql).contains("WHERE ((analytics.fact_sales.amount = '100') AND (dim_rm.status = 'active'))");
     }
 
     @Test
@@ -235,9 +235,9 @@ public class SqlGeneratorServiceTest {
         String sql = service.generate(config, Collections.emptyMap());
 
         // Assert
-        assertThat(sql).contains("WHERE ((analytics.fact_sales.region <> 'West' OR analytics.fact_sales.region IS NULL)) " +
+        assertThat(sql).contains("WHERE (((analytics.fact_sales.region <> 'West' OR analytics.fact_sales.region IS NULL)) " +
             "AND ((analytics.fact_sales.category <> 'Furniture' OR analytics.fact_sales.category IS NULL)) " +
-            "AND ((analytics.fact_sales.name NOT LIKE '%John%' ESCAPE '\\' OR analytics.fact_sales.name IS NULL))");
+            "AND ((analytics.fact_sales.name NOT LIKE '%John%' ESCAPE '\\' OR analytics.fact_sales.name IS NULL)))");
     }
 
     @Test
@@ -266,7 +266,7 @@ public class SqlGeneratorServiceTest {
         String sql = service.generate(config, Collections.emptyMap());
 
         // Assert
-        assertThat(sql).contains("WHERE (analytics.fact_sales.country IN ('US', 'CA', 'FR'))");
+        assertThat(sql).contains("WHERE ((analytics.fact_sales.country IN ('US', 'CA', 'FR')))");
     }
 
     @Test
@@ -298,10 +298,10 @@ public class SqlGeneratorServiceTest {
         String sql = service.generate(config, Collections.emptyMap());
 
         // Assert
-        assertThat(sql).contains("WHERE ((analytics.fact_sales.region IS NULL OR TRIM(analytics.fact_sales.region) = '')) " +
+        assertThat(sql).contains("WHERE (((analytics.fact_sales.region IS NULL OR TRIM(analytics.fact_sales.region) = '')) " +
             "AND ((analytics.fact_sales.category IS NOT NULL AND TRIM(analytics.fact_sales.category) <> '')) " +
             "AND (analytics.fact_sales.name IS NULL) " +
-            "AND (analytics.fact_sales.status IS NOT NULL)");
+            "AND (analytics.fact_sales.status IS NOT NULL))");
     }
 
     @Test
@@ -332,9 +332,9 @@ public class SqlGeneratorServiceTest {
         String sql = service.generate(config, Collections.emptyMap());
 
         // Assert
-        assertThat(sql).contains("WHERE (analytics.fact_sales.code LIKE '%10\\%\\_\\\\%' ESCAPE '\\') " +
+        assertThat(sql).contains("WHERE ((analytics.fact_sales.code LIKE '%10\\%\\_\\\\%' ESCAPE '\\') " +
             "AND (analytics.fact_sales.prefix LIKE 'abc\\%%' ESCAPE '\\') " +
-            "AND (analytics.fact_sales.suffix LIKE '%\\_xyz' ESCAPE '\\')");
+            "AND (analytics.fact_sales.suffix LIKE '%\\_xyz' ESCAPE '\\'))");
     }
 
     @Test
@@ -366,10 +366,10 @@ public class SqlGeneratorServiceTest {
         String sql = service.generate(config, Collections.emptyMap());
 
         // Assert
-        assertThat(sql).contains("WHERE (analytics.fact_sales.amount > '100') " +
+        assertThat(sql).contains("WHERE ((analytics.fact_sales.amount > '100') " +
             "AND (analytics.fact_sales.amount >= '150') " +
             "AND (analytics.fact_sales.quantity < '10') " +
-            "AND (analytics.fact_sales.quantity <= '20')");
+            "AND (analytics.fact_sales.quantity <= '20'))");
     }
 
     @Test
@@ -398,7 +398,7 @@ public class SqlGeneratorServiceTest {
         String sql = service.generate(config, Collections.emptyMap());
 
         // Assert
-        assertThat(sql).contains("WHERE (analytics.fact_sales.interest_rate IS NOT NULL)");
+        assertThat(sql).contains("WHERE ((analytics.fact_sales.interest_rate IS NOT NULL))");
     }
 
     @Test
@@ -453,5 +453,114 @@ public class SqlGeneratorServiceTest {
 
         // Assert
         assertThat(sql).contains("AND ((location_id = '1') AND (interest_rate <= '5'))");
+    }
+
+    @Test
+    @DisplayName("generate with quick filters compiles with sequential AND and single outer parenthesis")
+    public void generate_withQuickFilters_shouldCompileWithSequentialAnd() {
+        // Arrange
+        List<ColumnDefDto> columns = List.of(new ColumnDefDto("C1", "Col 1", Enums.ColType.WEEK, 0, null, null, 1));
+        List<ReportRowDto> rows = List.of(
+            new ReportRowDto("R1", "REP1", "Row 1", Enums.RowType.data, 
+                new MeasureDefinitionDTO("raw", null, null, null, "SUM(amount)"), 
+                null, "normal", 0, 1, Set.of("C1"), null)
+        );
+        String quickFiltersJson = "[" +
+            "{\"attribute\":\"region\",\"operator\":\"=\",\"value\":\"East\"}," +
+            "{\"attribute\":\"status\",\"operator\":\"=\",\"value\":\"active\"}" +
+            "]";
+        ReportConfigDto config = new ReportConfigDto(
+            "REP1", "Test Report", columns, rows, LocalDate.of(2026, 5, 26), 1, Enums.ReportStatus.draft,
+            "analytics.fact_sales", "weekly", null, null, false, quickFiltersJson, null
+        );
+
+        // Act
+        String sql = service.generate(config, Collections.emptyMap());
+
+        // Assert
+        assertThat(sql).contains("WHERE (analytics.fact_sales.region = 'East' AND analytics.fact_sales.status = 'active')");
+    }
+
+    @Test
+    @DisplayName("generate with both quick and general filters welds them together using AND")
+    public void generate_withBothQuickAndGeneralFilters_shouldWeldWithAnd() {
+        // Arrange
+        List<ColumnDefDto> columns = List.of(new ColumnDefDto("C1", "Col 1", Enums.ColType.WEEK, 0, null, null, 1));
+        List<ReportRowDto> rows = List.of(
+            new ReportRowDto("R1", "REP1", "Row 1", Enums.RowType.data, 
+                new MeasureDefinitionDTO("raw", null, null, null, "SUM(amount)"), 
+                null, "normal", 0, 1, Set.of("C1"), null)
+        );
+        String quickFiltersJson = "[" +
+            "{\"attribute\":\"region\",\"operator\":\"=\",\"value\":\"East\"}," +
+            "{\"attribute\":\"status\",\"operator\":\"=\",\"value\":\"active\"}" +
+            "]";
+        String generalFiltersJson = "[" +
+            "{\"attribute\":\"category\",\"operator\":\"=\",\"value\":\"Office\",\"conjunction\":\"OR\"}," +
+            "{\"attribute\":\"amount\",\"operator\":\">\",\"value\":\"500\"}" +
+            "]";
+        ReportConfigDto config = new ReportConfigDto(
+            "REP1", "Test Report", columns, rows, LocalDate.of(2026, 5, 26), 1, Enums.ReportStatus.draft,
+            "analytics.fact_sales", "weekly", null, null, false, quickFiltersJson, generalFiltersJson
+        );
+
+        // Act
+        String sql = service.generate(config, Collections.emptyMap());
+
+        // Assert
+        assertThat(sql).contains("WHERE (analytics.fact_sales.region = 'East' AND analytics.fact_sales.status = 'active') " +
+            "AND ((analytics.fact_sales.category = 'Office') OR (analytics.fact_sales.amount > '500'))");
+    }
+
+    @Test
+    @DisplayName("generate with quick filters ignores individual conjunction properties and links using AND")
+    public void generate_withQuickFiltersHavingConjunction_shouldIgnoreConjunction() {
+        // Arrange
+        List<ColumnDefDto> columns = List.of(new ColumnDefDto("C1", "Col 1", Enums.ColType.WEEK, 0, null, null, 1));
+        List<ReportRowDto> rows = List.of(
+            new ReportRowDto("R1", "REP1", "Row 1", Enums.RowType.data, 
+                new MeasureDefinitionDTO("raw", null, null, null, "SUM(amount)"), 
+                null, "normal", 0, 1, Set.of("C1"), null)
+        );
+        String quickFiltersJson = "[" +
+            "{\"attribute\":\"region\",\"operator\":\"=\",\"value\":\"East\",\"conjunction\":\"OR\"}," +
+            "{\"attribute\":\"status\",\"operator\":\"=\",\"value\":\"active\"}" +
+            "]";
+        ReportConfigDto config = new ReportConfigDto(
+            "REP1", "Test Report", columns, rows, LocalDate.of(2026, 5, 26), 1, Enums.ReportStatus.draft,
+            "analytics.fact_sales", "weekly", null, null, false, quickFiltersJson, null
+        );
+
+        // Act
+        String sql = service.generate(config, Collections.emptyMap());
+
+        // Assert
+        assertThat(sql).contains("WHERE (analytics.fact_sales.region = 'East' AND analytics.fact_sales.status = 'active')");
+    }
+
+    @Test
+    @DisplayName("generate with general filters respecting UI toggled OR conjunction")
+    public void generate_withGeneralFiltersOrConjunction_shouldRespectOr() {
+        // Arrange
+        List<ColumnDefDto> columns = List.of(new ColumnDefDto("C1", "Col 1", Enums.ColType.WEEK, 0, null, null, 1));
+        List<ReportRowDto> rows = List.of(
+            new ReportRowDto("R1", "REP1", "Row 1", Enums.RowType.data, 
+                new MeasureDefinitionDTO("raw", null, null, null, "SUM(amount)"), 
+                null, "normal", 0, 1, Set.of("C1"), null)
+        );
+        String generalFiltersJson = "[" +
+            "{\"attribute\":\"category\",\"operator\":\"=\",\"value\":\"Furniture\",\"conjunction\":\"OR\"}," +
+            "{\"attribute\":\"category\",\"operator\":\"=\",\"value\":\"Office\"}" +
+            "]";
+        ReportConfigDto config = new ReportConfigDto(
+            "REP1", "Test Report", columns, rows, LocalDate.of(2026, 5, 26), 1, Enums.ReportStatus.draft,
+            "analytics.fact_sales", "weekly", null, null, false, null, generalFiltersJson
+        );
+
+        // Act
+        String sql = service.generate(config, Collections.emptyMap());
+
+        // Assert
+        assertThat(sql).contains("WHERE ((analytics.fact_sales.category = 'Furniture') OR (analytics.fact_sales.category = 'Office'))");
     }
 }

@@ -138,7 +138,7 @@ public class SqlGeneratorService {
                 //
                 // We attempt to resolve by name convention first; if the catalog is
                 // unavailable the router will return an empty list and the CTE
-            	// will still compile (without the bridging join).
+                // will still compile (without the bridging join).
                 String conformedDimGuess = resolveConformedDimension(conformedKey);
                 if (conformedDimGuess != null) {
                     dimensionTargets.add(conformedDimGuess);
@@ -173,20 +173,66 @@ public class SqlGeneratorService {
                 groupByExpr = "1";
             }
 
-            String generalFilterExpr = compileFilterList(factTable, generalFilters, tableColumnsCache);
-            String quickFilterExpr = compileFilterList(factTable, quickFilters, tableColumnsCache);
-
-            List<String> factCompiledFilters = new ArrayList<>();
-            if (!generalFilterExpr.isEmpty()) {
-                factCompiledFilters.add(generalFilterExpr);
+            // ── Hierarchical Parenthetical Partitioning Strategy ─────────────────
+            
+            // 1. Compile Quick Filters Block
+            StringBuilder quickBuilder = new StringBuilder();
+            for (FilterCondition cond : quickFilters) {
+                if (isFilterApplicable(factTable, cond, tableColumnsCache)) {
+                    String sqlCond = compileFactFilter(factTable, cond);
+                    if (sqlCond != null && !sqlCond.isBlank()) {
+                        if (quickBuilder.length() > 0) {
+                            quickBuilder.append(" AND ");
+                        }
+                        quickBuilder.append(sqlCond);
+                    }
+                }
             }
-            if (!quickFilterExpr.isEmpty()) {
-                factCompiledFilters.add(quickFilterExpr);
+            String quickBlock = "";
+            if (quickBuilder.length() > 0) {
+                quickBlock = "(" + quickBuilder.toString() + ")";
+            }
+
+            // 2. Compile General Filters Block
+            StringBuilder generalBuilder = new StringBuilder();
+            FilterCondition lastGenCond = null;
+            for (FilterCondition cond : generalFilters) {
+                if (isFilterApplicable(factTable, cond, tableColumnsCache)) {
+                    String sqlCond = compileFactFilter(factTable, cond);
+                    if (sqlCond != null && !sqlCond.isBlank()) {
+                        if (generalBuilder.length() > 0) {
+                            String conj = "AND";
+                            if (lastGenCond != null && lastGenCond.getConjunction() != null) {
+                                String c = lastGenCond.getConjunction().trim().toUpperCase();
+                                if ("AND".equals(c) || "OR".equals(c)) {
+                                    conj = c;
+                                }
+                            }
+                            generalBuilder.append(" ").append(conj).append(" ");
+                        }
+                        generalBuilder.append("(").append(sqlCond).append(")");
+                        lastGenCond = cond;
+                    }
+                }
+            }
+            String generalBlock = "";
+            if (generalBuilder.length() > 0) {
+                generalBlock = "(" + generalBuilder.toString() + ")";
+            }
+
+            // 3. Master Logic Intersection Execution
+            String combinedFilters = "";
+            if (!quickBlock.isEmpty() && !generalBlock.isEmpty()) {
+                combinedFilters = quickBlock + " AND " + generalBlock;
+            } else if (!quickBlock.isEmpty()) {
+                combinedFilters = quickBlock;
+            } else if (!generalBlock.isEmpty()) {
+                combinedFilters = generalBlock;
             }
 
             String whereClause = "";
-            if (!factCompiledFilters.isEmpty()) {
-                whereClause = "\n    WHERE " + String.join(" AND ", factCompiledFilters);
+            if (!combinedFilters.isEmpty()) {
+                whereClause = "\n    WHERE " + combinedFilters;
             }
 
             // Build aggregations for each active data row + column for this table
@@ -757,35 +803,6 @@ public class SqlGeneratorService {
         if (openParen != 0) {
             throw new IllegalArgumentException("Unmatched parentheses in filter expression: " + expr);
         }
-    }
-
-    private String compileFilterList(String factTable, List<FilterCondition> filters, Map<String, Set<String>> cache) {
-        if (filters == null || filters.isEmpty()) {
-            return "";
-        }
-        StringBuilder sb = new StringBuilder();
-        FilterCondition lastApplicable = null;
-        
-        for (FilterCondition cond : filters) {
-            if (isFilterApplicable(factTable, cond, cache)) {
-                String sqlCond = compileFactFilter(factTable, cond);
-                if (sqlCond != null && !sqlCond.isBlank()) {
-                    if (sb.length() > 0) {
-                        String conj = "AND";
-                        if (lastApplicable != null && lastApplicable.getConjunction() != null) {
-                            String c = lastApplicable.getConjunction().trim().toUpperCase();
-                            if ("AND".equals(c) || "OR".equals(c)) {
-                                conj = c;
-                            }
-                        }
-                        sb.append(" ").append(conj).append(" ");
-                    }
-                    sb.append("(").append(sqlCond).append(")");
-                    lastApplicable = cond;
-                }
-            }
-        }
-        return sb.toString();
     }
 
     private String compileRowFilter(String rowFilter) {
