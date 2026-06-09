@@ -19,6 +19,12 @@ public class PostProcessorService {
             Map<String, Double> colVals = new HashMap<>();
             for (ColumnDefDto col : config.getColumns()) {
                 colVals.put(col.colId().toUpperCase(), 0.0);
+                if (col.colType() == Enums.ColType.ROLLING) {
+                    int rollingN = col.rollingN() != null ? col.rollingN() : 1;
+                    for (int i = 1; i <= rollingN; i++) {
+                        colVals.put((col.colId() + "_" + i).toUpperCase(), 0.0);
+                    }
+                }
             }
             matrix.put(row.rowId().toUpperCase(), colVals);
         }
@@ -63,16 +69,27 @@ public class PostProcessorService {
             ReportRowDto row = config.getRow(rid);
             if (row != null && row.isCalcRow()) {
                 for (ColumnDefDto col : config.getColumns()) {
-                    String cid = col.colId().toUpperCase();
-                    if (row.isEnabledFor(cid)) {
-                        // Extract context for THIS column across all row IDs
-                        Map<String, Double> colContext = new HashMap<>();
-                        for (Map.Entry<String, Map<String, Double>> mEntry : matrix.entrySet()) {
-                            colContext.put(mEntry.getKey(), mEntry.getValue().getOrDefault(cid, 0.0));
+                    List<String> colIdsToEval = new ArrayList<>();
+                    colIdsToEval.add(col.colId().toUpperCase());
+                    if (col.colType() == Enums.ColType.ROLLING) {
+                        int rollingN = col.rollingN() != null ? col.rollingN() : 1;
+                        for (int i = 1; i <= rollingN; i++) {
+                            colIdsToEval.add((col.colId() + "_" + i).toUpperCase());
                         }
-                        String formula = (row.source() != null) ? row.source().getRawSql() : "";
-                        double val = evaluateFormula(formula, colContext);
-                        matrix.get(rid).put(cid, val);
+                    }
+
+                    for (String cid : colIdsToEval) {
+                        String checkCid = cid.contains("_") ? cid.substring(0, cid.indexOf("_")) : cid;
+                        if (row.isEnabledFor(checkCid)) {
+                            // Extract context for THIS column across all row IDs
+                            Map<String, Double> colContext = new HashMap<>();
+                            for (Map.Entry<String, Map<String, Double>> mEntry : matrix.entrySet()) {
+                                colContext.put(mEntry.getKey(), mEntry.getValue().getOrDefault(cid, 0.0));
+                            }
+                            String formula = (row.source() != null) ? row.source().getRawSql() : "";
+                            double val = evaluateFormula(formula, colContext);
+                            matrix.get(rid).put(cid, val);
+                        }
                     }
                 }
             }

@@ -105,4 +105,57 @@ public class PostProcessorServiceTest {
         assertThat(matrix.get("R3").get("C2")).isEqualTo(90.0);  // 40 + 50
         assertThat(matrix.get("R3").get("C3")).isEqualTo(210.0); // 60 + 150 (and C1 - C2 check: 300 - 90 = 210)
     }
+
+    @Test
+    @DisplayName("process ROLLING columns initializes subcolumns and evaluates cross-row formulas for subcolumns")
+    public void process_rollingMatrixAndCalculations() {
+        // Arrange
+        List<ColumnDefDto> columns = List.of(
+            new ColumnDefDto("C7", "3-Mo Rolling", Enums.ColType.ROLLING, 0, 3, "MONTH", "", 1)
+        );
+
+        List<ReportRowDto> rows = List.of(
+            new ReportRowDto("R1", "REP1", "Row 1", Enums.RowType.data, new MeasureDefinitionDTO("raw", null, null, null, "m1"), null, "normal", 0, 1, Set.of("C7"), null),
+            new ReportRowDto("R2", "REP1", "Row 2", Enums.RowType.data, new MeasureDefinitionDTO("raw", null, null, null, "m2"), null, "normal", 0, 2, Set.of("C7"), null),
+            new ReportRowDto("R3", "REP1", "Total Row", Enums.RowType.calc, new MeasureDefinitionDTO("raw", null, null, null, "R1 + R2"), null, "total", 0, 3, Set.of("C7"), null)
+        );
+
+        ReportConfigDto config = new ReportConfigDto(
+            "REP1", "Test Report", columns, rows, null, 1, Enums.ReportStatus.draft,
+            "analytics.fact_sales", "monthly", null, null, false, null, null
+        );
+
+        List<Map<String, Object>> dbResults = List.of(
+            Map.of("row_id", "R1", "col_id", "C7", "val", 1000.0),
+            Map.of("row_id", "R1", "col_id", "C7_1", "val", 100.0),
+            Map.of("row_id", "R1", "col_id", "C7_2", "val", 200.0),
+            Map.of("row_id", "R1", "col_id", "C7_3", "val", 300.0),
+            Map.of("row_id", "R2", "col_id", "C7", "val", 2000.0),
+            Map.of("row_id", "R2", "col_id", "C7_1", "val", 50.0),
+            Map.of("row_id", "R2", "col_id", "C7_2", "val", 150.0),
+            Map.of("row_id", "R2", "col_id", "C7_3", "val", 250.0)
+        );
+
+        // Act
+        Map<String, Map<String, Double>> matrix = service.process(config, dbResults);
+
+        // Assert
+        // Check R1
+        assertThat(matrix.get("R1").get("C7")).isEqualTo(1000.0);
+        assertThat(matrix.get("R1").get("C7_1")).isEqualTo(100.0);
+        assertThat(matrix.get("R1").get("C7_2")).isEqualTo(200.0);
+        assertThat(matrix.get("R1").get("C7_3")).isEqualTo(300.0);
+
+        // Check R2
+        assertThat(matrix.get("R2").get("C7")).isEqualTo(2000.0);
+        assertThat(matrix.get("R2").get("C7_1")).isEqualTo(50.0);
+        assertThat(matrix.get("R2").get("C7_2")).isEqualTo(150.0);
+        assertThat(matrix.get("R2").get("C7_3")).isEqualTo(250.0);
+
+        // Check R3 (Total: R1 + R2)
+        assertThat(matrix.get("R3").get("C7")).isEqualTo(3000.0);
+        assertThat(matrix.get("R3").get("C7_1")).isEqualTo(150.0);
+        assertThat(matrix.get("R3").get("C7_2")).isEqualTo(350.0);
+        assertThat(matrix.get("R3").get("C7_3")).isEqualTo(550.0);
+    }
 }

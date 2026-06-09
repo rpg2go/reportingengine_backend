@@ -368,3 +368,42 @@ The PostgreSQL instance manages two schemas in the `agentic_ai` database:
 
 - **`reporting.*`**: Stores metadata, report definitions, explores, views, dimension/measure columns, join paths, and import audit history.
 - **`analytics.*`**: Represents the physical Data Warehouse (DWH) containing dimension and fact tables (seeding transaction, performance, investment, and sales data for 2024–2026).
+
+---
+
+## Troubleshooting Port Conflicts
+
+When running the application locally, you may encounter port conflicts if the processes are not terminated cleanly (e.g., when a terminal session is closed without stopping the servers).
+
+### 1. Identify Running Processes
+
+To find which process is listening on a specific port:
+
+* **macOS / Linux**:
+  ```bash
+  lsof -i :8101   # For backend (Port 8101)
+  lsof -i :4200   # For frontend (Port 4200)
+  ```
+  This will print a list of running processes. Look for the `PID` column.
+
+* **Windows**:
+  ```powershell
+  netstat -ano | findstr :8101
+  netstat -ano | findstr :4200
+  ```
+  The last column in the output represents the process ID (`PID`).
+
+### 2. Kill the Process Manually
+
+Once you have identified the process ID (`PID`):
+
+* **macOS / Linux**:
+  ```bash
+  kill -9 <PID>
+  ```
+
+* **Windows**:
+  ```powershell
+  taskkill /PID <PID> /F
+  ```
+

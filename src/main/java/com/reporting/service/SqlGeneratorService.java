@@ -284,83 +284,34 @@ public class SqlGeneratorService {
                         }
                     }
 
-                    String metricClause = "";
-                    if ("visual".equalsIgnoreCase(mdef.getMode())) {
-                        String agg = mdef.getAggregation() != null ? mdef.getAggregation().trim().toUpperCase() : "SUM";
-                        String originalColName = mdef.getTargetColumn() != null ? mdef.getTargetColumn().trim() : "";
-
-                        if (("SUM".equals(agg) || "AVG".equals(agg)) && !isNumericColumn(factTable, originalColName)) {
-                            throw new IllegalArgumentException("Column '" + originalColName + "' in table " + factTable + " is not numeric and cannot be aggregated with " + agg);
-                        }
-
-                        String colName = factTable + "." + originalColName;
-                        String fill = "SUM".equals(agg) ? "0" : "NULL";
-
-                        if ("COUNT_DISTINCT".equals(agg) || "COUNT DISTINCT".equals(agg)) {
-                            metricClause = String.format(
-                                "COUNT(DISTINCT CASE WHEN %s%s THEN %s ELSE NULL END)",
-                                dateConstraint,
-                                filterClause,
-                                colName
-                            );
-                        } else {
-                            metricClause = String.format(
-                                "%s(CASE WHEN %s%s THEN %s ELSE %s END)",
-                                agg,
-                                dateConstraint,
-                                filterClause,
-                                colName,
-                                fill
-                            );
-                        }
-                    } else { // raw mode
-                        String raw = mdef.getRawSql();
-                        if (raw == null) {
-                            raw = "";
-                        }
-                        String processedRaw = raw;
-                        String shortTbl = factTable;
-                        if (factTable.contains(".")) {
-                            shortTbl = factTable.substring(factTable.lastIndexOf(".") + 1);
-                        }
-                        String escapedFull = java.util.regex.Pattern.quote(factTable.trim()) + "\\.";
-                        String escapedShort = java.util.regex.Pattern.quote(shortTbl.trim()) + "\\.";
-                        processedRaw = processedRaw.replaceAll("(?i)" + escapedFull, factTable + ".");
-                        processedRaw = processedRaw.replaceAll("(?i)" + escapedShort, factTable + ".");
-
-                        processedRaw = makeDivisionSafe(processedRaw);
-                        validateFilterExpr(processedRaw);
-
-                        boolean hasAgg = false;
-                        String[] functions = {"SUM", "AVG", "COUNT", "MIN", "MAX"};
-                        String upperRaw = processedRaw.toUpperCase();
-                        String fill = "0";
-                        for (String fn : functions) {
-                            if (upperRaw.contains(fn + "(")) {
-                                hasAgg = true;
-                                if ("SUM".equals(fn)) {
-                                    fill = "0";
-                                } else {
-                                    fill = "NULL";
-                                }
-                                break;
-                            }
-                        }
-
-                        if (hasAgg) {
-                            metricClause = injectConstraintsIntoRawSql(processedRaw, dateConstraint + filterClause, fill);
-                        } else {
-                            metricClause = String.format(
-                                "SUM(CASE WHEN %s%s THEN (%s) ELSE 0 END)",
-                                dateConstraint,
-                                filterClause,
-                                processedRaw
-                            );
-                        }
-                    }
-
+                    String metricClause = compileMetricClause(factTable, mdef, dateConstraint, filterClause);
                     String alias = "val_" + row.rowId().toLowerCase() + "_" + col.colId().toLowerCase();
                     selectList.add(String.format("CAST(%s AS DOUBLE PRECISION) AS %s", metricClause, alias));
+
+                    if (col.colType() == Enums.ColType.ROLLING) {
+                        int rollingN = col.rollingN() != null ? col.rollingN() : 1;
+                        String grain = col.effectiveRollingGrain();
+                        for (int i = 1; i <= rollingN; i++) {
+                            LocalDate subStart;
+                            LocalDate subEnd;
+                            if ("DAY".equals(grain)) {
+                                subStart = config.getReferenceDate().minusDays(i);
+                                subEnd = config.getReferenceDate().minusDays(i);
+                            } else if ("MONTH".equals(grain)) {
+                                LocalDate[] b = DateUtils.getPeriodBoundaries(config.getReferenceDate(), Enums.ColType.MTD, -i, null, null);
+                                subStart = b[0];
+                                subEnd = b[1];
+                            } else { // WEEK
+                                LocalDate[] b = DateUtils.getPeriodBoundaries(config.getReferenceDate(), Enums.ColType.WEEK, -i, null, null);
+                                subStart = b[0];
+                                subEnd = b[1];
+                            }
+                            String subDateConstraint = String.format("%s >= '%s' AND %s <= '%s'", prefixedTimeKey, subStart.toString(), prefixedTimeKey, subEnd.toString());
+                            String subMetricClause = compileMetricClause(factTable, mdef, subDateConstraint, filterClause);
+                            String subAlias = "val_" + row.rowId().toLowerCase() + "_" + col.colId().toLowerCase() + "_" + i;
+                            selectList.add(String.format("CAST(%s AS DOUBLE PRECISION) AS %s", subMetricClause, subAlias));
+                        }
+                    }
                 }
             }
 
@@ -420,6 +371,15 @@ public class SqlGeneratorService {
                     }
                     String alias = "val_" + row.rowId().toLowerCase() + "_" + col.colId().toLowerCase();
                     combinedSelectList.add(String.format("COALESCE(%s.%s, 0) AS %s", cteName, alias, alias));
+
+                    if (col.colType() == Enums.ColType.ROLLING) {
+                        int rollingN = col.rollingN() != null ? col.rollingN() : 1;
+                        for (int i = 1; i <= rollingN; i++) {
+                            String subColId = col.colId() + "_" + i;
+                            String subAlias = "val_" + row.rowId().toLowerCase() + "_" + subColId.toLowerCase();
+                            combinedSelectList.add(String.format("COALESCE(%s.%s, 0) AS %s", cteName, subAlias, subAlias));
+                        }
+                    }
                 }
             }
         }
@@ -472,6 +432,22 @@ public class SqlGeneratorService {
                     alias
                 );
                 finalSelects.add(select);
+
+                if (col.colType() == Enums.ColType.ROLLING) {
+                    int rollingN = col.rollingN() != null ? col.rollingN() : 1;
+                    for (int i = 1; i <= rollingN; i++) {
+                        String subColId = col.colId() + "_" + i;
+                        String subAlias = "val_" + row.rowId().toLowerCase() + "_" + subColId.toLowerCase();
+                        String subSelect = String.format(
+                            "SELECT '%s' AS row_id, '%s' AS col_id, CAST(%s(%s) AS DOUBLE PRECISION) AS val FROM combined_data",
+                            row.rowId().toUpperCase(),
+                            subColId.toUpperCase(),
+                            finalAgg,
+                            subAlias
+                        );
+                        finalSelects.add(subSelect);
+                    }
+                }
             }
         }
 
@@ -1050,5 +1026,87 @@ public class SqlGeneratorService {
             cond.getValue()
         );
         return compileFilterCondition(clone);
+    }
+
+    private String compileMetricClause(
+            String factTable,
+            MeasureDefinitionDTO mdef,
+            String dateConstraint,
+            String filterClause) {
+        String metricClause = "";
+        if ("visual".equalsIgnoreCase(mdef.getMode())) {
+            String agg = mdef.getAggregation() != null ? mdef.getAggregation().trim().toUpperCase() : "SUM";
+            String originalColName = mdef.getTargetColumn() != null ? mdef.getTargetColumn().trim() : "";
+
+            if (("SUM".equals(agg) || "AVG".equals(agg)) && !isNumericColumn(factTable, originalColName)) {
+                throw new IllegalArgumentException("Column '" + originalColName + "' in table " + factTable + " is not numeric and cannot be aggregated with " + agg);
+            }
+
+            String colName = factTable + "." + originalColName;
+            String fill = "SUM".equals(agg) ? "0" : "NULL";
+
+            if ("COUNT_DISTINCT".equals(agg) || "COUNT DISTINCT".equals(agg)) {
+                metricClause = String.format(
+                    "COUNT(DISTINCT CASE WHEN %s%s THEN %s ELSE NULL END)",
+                    dateConstraint,
+                    filterClause,
+                    colName
+                );
+            } else {
+                metricClause = String.format(
+                    "%s(CASE WHEN %s%s THEN %s ELSE %s END)",
+                    agg,
+                    dateConstraint,
+                    filterClause,
+                    colName,
+                    fill
+                );
+            }
+        } else { // raw mode
+            String raw = mdef.getRawSql();
+            if (raw == null) {
+                raw = "";
+            }
+            String processedRaw = raw;
+            String shortTbl = factTable;
+            if (factTable.contains(".")) {
+                shortTbl = factTable.substring(factTable.lastIndexOf(".") + 1);
+            }
+            String escapedFull = java.util.regex.Pattern.quote(factTable.trim()) + "\\.";
+            String escapedShort = java.util.regex.Pattern.quote(shortTbl.trim()) + "\\.";
+            processedRaw = processedRaw.replaceAll("(?i)" + escapedFull, factTable + ".");
+            processedRaw = processedRaw.replaceAll("(?i)" + escapedShort, factTable + ".");
+
+            processedRaw = makeDivisionSafe(processedRaw);
+            validateFilterExpr(processedRaw);
+
+            boolean hasAgg = false;
+            String[] functions = {"SUM", "AVG", "COUNT", "MIN", "MAX"};
+            String upperRaw = processedRaw.toUpperCase();
+            String fill = "0";
+            for (String fn : functions) {
+                if (upperRaw.contains(fn + "(")) {
+                    hasAgg = true;
+                    if ("SUM".equals(fn)) {
+                        fill = "0";
+                    } else {
+                        fill = "NULL";
+                    }
+                    break;
+                }
+            }
+
+            if (hasAgg) {
+                metricClause = injectConstraintsIntoRawSql(processedRaw, dateConstraint + filterClause, fill);
+            } else {
+                metricClause = String.format(
+                    "SUM(CASE WHEN %s%s THEN (%s) ELSE 0 END)",
+                    dateConstraint,
+                    filterClause,
+                    processedRaw
+                );
+            }
+        }
+        return metricClause;
     }
 }

@@ -563,4 +563,38 @@ public class SqlGeneratorServiceTest {
         // Assert
         assertThat(sql).contains("WHERE ((analytics.fact_sales.category = 'Furniture') OR (analytics.fact_sales.category = 'Office'))");
     }
+
+    @Test
+    @DisplayName("generate with ROLLING columns expands query correctly with parent and sub-period selects")
+    public void generate_withRollingColumns_shouldExpandQueryToSubPeriods() {
+        // Arrange
+        List<ColumnDefDto> columns = List.of(
+            new ColumnDefDto("C7", "3-Mo Rolling", Enums.ColType.ROLLING, 0, 3, "MONTH", "", 1)
+        );
+        List<ReportRowDto> rows = List.of(
+            new ReportRowDto("R1", "REP1", "Row 1", Enums.RowType.data, 
+                new MeasureDefinitionDTO("visual", "SUM", "amount", "analytics.fact_sales", null), 
+                null, "normal", 0, 1, Set.of("C7"), null)
+        );
+        ReportConfigDto config = new ReportConfigDto(
+            "REP1", "Test Report", columns, rows, LocalDate.of(2026, 6, 9), 1, Enums.ReportStatus.draft,
+            "analytics.fact_sales", "monthly", null, null, false, null, null
+        );
+
+        // Act
+        String sql = service.generate(config, Collections.emptyMap());
+
+        // Assert
+        // Parent alias: val_r1_c7
+        assertThat(sql).contains("val_r1_c7");
+        // Sub-column aliases: val_r1_c7_1, val_r1_c7_2, val_r1_c7_3
+        assertThat(sql).contains("val_r1_c7_1");
+        assertThat(sql).contains("val_r1_c7_2");
+        assertThat(sql).contains("val_r1_c7_3");
+
+        // Sub-column select in final unpivoting SELECT
+        assertThat(sql).contains("SELECT 'R1' AS row_id, 'C7_1' AS col_id, CAST(SUM(val_r1_c7_1) AS DOUBLE PRECISION) AS val FROM combined_data");
+        assertThat(sql).contains("SELECT 'R1' AS row_id, 'C7_2' AS col_id, CAST(SUM(val_r1_c7_2) AS DOUBLE PRECISION) AS val FROM combined_data");
+        assertThat(sql).contains("SELECT 'R1' AS row_id, 'C7_3' AS col_id, CAST(SUM(val_r1_c7_3) AS DOUBLE PRECISION) AS val FROM combined_data");
+    }
 }
