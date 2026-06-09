@@ -9,10 +9,125 @@ import org.springframework.stereotype.Service;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.time.LocalDate;
+import java.util.List;
+import java.util.ArrayList;
 import java.util.Map;
 
 @Service
 public class LayoutRendererService {
+
+    private static class ExpandedColumn {
+        private final String colId;
+        private final String label;
+        private final Enums.ColType colType;
+        private final int periodOffset;
+        private final Integer rollingN;
+        private final String rollingGrain;
+        private final String formulaExpr;
+        private final int displayOrder;
+        private final boolean isExpandedSubCol;
+        private final String parentColId;
+
+        public ExpandedColumn(String colId, String label, Enums.ColType colType, int periodOffset, 
+                              Integer rollingN, String rollingGrain, String formulaExpr, 
+                              int displayOrder, boolean isExpandedSubCol, String parentColId) {
+            this.colId = colId;
+            this.label = label;
+            this.colType = colType;
+            this.periodOffset = periodOffset;
+            this.rollingN = rollingN;
+            this.rollingGrain = rollingGrain;
+            this.formulaExpr = formulaExpr;
+            this.displayOrder = displayOrder;
+            this.isExpandedSubCol = isExpandedSubCol;
+            this.parentColId = parentColId;
+        }
+
+        public String getColId() { return colId; }
+        public String getLabel() { return label; }
+        public Enums.ColType getColType() { return colType; }
+        public boolean isExpandedSubCol() { return isExpandedSubCol; }
+        public String getParentColId() { return parentColId; }
+    }
+
+    private static String formatShortDay(LocalDate date) {
+        return date.format(java.time.format.DateTimeFormatter.ofPattern("dd MMM", java.util.Locale.US));
+    }
+
+    private static String formatMonthYear(LocalDate date) {
+        return date.format(java.time.format.DateTimeFormatter.ofPattern("MMMM yyyy", java.util.Locale.US));
+    }
+
+    private static String formatWeekRange(LocalDate start, LocalDate end) {
+        java.time.format.DateTimeFormatter fmt = java.time.format.DateTimeFormatter.ofPattern("d MMM", java.util.Locale.US);
+        return start.format(fmt) + " - " + end.format(fmt);
+    }
+
+    private List<ExpandedColumn> getExpandedColumns(ReportConfigDto config) {
+        List<ExpandedColumn> expanded = new ArrayList<>();
+        LocalDate refDate = config.getReferenceDate() != null ? config.getReferenceDate() : LocalDate.now();
+
+        for (ColumnDefDto col : config.getColumns()) {
+            if (col.colType() == Enums.ColType.ROLLING) {
+                int rollingN = col.rollingN() != null ? col.rollingN() : 1;
+                String grain = col.effectiveRollingGrain();
+
+                for (int i = 1; i <= rollingN; i++) {
+                    String subColId = col.colId() + "_" + i;
+                    String label = "";
+
+                    switch (grain) {
+                        case "DAY": {
+                            LocalDate target = refDate.minusDays(i);
+                            label = formatShortDay(target);
+                            break;
+                        }
+                        case "MONTH": {
+                            LocalDate target = refDate.minusMonths(i);
+                            label = formatMonthYear(target);
+                            break;
+                        }
+                        case "WEEK":
+                        default: {
+                            LocalDate refMonday = refDate.with(java.time.temporal.TemporalAdjusters.previousOrSame(java.time.DayOfWeek.MONDAY));
+                            LocalDate targetMonday = refMonday.minusWeeks(i);
+                            LocalDate targetSunday = targetMonday.plusDays(6);
+                            label = formatWeekRange(targetMonday, targetSunday);
+                            break;
+                        }
+                    }
+
+                    expanded.add(new ExpandedColumn(
+                        subColId,
+                        label,
+                        col.colType(),
+                        -i,
+                        null,
+                        null,
+                        "",
+                        col.displayOrder(),
+                        true,
+                        col.colId()
+                    ));
+                }
+            } else {
+                expanded.add(new ExpandedColumn(
+                    col.colId(),
+                    col.label(),
+                    col.colType(),
+                    col.periodOffset(),
+                    col.rollingN(),
+                    col.rollingGrain(),
+                    col.formulaExpr(),
+                    col.displayOrder(),
+                    false,
+                    null
+                ));
+            }
+        }
+        return expanded;
+    }
 
     public byte[] render(ReportConfigDto config, Map<String, Map<String, Double>> data) throws IOException {
         try (SXSSFWorkbook workbook = new SXSSFWorkbook(100)) {
@@ -37,10 +152,11 @@ public class LayoutRendererService {
             headerLabelCell.setCellValue("Report Line");
             headerLabelCell.setCellStyle(headerStyle);
 
+            List<ExpandedColumn> expandedCols = getExpandedColumns(config);
             int colIdx = 1;
-            for (ColumnDefDto col : config.getColumns()) {
+            for (ExpandedColumn col : expandedCols) {
                 Cell cell = headerRow.createCell(colIdx++);
-                cell.setCellValue(col.label());
+                cell.setCellValue(col.getLabel());
                 cell.setCellStyle(headerStyle);
             }
 
@@ -97,25 +213,30 @@ public class LayoutRendererService {
                 // Render Column Data (C1, C2...)
                 if (reportRow.rowType() != Enums.RowType.blank) {
                     int dataColIdx = 1;
-                    for (ColumnDefDto col : config.getColumns()) {
+                    for (ExpandedColumn col : expandedCols) {
                         Cell dataCell = row.createCell(dataColIdx++);
                         dataCell.setCellStyle(numStyle);
-                        if (reportRow.isEnabledFor(col.colId())) {
-                            double val = data.getOrDefault(reportRow.rowId().toUpperCase(), Map.of())
-                                             .getOrDefault(col.colId().toUpperCase(), 0.0);
-                            dataCell.setCellValue(val);
+                        
+                        String checkColId = col.isExpandedSubCol() ? col.getParentColId() : col.getColId();
+                        if (reportRow.isEnabledFor(checkColId)) {
+                            Map<String, Double> rowData = data.getOrDefault(reportRow.rowId().toUpperCase(), Map.of());
+                            Double val = rowData.get(col.getColId().toUpperCase());
+                            if (val == null && col.isExpandedSubCol()) {
+                                val = rowData.get(col.getParentColId().toUpperCase());
+                            }
+                            dataCell.setCellValue(val != null ? val : 0.0);
                         }
                     }
                 } else {
                     // Blank spacer row styling
-                    for (int c = 1; c <= config.getColumns().size(); c++) {
+                    for (int c = 1; c <= expandedCols.size(); c++) {
                         row.createCell(c).setCellStyle(textStyle);
                     }
                 }
             }
 
             // Auto-size columns
-            for (int i = 0; i <= config.getColumns().size(); i++) {
+            for (int i = 0; i <= expandedCols.size(); i++) {
                 sheet.autoSizeColumn(i);
                 sheet.setColumnWidth(i, sheet.getColumnWidth(i) + 1024);
             }
@@ -142,7 +263,8 @@ public class LayoutRendererService {
         font.setColor(IndexedColors.WHITE.getIndex());
         style.setFont(font);
 
-        XSSFColor fill = new XSSFColor(new java.awt.Color(27, 79, 114), new DefaultIndexedColorMap()); // #1B4F72
+        // Header cells background tint fill: #1e293b
+        XSSFColor fill = new XSSFColor(new java.awt.Color(30, 41, 59), new DefaultIndexedColorMap()); 
         style.setFillForegroundColor(fill);
         style.setFillPattern(FillPatternType.SOLID_FOREGROUND);
 

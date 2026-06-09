@@ -77,4 +77,58 @@ public class LayoutRendererServiceTest {
             assertThat(r2Row.getCell(1).getNumericCellValue()).isEqualTo(2000.00);
         }
     }
+
+    @Test
+    @DisplayName("render expands ROLLING columns and retrieves values correctly")
+    public void render_rollingColumns_shouldExpandAndRenderCorrectly() throws IOException {
+        // Arrange
+        java.time.LocalDate refDate = java.time.LocalDate.of(2026, 6, 9);
+        List<ColumnDefDto> columns = List.of(
+            new ColumnDefDto("C7", "3-Mo Rolling", Enums.ColType.ROLLING, 0, 3, "MONTH", "", 1)
+        );
+        List<ReportRowDto> rows = List.of(
+            new ReportRowDto("R1", "REP1", "Revenue", Enums.RowType.data, new MeasureDefinitionDTO("raw", null, null, null, "m1"), null, "section", 0, 1, Set.of("C7"), null)
+        );
+        ReportConfigDto config = new ReportConfigDto(
+            "REP1", "Report A", columns, rows, refDate, 1, null, "a", "w", null, null, false, null, null
+        );
+
+        // Data matches sub-column keys or fallback parent key
+        Map<String, Map<String, Double>> data = Map.of(
+            "R1", Map.of(
+                "C7_1", 100.0,
+                "C7_2", 200.0
+                // C7_3 is missing, should fall back to parent C7 if present in query results, or default to 0.0
+            )
+        );
+
+        // Act
+        byte[] excelBytes = renderer.render(config, data);
+
+        // Assert
+        assertThat(excelBytes).isNotNull();
+        assertThat(excelBytes.length).isGreaterThan(0);
+
+        try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(excelBytes))) {
+            Sheet sheet = workbook.getSheet("Report");
+            assertThat(sheet).isNotNull();
+
+            // Header Row (Row 0)
+            Row headerRow = sheet.getRow(0);
+            assertThat(headerRow).isNotNull();
+            assertThat(headerRow.getCell(0).getStringCellValue()).isEqualTo("Report Line");
+            // C7_1: May 2026, C7_2: April 2026, C7_3: March 2026
+            assertThat(headerRow.getCell(1).getStringCellValue()).isEqualTo("May 2026");
+            assertThat(headerRow.getCell(2).getStringCellValue()).isEqualTo("April 2026");
+            assertThat(headerRow.getCell(3).getStringCellValue()).isEqualTo("March 2026");
+
+            // Row 1 (R1 - Revenue)
+            Row r1Row = sheet.getRow(1);
+            assertThat(r1Row).isNotNull();
+            assertThat(r1Row.getCell(0).getStringCellValue()).isEqualTo("Revenue");
+            assertThat(r1Row.getCell(1).getNumericCellValue()).isEqualTo(100.0);
+            assertThat(r1Row.getCell(2).getNumericCellValue()).isEqualTo(200.0);
+            assertThat(r1Row.getCell(3).getNumericCellValue()).isEqualTo(0.0);
+        }
+    }
 }
