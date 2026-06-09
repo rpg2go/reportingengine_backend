@@ -270,8 +270,13 @@ public class ReportController {
             return ResponseEntity.badRequest().build();
         }
 
-        String sql = String.format("SELECT DISTINCT %s FROM %s WHERE %s IS NOT NULL ORDER BY %s LIMIT 100", 
-            queryColumn, resolved, queryColumn, queryColumn);
+        int limit = 100;
+        if ("date_key".equals(queryColumn) && "analytics.dim_date".equals(resolved)) {
+            limit = 1500;
+        }
+
+        String sql = String.format("SELECT DISTINCT %s FROM %s WHERE %s IS NOT NULL ORDER BY %s LIMIT %d", 
+            queryColumn, resolved, queryColumn, queryColumn, limit);
         
         List<String> values = jdbcTemplate.getJdbcOperations().query(sql, (rs, rowNum) -> {
             Object val = rs.getObject(1);
