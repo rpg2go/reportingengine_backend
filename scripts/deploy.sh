@@ -29,7 +29,7 @@ fi
 GCP_REGION="${GCP_REGION:-europe-west3}"
 
 # Validate required variables
-required_vars=("GCP_PROJECT_ID" "BACKEND_SERVICE_NAME" "FRONTEND_SERVICE_NAME" "SPRING_DATASOURCE_URL" "SPRING_DATASOURCE_USERNAME" "SPRING_DATASOURCE_PASSWORD")
+required_vars=("GCP_PROJECT_ID" "BACKEND_SERVICE_NAME" "SPRING_DATASOURCE_URL" "SPRING_DATASOURCE_USERNAME" "SPRING_DATASOURCE_PASSWORD")
 for var in "${required_vars[@]}"; do
   if [ -z "${!var}" ]; then
     echo "Error: Required environment variable $var is missing from .env"
@@ -55,19 +55,7 @@ echo "Retrieving Backend URL..."
 BACKEND_URL=$(gcloud run services describe ${BACKEND_SERVICE_NAME} --region ${GCP_REGION} --format "value(status.url)")
 echo "Backend URL: ${BACKEND_URL}"
 
-echo "Deploying Frontend Service (${FRONTEND_SERVICE_NAME}) to Cloud Run..."
-gcloud run deploy ${FRONTEND_SERVICE_NAME} \
-  --source "${SCRIPT_DIR}/../../reportingengine_frontend" \
-  --region ${GCP_REGION} \
-  --set-env-vars="BACKEND_URL=${BACKEND_URL}" \
-  --allow-unauthenticated \
-  --quiet
-
-echo "Retrieving Frontend URL..."
-FRONTEND_URL=$(gcloud run services describe ${FRONTEND_SERVICE_NAME} --region ${GCP_REGION} --format "value(status.url)")
-
 echo "=========================================="
 echo "Deployment completed successfully!"
 echo "Backend API URL: ${BACKEND_URL}"
-echo "Frontend Web URL: ${FRONTEND_URL}"
 echo "=========================================="

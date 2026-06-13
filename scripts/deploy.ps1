@@ -37,7 +37,7 @@ if (-not (Get-Variable -Name GCP_REGION -Scope Script -ErrorAction SilentlyConti
 Write-Host "Deployment region: $GCP_REGION" -ForegroundColor Cyan
 
 # Validate required variables
-$requiredVars = @("GCP_PROJECT_ID", "BACKEND_SERVICE_NAME", "FRONTEND_SERVICE_NAME", "SPRING_DATASOURCE_URL", "SPRING_DATASOURCE_USERNAME", "SPRING_DATASOURCE_PASSWORD")
+$requiredVars = @("GCP_PROJECT_ID", "BACKEND_SERVICE_NAME", "SPRING_DATASOURCE_URL", "SPRING_DATASOURCE_USERNAME", "SPRING_DATASOURCE_PASSWORD")
 foreach ($var in $requiredVars) {
     if (-not (Get-Variable -Name $var -ErrorAction SilentlyContinue)) {
         Write-Error "Error: Required environment variable $var is missing from .env"
@@ -65,24 +65,7 @@ Write-Host "Retrieving Backend URL..." -ForegroundColor Cyan
 $BACKEND_URL = (gcloud run services describe $BACKEND_SERVICE_NAME --region $GCP_REGION --format "value(status.url)")
 Write-Host "Backend URL: $BACKEND_URL" -ForegroundColor Green
 
-Write-Host "Deploying Frontend Service ($FRONTEND_SERVICE_NAME) to Cloud Run..." -ForegroundColor Cyan
-gcloud run deploy $FRONTEND_SERVICE_NAME `
-  --source "$PSScriptRoot/../../reportingengine_frontend" `
-  --region $GCP_REGION `
-  --set-env-vars="BACKEND_URL=$BACKEND_URL" `
-  --allow-unauthenticated `
-  --quiet
-
-if ($LASTEXITCODE -ne 0) {
-  Write-Error "Frontend deployment failed!"
-  exit $LASTEXITCODE
-}
-
-Write-Host "Retrieving Frontend URL..." -ForegroundColor Cyan
-$FRONTEND_URL = (gcloud run services describe $FRONTEND_SERVICE_NAME --region $GCP_REGION --format "value(status.url)")
-
 Write-Host "==========================================" -ForegroundColor Green
 Write-Host "Deployment completed successfully!" -ForegroundColor Green
 Write-Host "Backend API URL: $BACKEND_URL" -ForegroundColor Green
-Write-Host "Frontend Web URL: $FRONTEND_URL" -ForegroundColor Green
 Write-Host "==========================================" -ForegroundColor Green
