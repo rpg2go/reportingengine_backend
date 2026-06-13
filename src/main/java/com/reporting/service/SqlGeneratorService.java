@@ -65,6 +65,24 @@ public class SqlGeneratorService {
         Map<String, Set<String>> tableColumnsCache = new HashMap<>();
         String conformedKey = findConformedKey(uniqueTables, tableColumnsCache);
 
+        List<String> granularities = new ArrayList<>();
+        if (config.getGranularity() != null && !config.getGranularity().isBlank()) {
+            for (String s : config.getGranularity().split(",")) {
+                String trimmed = s.trim();
+                if (!trimmed.isEmpty()) {
+                    granularities.add(trimmed);
+                }
+            }
+        }
+        if (granularities.isEmpty()) {
+            granularities.add(conformedKey);
+        }
+
+        List<String> granularityAliases = new ArrayList<>();
+        for (String g : granularities) {
+            granularityAliases.add(getGranularityAlias(g));
+        }
+
         // 3. Build CTE definitions for each unique table
         Map<String, String> tableToCteName = new HashMap<>();
         for (String table : uniqueTables) {
@@ -145,6 +163,29 @@ public class SqlGeneratorService {
                 }
             }
 
+            // Pre-resolve granularity target dimensions so they are joined correctly
+            for (String g : granularities) {
+                String cleanGran = g.trim();
+                if (cleanGran.contains(".")) {
+                    String tblPart = cleanGran.substring(0, cleanGran.lastIndexOf("."));
+                    if (tblPart.contains(".")) {
+                        tblPart = tblPart.substring(tblPart.lastIndexOf(".") + 1);
+                    }
+                    if (!tblPart.equalsIgnoreCase(factTable)) {
+                        dimensionTargets.add(tblPart.trim());
+                    }
+                } else {
+                    if ("customer_id".equalsIgnoreCase(cleanGran) && factTable.toLowerCase().contains("fact_banking_transactions")) {
+                        dimensionTargets.add("dim_accounts");
+                    } else {
+                        String conformedDim = resolveConformedDimension(cleanGran);
+                        if (conformedDim != null) {
+                            dimensionTargets.add(conformedDim.trim());
+                        }
+                    }
+                }
+            }
+
             // ── Delegate all JOIN clause assembly to SchemaGraphRouter ────────────
             // The router returns a topologically ordered, de-duplicated list of SQL
             // LEFT JOIN strings.  No table names, column names, or multi-hop logic
@@ -159,19 +200,19 @@ public class SqlGeneratorService {
                 fromClause.append("\n    ").append(joinClause);
             }
 
-            // Conformed Key Select & Group expressions
-            String selectKeyExpr;
-            String groupByExpr;
-            if ("customer_id".equalsIgnoreCase(conformedKey) && factTable.toLowerCase().contains("fact_banking_transactions")) {
-                selectKeyExpr = "analytics.dim_accounts.customer_id AS customer_id";
-                groupByExpr = "analytics.dim_accounts.customer_id";
-            } else if (columnExists(factTable, conformedKey, tableColumnsCache)) {
-                selectKeyExpr = factTable + "." + conformedKey + " AS " + conformedKey;
-                groupByExpr = factTable + "." + conformedKey;
-            } else {
-                selectKeyExpr = "CAST(NULL AS INTEGER) AS " + conformedKey;
-                groupByExpr = "1";
+            // Granularity fields Select & Group expressions
+            List<String> selectKeyExprs = new ArrayList<>();
+            List<String> groupByExprs = new ArrayList<>();
+            for (String g : granularities) {
+                String expr = resolveGranularityExpression(factTable, g, dimensionTargets, tableColumnsCache);
+                String alias = getGranularityAlias(g);
+                String selectKeyExpr = expr.contains(" AS ") ? expr : (expr + " AS " + alias);
+                selectKeyExprs.add(selectKeyExpr);
+                if (!expr.contains("CAST(NULL")) {
+                    groupByExprs.add(expr);
+                }
             }
+            String groupByExpr = buildGroupByClause(groupByExprs);
 
             // ── Hierarchical Parenthetical Partitioning Strategy ─────────────────
             
@@ -237,7 +278,7 @@ public class SqlGeneratorService {
 
             // Build aggregations for each active data row + column for this table
             List<String> selectList = new ArrayList<>();
-            selectList.add(selectKeyExpr);
+            selectList.addAll(selectKeyExprs);
 
             for (ReportRowDto row : config.getRows()) {
                 if (!row.isDataRow()) {
@@ -259,6 +300,8 @@ public class SqlGeneratorService {
                     if (!row.isEnabledFor(col.colId())) {
                         continue;
                     }
+
+                    // Reuse outer scope timeKey and prefixedTimeKey
 
                     String timeKey = getTimeKeyForTable(factTable);
                     String prefixedTimeKey = factTable + "." + timeKey;
@@ -328,25 +371,34 @@ public class SqlGeneratorService {
 
         // 4. Build unified_spine CTE using UNION DISTINCT
         List<String> spineSelects = new ArrayList<>();
+        String aliasCsv = String.join(", ", granularityAliases);
+        List<String> spineFilters = new ArrayList<>();
+        for (String alias : granularityAliases) {
+            spineFilters.add(alias + " IS NOT NULL");
+        }
+        String spineFilterStr = String.join(" AND ", spineFilters);
+
         for (String table : uniqueTables) {
             String cteName = tableToCteName.get(table.trim().toLowerCase());
-            spineSelects.add(String.format("    SELECT %s FROM %s WHERE %s IS NOT NULL", conformedKey, cteName, conformedKey));
+            spineSelects.add(String.format("    SELECT %s FROM %s WHERE %s", aliasCsv, cteName, spineFilterStr));
         }
 
         String unifiedSpineCte = String.format(
             "  unified_spine AS (\n" +
-            "    SELECT DISTINCT spine_raw.%s FROM (\n" +
+            "    SELECT DISTINCT %s FROM (\n" +
             "%s\n" +
             "    ) spine_raw\n" +
             "  )",
-            conformedKey,
+            aliasCsv,
             String.join("\n    UNION DISTINCT\n", spineSelects)
         );
         cteDefinitions.add(unifiedSpineCte);
 
         // 5. Build combined_data CTE
         List<String> combinedSelectList = new ArrayList<>();
-        combinedSelectList.add("s." + conformedKey);
+        for (String alias : granularityAliases) {
+            combinedSelectList.add("s." + alias);
+        }
 
         for (String table : uniqueTables) {
             String cteName = tableToCteName.get(table.trim().toLowerCase());
@@ -387,7 +439,11 @@ public class SqlGeneratorService {
         StringBuilder combinedFrom = new StringBuilder("FROM unified_spine s");
         for (String table : uniqueTables) {
             String cteName = tableToCteName.get(table.trim().toLowerCase());
-            combinedFrom.append(String.format("\n    LEFT JOIN %s ON %s.%s = s.%s", cteName, cteName, conformedKey, conformedKey));
+            List<String> joinConditions = new ArrayList<>();
+            for (String alias : granularityAliases) {
+                joinConditions.add(String.format("%s.%s = s.%s", cteName, alias, alias));
+            }
+            combinedFrom.append(String.format("\n    LEFT JOIN %s ON %s", cteName, String.join(" AND ", joinConditions)));
         }
 
         String combinedCte = String.format(
@@ -399,6 +455,34 @@ public class SqlGeneratorService {
 
         // 6. Build final selects for unpivoting
         List<String> finalSelects = new ArrayList<>();
+
+        // Find first non-CALC column to define the report's current reference date boundaries
+        ColumnDefDto currentPeriodCol = null;
+        for (ColumnDefDto col : config.getColumns()) {
+            if (col.colType() != Enums.ColType.CALC) {
+                currentPeriodCol = col;
+                break;
+            }
+        }
+
+        LocalDate startBound = null;
+        LocalDate endBound = null;
+        if (currentPeriodCol != null) {
+            LocalDate[] boundaries = DateUtils.getPeriodBoundaries(
+                config.getReferenceDate(),
+                currentPeriodCol.colType(),
+                currentPeriodCol.periodOffset(),
+                currentPeriodCol.rollingN(),
+                currentPeriodCol.effectiveRollingGrain()
+            );
+            startBound = boundaries[0];
+            endBound = boundaries[1];
+        }
+
+        String firstTable = uniqueTables.iterator().next();
+        String timeKey = getTimeKeyForTable(firstTable);
+        String timeKeyAlias = getGranularityAlias(timeKey);
+
         for (ReportRowDto row : config.getRows()) {
             if (!row.isDataRow()) {
                 continue;
@@ -424,6 +508,7 @@ public class SqlGeneratorService {
                     }
                 }
 
+                // Standard total select
                 String select = String.format(
                     "SELECT '%s' AS row_id, '%s' AS col_id, CAST(%s(%s) AS DOUBLE PRECISION) AS val FROM combined_data",
                     row.rowId().toUpperCase(),
@@ -432,6 +517,32 @@ public class SqlGeneratorService {
                     alias
                 );
                 finalSelects.add(select);
+
+                // Filter sub-rows to only show the specific reporting date period if present in granularity
+                String filterClause = "";
+                if (startBound != null && endBound != null && granularityAliases.contains(timeKeyAlias)) {
+                    filterClause = String.format(" WHERE %s >= '%s' AND %s <= '%s'", timeKeyAlias, startBound.toString(), timeKeyAlias, endBound.toString());
+                }
+
+                // Granularity breakdown select
+                if (!granularityAliases.isEmpty()) {
+                    List<String> concatParts = new ArrayList<>();
+                    concatParts.add(String.format("'%s'", row.rowId().toUpperCase()));
+                    for (String gAlias : granularityAliases) {
+                        concatParts.add(String.format("COALESCE(%s::text, '')", gAlias));
+                    }
+                    String rowIdExpr = String.join(" || '|' || ", concatParts);
+                    String selectGran = String.format(
+                        "SELECT %s AS row_id, '%s' AS col_id, CAST(%s(%s) AS DOUBLE PRECISION) AS val FROM combined_data%s GROUP BY %s",
+                        rowIdExpr,
+                        col.colId().toUpperCase(),
+                        finalAgg,
+                        alias,
+                        filterClause,
+                        String.join(", ", granularityAliases)
+                    );
+                    finalSelects.add(selectGran);
+                }
 
                 if (col.colType() == Enums.ColType.ROLLING) {
                     int rollingN = col.rollingN() != null ? col.rollingN() : 1;
@@ -446,6 +557,25 @@ public class SqlGeneratorService {
                             subAlias
                         );
                         finalSelects.add(subSelect);
+
+                        if (!granularityAliases.isEmpty()) {
+                            List<String> concatParts = new ArrayList<>();
+                            concatParts.add(String.format("'%s'", row.rowId().toUpperCase()));
+                            for (String gAlias : granularityAliases) {
+                                concatParts.add(String.format("COALESCE(%s::text, '')", gAlias));
+                            }
+                            String rowIdExpr = String.join(" || '|' || ", concatParts);
+                            String subSelectGran = String.format(
+                                "SELECT %s AS row_id, '%s' AS col_id, CAST(%s(%s) AS DOUBLE PRECISION) AS val FROM combined_data%s GROUP BY %s",
+                                rowIdExpr,
+                                subColId.toUpperCase(),
+                                finalAgg,
+                                subAlias,
+                                filterClause,
+                                String.join(", ", granularityAliases)
+                            );
+                            finalSelects.add(subSelectGran);
+                        }
                     }
                 }
             }
@@ -460,6 +590,71 @@ public class SqlGeneratorService {
         sql.append(String.join("\nUNION ALL\n", finalSelects));
 
         return sql.toString();
+    }
+
+    public String buildGroupByClause(List<String> granularities) {
+        if (granularities == null || granularities.isEmpty()) {
+            return "1";
+        }
+        return String.join(", ", granularities);
+    }
+
+    private static String getGranularityAlias(String granularity) {
+        if (granularity.contains(".")) {
+            return granularity.substring(granularity.lastIndexOf(".") + 1);
+        }
+        return granularity;
+    }
+
+    private String resolveGranularityExpression(String factTable, String granularity, Set<String> dimensionTargets, Map<String, Set<String>> cache) {
+        String cleanGran = granularity.trim();
+        String alias = getGranularityAlias(cleanGran);
+        
+        // If qualified, e.g., dim_customers.city or analytics.dim_customers.city
+        if (cleanGran.contains(".")) {
+            // Make sure the dimension table is added to the targets so it gets joined
+            String tblPart = cleanGran.substring(0, cleanGran.lastIndexOf("."));
+            if (tblPart.contains(".")) {
+                tblPart = tblPart.substring(tblPart.lastIndexOf(".") + 1);
+            }
+            if (!tblPart.equalsIgnoreCase(factTable)) {
+                dimensionTargets.add(tblPart);
+            }
+            return cleanGran;
+        }
+        
+        // Special hardcoded rule for customer_id in banking transactions
+        if ("customer_id".equalsIgnoreCase(cleanGran) && factTable.toLowerCase().contains("fact_banking_transactions")) {
+            dimensionTargets.add("dim_accounts");
+            return "analytics.dim_accounts.customer_id";
+        }
+        
+        // Check if it exists in the fact table
+        if (columnExists(factTable, cleanGran, cache)) {
+            return factTable + "." + cleanGran;
+        }
+        
+        // Check if it exists in a conformed dimension table
+        String conformedDim = resolveConformedDimension(cleanGran);
+        if (conformedDim != null) {
+            dimensionTargets.add(conformedDim);
+            String keyColumn = cleanGran;
+            if (columnExists(conformedDim, keyColumn, cache)) {
+                return conformedDim + "." + keyColumn;
+            } else if (columnExists(conformedDim, "id", cache)) {
+                return conformedDim + ".id";
+            }
+        }
+        
+        // Fallback: search all loaded dimension tables in targets
+        for (String dim : dimensionTargets) {
+            if (columnExists(dim, cleanGran, cache)) {
+                return dim + "." + cleanGran;
+            }
+        }
+        
+        // Ultimate fallback
+        return "CAST(NULL AS VARCHAR) AS " + alias;
     }
 
     private String findConformedKey(Set<String> factTables, Map<String, Set<String>> cache) {
@@ -556,7 +751,7 @@ public class SqlGeneratorService {
             ? java.util.regex.Pattern.quote(factTableName.substring(factTableName.lastIndexOf(".") + 1).trim())
             : qualified;
         String result = joinClause.replaceAll("(?i)" + qualified + "\\.", "spine_raw.");
-        result = result.replaceAll("(?i)" + shortName + "\\.", "spine_raw.");
+        result = result.replaceAll("(?i)(?<!\\.)" + shortName + "\\.", "spine_raw.");
         return result;
     }
 
@@ -854,6 +1049,13 @@ public class SqlGeneratorService {
         String col = (dimTable != null && !dimTable.isBlank()) ? (dimTable.trim() + "." + attribute.trim()) : attribute.trim();
         String op = operator.trim().toLowerCase();
         
+        if (value == null || value.trim().isEmpty()) {
+            if (!"is blank".equals(op) && !"is not blank".equals(op) && 
+                !"is null".equals(op) && !"is not null".equals(op)) {
+                return "";
+            }
+        }
+        
         String result;
         switch (op) {
             case "=":
@@ -1075,7 +1277,7 @@ public class SqlGeneratorService {
             String escapedFull = java.util.regex.Pattern.quote(factTable.trim()) + "\\.";
             String escapedShort = java.util.regex.Pattern.quote(shortTbl.trim()) + "\\.";
             processedRaw = processedRaw.replaceAll("(?i)" + escapedFull, factTable + ".");
-            processedRaw = processedRaw.replaceAll("(?i)" + escapedShort, factTable + ".");
+            processedRaw = processedRaw.replaceAll("(?i)(?<!\\.)" + escapedShort, factTable + ".");
 
             processedRaw = makeDivisionSafe(processedRaw);
             validateFilterExpr(processedRaw);

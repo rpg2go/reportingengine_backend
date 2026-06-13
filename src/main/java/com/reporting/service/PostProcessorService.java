@@ -45,8 +45,23 @@ public class PostProcessorService {
                         // ignore
                     }
                 }
-                if (matrix.containsKey(rid) && matrix.get(rid).containsKey(cid)) {
-                    matrix.get(rid).put(cid, val);
+
+                if (rid.contains("|")) {
+                    String parentRid = rid.substring(0, rid.indexOf("|"));
+                    if (matrix.containsKey(parentRid)) {
+                        if (!matrix.containsKey(rid)) {
+                            Map<String, Double> colVals = new HashMap<>();
+                            for (Map.Entry<String, Double> entry : matrix.get(parentRid).entrySet()) {
+                                colVals.put(entry.getKey(), 0.0);
+                            }
+                            matrix.put(rid, colVals);
+                        }
+                        matrix.get(rid).put(cid, val);
+                    }
+                } else {
+                    if (matrix.containsKey(rid) && matrix.get(rid).containsKey(cid)) {
+                        matrix.get(rid).put(cid, val);
+                    }
                 }
             }
         }
@@ -54,9 +69,11 @@ public class PostProcessorService {
         // 3. Phase 1 (Column Calculations): Evaluates sqlColumn: false metrics (horizontal column formulas)
         for (ColumnDefDto col : config.getCalcColumns()) {
             String cid = col.colId().toUpperCase();
-            for (ReportRowDto row : config.getRows()) {
-                String rid = row.rowId().toUpperCase();
-                if (row.isEnabledFor(cid)) {
+            List<String> rowIds = new ArrayList<>(matrix.keySet());
+            for (String rid : rowIds) {
+                String parentRid = rid.contains("|") ? rid.substring(0, rid.indexOf("|")) : rid;
+                ReportRowDto row = config.getRow(parentRid);
+                if (row != null && row.isEnabledFor(cid)) {
                     double val = evaluateFormula(col.formulaExpr(), matrix.get(rid));
                     matrix.get(rid).put(cid, val);
                 }
@@ -68,6 +85,13 @@ public class PostProcessorService {
         for (String rid : evalOrder) {
             ReportRowDto row = config.getRow(rid);
             if (row != null && row.isCalcRow()) {
+                Set<String> suffixes = new HashSet<>();
+                for (String matrixRowId : matrix.keySet()) {
+                    if (matrixRowId.contains("|")) {
+                        suffixes.add(matrixRowId.substring(matrixRowId.indexOf("|") + 1));
+                    }
+                }
+
                 for (ColumnDefDto col : config.getColumns()) {
                     List<String> colIdsToEval = new ArrayList<>();
                     colIdsToEval.add(col.colId().toUpperCase());
@@ -81,14 +105,50 @@ public class PostProcessorService {
                     for (String cid : colIdsToEval) {
                         String checkCid = cid.contains("_") ? cid.substring(0, cid.indexOf("_")) : cid;
                         if (row.isEnabledFor(checkCid)) {
-                            // Extract context for THIS column across all row IDs
-                            Map<String, Double> colContext = new HashMap<>();
+                            // 1. Evaluate for the parent row
+                            Map<String, Double> parentContext = new HashMap<>();
                             for (Map.Entry<String, Map<String, Double>> mEntry : matrix.entrySet()) {
-                                colContext.put(mEntry.getKey(), mEntry.getValue().getOrDefault(cid, 0.0));
+                                if (!mEntry.getKey().contains("|")) {
+                                    parentContext.put(mEntry.getKey(), mEntry.getValue().getOrDefault(cid, 0.0));
+                                }
                             }
                             String formula = (row.source() != null) ? row.source().getRawSql() : "";
-                            double val = evaluateFormula(formula, colContext);
-                            matrix.get(rid).put(cid, val);
+                            double parentVal = evaluateFormula(formula, parentContext);
+                            matrix.get(rid).put(cid, parentVal);
+
+                            // 2. Evaluate for each granularity suffix combination
+                            for (String suffix : suffixes) {
+                                String subRid = rid + "|" + suffix;
+                                if (!matrix.containsKey(subRid)) {
+                                    Map<String, Double> colVals = new HashMap<>();
+                                    for (ColumnDefDto c : config.getColumns()) {
+                                        colVals.put(c.colId().toUpperCase(), 0.0);
+                                        if (c.colType() == Enums.ColType.ROLLING) {
+                                            int rollingN = c.rollingN() != null ? c.rollingN() : 1;
+                                            for (int i = 1; i <= rollingN; i++) {
+                                                colVals.put((c.colId() + "_" + i).toUpperCase(), 0.0);
+                                            }
+                                        }
+                                    }
+                                    matrix.put(subRid, colVals);
+                                }
+
+                                Map<String, Double> subContext = new HashMap<>();
+                                for (ReportRowDto r : config.getRows()) {
+                                    String lookupRid = r.rowId().toUpperCase();
+                                    String lookupSubRid = lookupRid + "|" + suffix;
+                                    double val = 0.0;
+                                    if (matrix.containsKey(lookupSubRid)) {
+                                        val = matrix.get(lookupSubRid).getOrDefault(cid, 0.0);
+                                    } else {
+                                        val = matrix.get(lookupRid).getOrDefault(cid, 0.0);
+                                    }
+                                    subContext.put(lookupRid, val);
+                                }
+
+                                double subVal = evaluateFormula(formula, subContext);
+                                matrix.get(subRid).put(cid, subVal);
+                            }
                         }
                     }
                 }

@@ -25,6 +25,7 @@ public class ReportConfigDto {
     @Valid
     private List<ReportRowDto> rows;
 
+    @com.fasterxml.jackson.annotation.JsonAlias({"reportingDate", "referenceDate"})
     private LocalDate referenceDate;
     private Integer exploreId;
 
@@ -32,7 +33,7 @@ public class ReportConfigDto {
     private Enums.ReportStatus status;
 
 
-    @Size(max = 100, message = "Granularity must be at most 100 characters")
+    @Size(max = 1000, message = "Granularity must be at most 1000 characters")
     private String granularity;
 
     @Size(max = 50, message = "Timeframe start must be at most 50 characters")
@@ -100,6 +101,7 @@ public class ReportConfigDto {
 
     public LocalDate getReferenceDate() { return referenceDate; }
     public void setReferenceDate(LocalDate referenceDate) { this.referenceDate = referenceDate; }
+    public void setReportingDate(LocalDate reportingDate) { this.referenceDate = reportingDate; }
 
     public Integer getExploreId() { return exploreId; }
     public void setExploreId(Integer exploreId) { this.exploreId = exploreId; }

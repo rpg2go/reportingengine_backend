@@ -152,8 +152,26 @@ public class LayoutRendererService {
             headerLabelCell.setCellValue("Report Line");
             headerLabelCell.setCellStyle(headerStyle);
 
-            List<ExpandedColumn> expandedCols = getExpandedColumns(config);
+            List<String> granularityHeaders = new ArrayList<>();
+            if (config.getGranularity() != null && !config.getGranularity().isBlank()) {
+                for (String g : config.getGranularity().split(",")) {
+                    String clean = g.trim();
+                    if (clean.contains(".")) {
+                        granularityHeaders.add(clean.substring(clean.lastIndexOf(".") + 1));
+                    } else {
+                        granularityHeaders.add(clean);
+                    }
+                }
+            }
+
             int colIdx = 1;
+            for (String gHeader : granularityHeaders) {
+                Cell cell = headerRow.createCell(colIdx++);
+                cell.setCellValue(gHeader);
+                cell.setCellStyle(headerStyle);
+            }
+
+            List<ExpandedColumn> expandedCols = getExpandedColumns(config);
             for (ExpandedColumn col : expandedCols) {
                 Cell cell = headerRow.createCell(colIdx++);
                 cell.setCellValue(col.getLabel());
@@ -213,6 +231,12 @@ public class LayoutRendererService {
                 // Render Column Data (C1, C2...)
                 if (reportRow.rowType() != Enums.RowType.blank) {
                     int dataColIdx = 1;
+                    for (String gHeader : granularityHeaders) {
+                        Cell cell = row.createCell(dataColIdx++);
+                        cell.setCellValue("-");
+                        cell.setCellStyle(textStyle);
+                    }
+
                     for (ExpandedColumn col : expandedCols) {
                         Cell dataCell = row.createCell(dataColIdx++);
                         dataCell.setCellStyle(numStyle);
@@ -229,14 +253,77 @@ public class LayoutRendererService {
                     }
                 } else {
                     // Blank spacer row styling
-                    for (int c = 1; c <= expandedCols.size(); c++) {
-                        row.createCell(c).setCellStyle(textStyle);
+                    int dataColIdx = 1;
+                    for (int c = 1; c <= granularityHeaders.size() + expandedCols.size(); c++) {
+                        row.createCell(dataColIdx++).setCellStyle(textStyle);
+                    }
+                }
+
+                // If this is a data row, find and render granularity sub-rows
+                if (reportRow.rowType() == Enums.RowType.data) {
+                    String prefix = reportRow.rowId().toUpperCase() + "|";
+                    List<String> subRowKeys = new ArrayList<>();
+                    for (String key : data.keySet()) {
+                        if (key.toUpperCase().startsWith(prefix)) {
+                            subRowKeys.add(key);
+                        }
+                    }
+
+                    if (!subRowKeys.isEmpty()) {
+                        // Sort them alphabetically by the label representation
+                        subRowKeys.sort((k1, k2) -> {
+                            String part1 = k1.substring(prefix.length());
+                            String part2 = k2.substring(prefix.length());
+                            String label1 = String.join(", ", part1.split("\\|"));
+                            String label2 = String.join(", ", part2.split("\\|"));
+                            return label1.compareToIgnoreCase(label2);
+                        });
+
+                        // Render each sub-row
+                        for (int i = 0; i < subRowKeys.size(); i++) {
+                            String subRowKey = subRowKeys.get(i);
+                            boolean isLast = (i == subRowKeys.size() - 1);
+                            Row subRow = sheet.createRow(rowIdx++);
+
+                            // Column A: Sub-row label with connector
+                            Cell subLabelCell = subRow.createCell(0);
+                            String connector = isLast ? "└ " : "├ ";
+                            
+                            String indentPrefix = "  ".repeat(reportRow.indentLevel() + 1) + connector;
+                            subLabelCell.setCellValue(indentPrefix);
+                            subLabelCell.setCellStyle(normalStyle);
+
+                            String[] segments = subRowKey.substring(prefix.length()).split("\\|");
+                            int dataColIdx = 1;
+                            for (int sIdx = 0; sIdx < granularityHeaders.size(); sIdx++) {
+                                Cell cell = subRow.createCell(dataColIdx++);
+                                String val = (sIdx < segments.length) ? segments[sIdx] : "";
+                                cell.setCellValue(val);
+                                cell.setCellStyle(normalStyle);
+                            }
+
+                            // Render Column Data (C1, C2...)
+                            for (ExpandedColumn col : expandedCols) {
+                                Cell dataCell = subRow.createCell(dataColIdx++);
+                                dataCell.setCellStyle(normalNumStyle);
+                                
+                                String checkColId = col.isExpandedSubCol() ? col.getParentColId() : col.getColId();
+                                if (reportRow.isEnabledFor(checkColId)) {
+                                    Map<String, Double> subRowData = data.getOrDefault(subRowKey, Map.of());
+                                    Double val = subRowData.get(col.getColId().toUpperCase());
+                                    if (val == null && col.isExpandedSubCol()) {
+                                        val = subRowData.get(col.getParentColId().toUpperCase());
+                                    }
+                                    dataCell.setCellValue(val != null ? val : 0.0);
+                                }
+                            }
+                        }
                     }
                 }
             }
 
             // Auto-size columns
-            for (int i = 0; i <= expandedCols.size(); i++) {
+            for (int i = 0; i <= granularityHeaders.size() + expandedCols.size(); i++) {
                 sheet.autoSizeColumn(i);
                 sheet.setColumnWidth(i, sheet.getColumnWidth(i) + 1024);
             }

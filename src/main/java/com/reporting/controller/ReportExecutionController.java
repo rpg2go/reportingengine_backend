@@ -37,7 +37,7 @@ public class ReportExecutionController {
             @PathVariable("reportId") String reportId,
             @RequestBody ExecuteRequest request) {
         try {
-            log.info("Executing report execution endpoint for reportId: {} with date: {}", reportId, request.getReportingDate());
+            log.info("Executing report execution endpoint for reportId: {} with date: {} and filters: {}", reportId, request.getReportingDate(), request.getRuntimeFilters());
 
             LocalDate refDate;
             if (request.getReportingDate() != null && !request.getReportingDate().isBlank()) {
@@ -157,5 +157,10 @@ public class ReportExecutionController {
         public void setTableColumn(String tableColumn) { this.tableColumn = tableColumn; }
         public String getValue() { return value; }
         public void setValue(String value) { this.value = value; }
+
+        @Override
+        public String toString() {
+            return "{" + tableColumn + "=" + value + "}";
+        }
     }
 }

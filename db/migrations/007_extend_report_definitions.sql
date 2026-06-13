@@ -8,7 +8,7 @@
 
 -- 1. Extend Report Header for source table, timeframe, and report-level filters
 ALTER TABLE reporting.rpt_report ADD COLUMN IF NOT EXISTS source_table VARCHAR(150);
-ALTER TABLE reporting.rpt_report ADD COLUMN IF NOT EXISTS granularity VARCHAR(100);
+ALTER TABLE reporting.rpt_report ADD COLUMN IF NOT EXISTS granularity VARCHAR(1000);
 ALTER TABLE reporting.rpt_report ADD COLUMN IF NOT EXISTS timeframe_start VARCHAR(50);
 ALTER TABLE reporting.rpt_report ADD COLUMN IF NOT EXISTS timeframe_end VARCHAR(50);
 ALTER TABLE reporting.rpt_report ADD COLUMN IF NOT EXISTS timeframe_today BOOLEAN DEFAULT FALSE;

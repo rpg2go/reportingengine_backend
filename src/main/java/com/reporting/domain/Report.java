@@ -35,7 +35,7 @@ public class Report {
     private String status = "draft"; // draft | published
 
 
-    @Column(name = "granularity", length = 100)
+    @Column(name = "granularity", length = 1000)
     private String granularity;
 
     @Column(name = "timeframe_start", length = 50)

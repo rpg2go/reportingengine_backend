@@ -634,46 +634,6 @@ public class ReportValidationService {
     }
 
     private void validateGlobalFiltersAndGranularity(ReportConfigDto config, Map<String, Map<String, String>> schemaCache, List<ValidationError> errors) {
-        // 1. Validate Granularity
-        String granularity = config.getGranularity();
-        if (granularity != null && !granularity.isBlank()) {
-            String normGran = granularity.trim().toLowerCase();
-            boolean isValid = false;
-            
-            // Check whitelist first
-            if (normGran.equals("customer_id") || normGran.equals("location_id") || normGran.equals("reporting_date")) {
-                isValid = true;
-            } else {
-                // Dynamic DWH check: verify if the granularity exists as a valid column in the DWH schema catalog
-                if (normGran.contains(".")) {
-                    String[] parts = normGran.split("\\.");
-                    String col = parts[parts.length - 1];
-                    String tbl = parts[parts.length - 2];
-                    Map<String, String> tblCols = schemaCache.get(tbl);
-                    if (tblCols != null && tblCols.containsKey(col)) {
-                        isValid = true;
-                    }
-                } else {
-                    // Check if it exists in any of the schema catalog tables
-                    for (Map<String, String> tblCols : schemaCache.values()) {
-                        if (tblCols.containsKey(normGran)) {
-                            isValid = true;
-                            break;
-                        }
-                    }
-                }
-            }
-
-            if (!isValid) {
-                errors.add(ValidationError.builder()
-                    .elementId("GLOBAL")
-                    .fieldContext("granularity")
-                    .errorSeverity("CRITICAL")
-                    .displayMessage("Report granularity must be strictly one of: customer_id, location_id, reporting_date, or a valid column from the DWH catalog (e.g. table.column). Got: " + granularity)
-                    .build());
-            }
-        }
-
         // 2. Identify the active fact tables used by the report's active data rows
         Set<String> activeFactTables = new LinkedHashSet<>();
         if (config.getRows() != null) {

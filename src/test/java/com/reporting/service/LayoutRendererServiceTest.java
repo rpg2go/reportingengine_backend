@@ -37,7 +37,7 @@ public class LayoutRendererServiceTest {
             new ReportRowDto("R2", "REP1", "Cost", Enums.RowType.data, new MeasureDefinitionDTO("raw", null, null, null, "m2"), null, "normal", 1, 2, Set.of("C1"), null)
         );
         ReportConfigDto config = new ReportConfigDto(
-            "REP1", "Report A", columns, rows, null, 1, null, "a", "w", null, null, false, null, null
+            "REP1", "Report A", columns, rows, null, 1, null, "a", null, null, null, false, null, null
         );
 
         Map<String, Map<String, Double>> data = Map.of(
@@ -90,7 +90,7 @@ public class LayoutRendererServiceTest {
             new ReportRowDto("R1", "REP1", "Revenue", Enums.RowType.data, new MeasureDefinitionDTO("raw", null, null, null, "m1"), null, "section", 0, 1, Set.of("C7"), null)
         );
         ReportConfigDto config = new ReportConfigDto(
-            "REP1", "Report A", columns, rows, refDate, 1, null, "a", "w", null, null, false, null, null
+            "REP1", "Report A", columns, rows, refDate, 1, null, "a", null, null, null, false, null, null
         );
 
         // Data matches sub-column keys or fallback parent key
@@ -129,6 +129,70 @@ public class LayoutRendererServiceTest {
             assertThat(r1Row.getCell(1).getNumericCellValue()).isEqualTo(100.0);
             assertThat(r1Row.getCell(2).getNumericCellValue()).isEqualTo(200.0);
             assertThat(r1Row.getCell(3).getNumericCellValue()).isEqualTo(0.0);
+        }
+    }
+
+    @Test
+    @DisplayName("render includes sorted granularity sub-rows underneath their parent rows in separate columns")
+    public void render_withGranularitySubRows_shouldRenderThemSortedAndIndented() throws IOException {
+        // Arrange
+        List<ColumnDefDto> columns = List.of(
+            new ColumnDefDto("C1", "Col 1 Label", Enums.ColType.WEEK, 0, null, null, 1)
+        );
+        List<ReportRowDto> rows = List.of(
+            new ReportRowDto("R1", "REP1", "Revenue", Enums.RowType.data, new MeasureDefinitionDTO("raw", null, null, null, "m1"), null, "normal", 0, 1, Set.of("C1"), null)
+        );
+        ReportConfigDto config = new ReportConfigDto(
+            "REP1", "Report A", columns, rows, null, 1, null, "a", "country,region", null, null, false, null, null
+        );
+
+        Map<String, Map<String, Double>> data = Map.of(
+            "R1", Map.of("C1", 1000.00),
+            "R1|USA|East", Map.of("C1", 600.00),
+            "R1|Canada|West", Map.of("C1", 400.00)
+        );
+
+        // Act
+        byte[] excelBytes = renderer.render(config, data);
+
+        // Assert
+        assertThat(excelBytes).isNotNull();
+        assertThat(excelBytes.length).isGreaterThan(0);
+
+        try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(excelBytes))) {
+            Sheet sheet = workbook.getSheet("Report");
+            assertThat(sheet).isNotNull();
+
+            // Total rows rendered: 1 header + 1 parent + 2 sub-rows = 4 rows
+            assertThat(sheet.getPhysicalNumberOfRows()).isEqualTo(4);
+
+            // Row 0 (Header)
+            Row headerRow = sheet.getRow(0);
+            assertThat(headerRow.getCell(0).getStringCellValue()).isEqualTo("Report Line");
+            assertThat(headerRow.getCell(1).getStringCellValue()).isEqualTo("country");
+            assertThat(headerRow.getCell(2).getStringCellValue()).isEqualTo("region");
+            assertThat(headerRow.getCell(3).getStringCellValue()).isEqualTo("Col 1 Label");
+
+            // Row 1 (R1 - Parent row)
+            Row r1Row = sheet.getRow(1);
+            assertThat(r1Row.getCell(0).getStringCellValue()).isEqualTo("Revenue");
+            assertThat(r1Row.getCell(1).getStringCellValue()).isEqualTo("-");
+            assertThat(r1Row.getCell(2).getStringCellValue()).isEqualTo("-");
+            assertThat(r1Row.getCell(3).getNumericCellValue()).isEqualTo(1000.00);
+
+            // Row 2 (Canada|West - sorted alphabetically before USA|East)
+            Row subRow1 = sheet.getRow(2);
+            assertThat(subRow1.getCell(0).getStringCellValue()).isEqualTo("  ├ ");
+            assertThat(subRow1.getCell(1).getStringCellValue()).isEqualTo("Canada");
+            assertThat(subRow1.getCell(2).getStringCellValue()).isEqualTo("West");
+            assertThat(subRow1.getCell(3).getNumericCellValue()).isEqualTo(400.00);
+
+            // Row 3 (USA|East - last sub-row, gets '└' connector)
+            Row subRow2 = sheet.getRow(3);
+            assertThat(subRow2.getCell(0).getStringCellValue()).isEqualTo("  └ ");
+            assertThat(subRow2.getCell(1).getStringCellValue()).isEqualTo("USA");
+            assertThat(subRow2.getCell(2).getStringCellValue()).isEqualTo("East");
+            assertThat(subRow2.getCell(3).getNumericCellValue()).isEqualTo(600.00);
         }
     }
 }

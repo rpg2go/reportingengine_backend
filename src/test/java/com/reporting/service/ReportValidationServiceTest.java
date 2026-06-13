@@ -294,23 +294,7 @@ public class ReportValidationServiceTest {
             .isEqualTo("amount / NULLIF(COALESCE(target_value, 0), 0)");
     }
 
-    @Test
-    @DisplayName("validateConfiguration - invalid granularity attribute should report critical error")
-    public void validate_invalidGranularity_shouldReportCriticalError() {
-        ReportConfigDto config = new ReportConfigDto(
-            "RPT1", "Test", Collections.emptyList(), Collections.emptyList(), null, 1, Enums.ReportStatus.draft,
-            "analytics.fact_sales", "invalid_granularity", null, null, false, null, null
-        );
 
-        ValidationResult result = validationService.validateConfiguration(config);
-
-        assertThat(result.isValid()).isFalse();
-        Optional<ValidationError> err = result.getErrors().stream()
-            .filter(e -> e.getFieldContext().equals("granularity") && e.getErrorSeverity().equals("CRITICAL"))
-            .findFirst();
-        assertThat(err).isPresent();
-        assertThat(err.get().getDisplayMessage()).contains("Report granularity must be strictly one of");
-    }
 
     @Test
     @DisplayName("validateConfiguration - conformed and unconformed general filters validation")

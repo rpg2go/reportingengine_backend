@@ -597,4 +597,34 @@ public class SqlGeneratorServiceTest {
         assertThat(sql).contains("SELECT 'R1' AS row_id, 'C7_2' AS col_id, CAST(SUM(val_r1_c7_2) AS DOUBLE PRECISION) AS val FROM combined_data");
         assertThat(sql).contains("SELECT 'R1' AS row_id, 'C7_3' AS col_id, CAST(SUM(val_r1_c7_3) AS DOUBLE PRECISION) AS val FROM combined_data");
     }
+
+    @Test
+    @DisplayName("generate with granularity applies sub-rows unpivoting and pre-resolves join targets")
+    public void generate_withGranularity_shouldIncludeSubRowsUnpivotingAndJoins() {
+        // Arrange
+        List<ColumnDefDto> columns = List.of(
+            new ColumnDefDto("C1", "Col 1", Enums.ColType.WEEK, 0, null, null, 1)
+        );
+        List<ReportRowDto> rows = List.of(
+            new ReportRowDto("R1", "REP1", "Row 1", Enums.RowType.data, 
+                new MeasureDefinitionDTO("visual", "SUM", "amount", "analytics.fact_sales", null), 
+                null, "normal", 0, 1, Set.of("C1"), null)
+        );
+        ReportConfigDto config = new ReportConfigDto(
+            "REP1", "Test Report", columns, rows, LocalDate.of(2026, 5, 26), 1, Enums.ReportStatus.draft,
+            "analytics.fact_sales", "dim_location.country_name", null, null, false, null, null
+        );
+
+        reset(schemaGraphRouter);
+        when(schemaGraphRouter.computeJoinClauses(anyString(), anySet()))
+            .thenReturn(List.of("LEFT JOIN dim_location ON dim_location.id = analytics.fact_sales.location_id"));
+
+        // Act
+        String sql = service.generate(config, Collections.emptyMap());
+
+        // Assert
+        verify(schemaGraphRouter).computeJoinClauses(eq("analytics.fact_sales"), argThat(set -> set.contains("dim_location")));
+        assertThat(sql).contains("SELECT 'R1' AS row_id, 'C1' AS col_id, CAST(SUM(val_r1_c1) AS DOUBLE PRECISION) AS val FROM combined_data");
+        assertThat(sql).contains("SELECT 'R1' || '|' || COALESCE(country_name::text, '') AS row_id, 'C1' AS col_id, CAST(SUM(val_r1_c1) AS DOUBLE PRECISION) AS val FROM combined_data GROUP BY country_name");
+    }
 }
