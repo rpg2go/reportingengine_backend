@@ -1,6 +1,6 @@
 # Reporting Engine Back-End — Enterprise Developer Guide
 
-A robust, enterprise-grade, metadata-driven report configuration and execution engine. This repository contains the **Java 17 (Spring Boot v3.2.4) backend** and PostgreSQL database migrations. The frontend is split into the [ReportTemplate_FrontEnd](file:///G:/workspace/ReportTemplate_FrontEnd) repository.
+A robust, enterprise-grade, metadata-driven report configuration and execution engine. This repository contains the **Java 17 (Spring Boot v3.2.4) backend** and PostgreSQL database migrations. The frontend is split into the [reportingengine_frontend](../reportingengine_frontend) repository.
 
 The backend ingests Excel layout templates, normalizes their configuration into metadata tables, resolves logical metrics against a semantic data model, generates high-performance SQL query structures with conditional aggregation, evaluates math formulas, and renders final styled Excel workbooks.
 
@@ -9,7 +9,7 @@ The backend ingests Excel layout templates, normalizes their configuration into 
 ## Repo Metadata
 
 - **Author**: Antigravity Developer Team & Google DeepMind Pair Programmer
-- **Repository**: [ReportTemplate_BackEnd](file:///G:/workspace/ReportTemplate_BackEnd)
+- **Repository**: [reportingengine_backend](./)
 - **Backend Stack**: Java 17, Spring Boot 3.2.4, Spring Data JPA, Hibernate, exp4j
 - **Database**: PostgreSQL 16 (Local Docker container or Neon Serverless Postgres in production)
 
@@ -62,7 +62,7 @@ The backend ingests Excel layout templates, normalizes their configuration into 
 ## Project Structure
 
 ```text
-ReportTemplate_BackEnd/
+reportingengine_backend/
 ├── .agents/                    # ADK validation agents configuration & code
 │   ├── agents/                 # Validator specifications
 │   └── validation/             # Executable validation agent (agent.py, tools.py)

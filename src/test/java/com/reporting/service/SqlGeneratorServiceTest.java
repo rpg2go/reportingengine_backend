@@ -93,7 +93,7 @@ public class SqlGeneratorServiceTest {
         // Assert
         assertThat(sql).contains("cte_fact_sales AS (");
         assertThat(sql).contains("FROM analytics.fact_sales");
-        assertThat(sql).contains("SELECT 'R1' AS row_id, 'C1' AS col_id, CAST(SUM(val_r1_c1) AS DOUBLE PRECISION) AS val FROM combined_data");
+        assertThat(sql).contains("SELECT 'R1' AS row_id, 'C1' AS col_id, CAST(SUM(val_r1_c1) AS DOUBLE PRECISION) AS val, CAST(NULL AS VARCHAR) AS weekly FROM combined_data");
     }
 
     @Test
@@ -298,8 +298,8 @@ public class SqlGeneratorServiceTest {
         String sql = service.generate(config, Collections.emptyMap());
 
         // Assert
-        assertThat(sql).contains("WHERE (((analytics.fact_sales.region IS NULL OR TRIM(analytics.fact_sales.region) = '')) " +
-            "AND ((analytics.fact_sales.category IS NOT NULL AND TRIM(analytics.fact_sales.category) <> '')) " +
+        assertThat(sql).contains("WHERE (((analytics.fact_sales.region IS NULL OR TRIM(CAST(analytics.fact_sales.region AS TEXT)) = '')) " +
+            "AND ((analytics.fact_sales.category IS NOT NULL AND TRIM(CAST(analytics.fact_sales.category AS TEXT)) <> '')) " +
             "AND (analytics.fact_sales.name IS NULL) " +
             "AND (analytics.fact_sales.status IS NOT NULL))");
     }
@@ -370,6 +370,67 @@ public class SqlGeneratorServiceTest {
             "AND (analytics.fact_sales.amount >= '150') " +
             "AND (analytics.fact_sales.quantity < '10') " +
             "AND (analytics.fact_sales.quantity <= '20'))");
+    }
+
+    @Test
+    @DisplayName("generate with general filters compiles all 16 operators correctly")
+    public void generate_withAllSixteenOperators_shouldCompile() {
+        // Arrange
+        List<ColumnDefDto> columns = List.of(
+            new ColumnDefDto("C1", "Col 1", Enums.ColType.WEEK, 0, null, null, 1)
+        );
+        List<ReportRowDto> rows = List.of(
+            new ReportRowDto("R1", "REP1", "Row 1", Enums.RowType.data, 
+                new MeasureDefinitionDTO("raw", null, null, null, "SUM(amount)"), 
+                null, "normal", 0, 1, Set.of("C1"), null)
+        );
+        
+        String generalFiltersJson = "[" +
+            "{\"attribute\":\"name\",\"operator\":\"is\",\"value\":\"Alice\"}," +
+            "{\"attribute\":\"name\",\"operator\":\"is not\",\"value\":\"Bob\"}," +
+            "{\"attribute\":\"name\",\"operator\":\"contains\",\"value\":\"li\"}," +
+            "{\"attribute\":\"name\",\"operator\":\"does not contains\",\"value\":\"za\"}," +
+            "{\"attribute\":\"name\",\"operator\":\"start with\",\"value\":\"Al\"}," +
+            "{\"attribute\":\"name\",\"operator\":\"end with\",\"value\":\"ce\"}," +
+            "{\"attribute\":\"name\",\"operator\":\"is blank\",\"value\":\"\"}," +
+            "{\"attribute\":\"name\",\"operator\":\"is not blank\",\"value\":\"\"}," +
+            "{\"attribute\":\"name\",\"operator\":\"is null\",\"value\":\"\"}," +
+            "{\"attribute\":\"name\",\"operator\":\"is not null\",\"value\":\"\"}," +
+            "{\"attribute\":\"name\",\"operator\":\"in list\",\"value\":\"Alice, Bob\"}," +
+            "{\"attribute\":\"name\",\"operator\":\"not in list\",\"value\":\"Charlie, Dave\"}," +
+            "{\"attribute\":\"name\",\"operator\":\"is different from\",\"value\":\"Eve\"}," +
+            "{\"attribute\":\"amount\",\"operator\":\"is greater then\",\"value\":\"10\"}," +
+            "{\"attribute\":\"amount\",\"operator\":\"is greater or equal\",\"value\":\"20\"}," +
+            "{\"attribute\":\"amount\",\"operator\":\"is less then\",\"value\":\"30\"}," +
+            "{\"attribute\":\"amount\",\"operator\":\"is less or equal\",\"value\":\"40\"}" +
+            "]";
+            
+        ReportConfigDto config = new ReportConfigDto(
+            "REP1", "Test Report", columns, rows, LocalDate.of(2026, 5, 26), 1, Enums.ReportStatus.draft,
+            "analytics.fact_sales", "weekly", null, null, false, null, generalFiltersJson
+        );
+
+        // Act
+        String sql = service.generate(config, Collections.emptyMap());
+
+        // Assert
+        assertThat(sql).contains("analytics.fact_sales.name = 'Alice'");
+        assertThat(sql).contains("(analytics.fact_sales.name <> 'Bob' OR analytics.fact_sales.name IS NULL)");
+        assertThat(sql).contains("analytics.fact_sales.name ILIKE '%li%' ESCAPE '\\'");
+        assertThat(sql).contains("(analytics.fact_sales.name NOT ILIKE '%za%' ESCAPE '\\' OR analytics.fact_sales.name IS NULL)");
+        assertThat(sql).contains("analytics.fact_sales.name ILIKE 'Al%' ESCAPE '\\'");
+        assertThat(sql).contains("analytics.fact_sales.name ILIKE '%ce' ESCAPE '\\'");
+        assertThat(sql).contains("(analytics.fact_sales.name IS NULL OR TRIM(CAST(analytics.fact_sales.name AS TEXT)) = '')");
+        assertThat(sql).contains("(analytics.fact_sales.name IS NOT NULL AND TRIM(CAST(analytics.fact_sales.name AS TEXT)) <> '')");
+        assertThat(sql).contains("analytics.fact_sales.name IS NULL");
+        assertThat(sql).contains("analytics.fact_sales.name IS NOT NULL");
+        assertThat(sql).contains("analytics.fact_sales.name IN ('Alice', 'Bob')");
+        assertThat(sql).contains("analytics.fact_sales.name NOT IN ('Charlie', 'Dave')");
+        assertThat(sql).contains("(analytics.fact_sales.name <> 'Eve' OR analytics.fact_sales.name IS NULL)");
+        assertThat(sql).contains("analytics.fact_sales.amount > '10'");
+        assertThat(sql).contains("analytics.fact_sales.amount >= '20'");
+        assertThat(sql).contains("analytics.fact_sales.amount < '30'");
+        assertThat(sql).contains("analytics.fact_sales.amount <= '40'");
     }
 
     @Test
@@ -593,9 +654,9 @@ public class SqlGeneratorServiceTest {
         assertThat(sql).contains("val_r1_c7_3");
 
         // Sub-column select in final unpivoting SELECT
-        assertThat(sql).contains("SELECT 'R1' AS row_id, 'C7_1' AS col_id, CAST(SUM(val_r1_c7_1) AS DOUBLE PRECISION) AS val FROM combined_data");
-        assertThat(sql).contains("SELECT 'R1' AS row_id, 'C7_2' AS col_id, CAST(SUM(val_r1_c7_2) AS DOUBLE PRECISION) AS val FROM combined_data");
-        assertThat(sql).contains("SELECT 'R1' AS row_id, 'C7_3' AS col_id, CAST(SUM(val_r1_c7_3) AS DOUBLE PRECISION) AS val FROM combined_data");
+        assertThat(sql).contains("SELECT 'R1' AS row_id, 'C7_1' AS col_id, CAST(SUM(val_r1_c7_1) AS DOUBLE PRECISION) AS val, CAST(NULL AS VARCHAR) AS monthly FROM combined_data");
+        assertThat(sql).contains("SELECT 'R1' AS row_id, 'C7_2' AS col_id, CAST(SUM(val_r1_c7_2) AS DOUBLE PRECISION) AS val, CAST(NULL AS VARCHAR) AS monthly FROM combined_data");
+        assertThat(sql).contains("SELECT 'R1' AS row_id, 'C7_3' AS col_id, CAST(SUM(val_r1_c7_3) AS DOUBLE PRECISION) AS val, CAST(NULL AS VARCHAR) AS monthly FROM combined_data");
     }
 
     @Test
@@ -624,7 +685,51 @@ public class SqlGeneratorServiceTest {
 
         // Assert
         verify(schemaGraphRouter).computeJoinClauses(eq("analytics.fact_sales"), argThat(set -> set.contains("dim_location")));
-        assertThat(sql).contains("SELECT 'R1' AS row_id, 'C1' AS col_id, CAST(SUM(val_r1_c1) AS DOUBLE PRECISION) AS val FROM combined_data");
-        assertThat(sql).contains("SELECT 'R1' || '|' || COALESCE(country_name::text, '') AS row_id, 'C1' AS col_id, CAST(SUM(val_r1_c1) AS DOUBLE PRECISION) AS val FROM combined_data GROUP BY country_name");
+        assertThat(sql).contains("SELECT 'R1' AS row_id, 'C1' AS col_id, CAST(SUM(val_r1_c1) AS DOUBLE PRECISION) AS val, CAST(NULL AS VARCHAR) AS country_name FROM combined_data");
+        assertThat(sql).contains("SELECT 'R1' AS row_id, 'C1' AS col_id, CAST(SUM(val_r1_c1) AS DOUBLE PRECISION) AS val, country_name FROM combined_data GROUP BY country_name");
+    }
+
+    @Test
+    @DisplayName("generate with recursive row filter groups compiles nested parenthetical rules")
+    public void generate_withRecursiveRowFilters_shouldCompileNestedParentheses() {
+        // Arrange
+        List<ColumnDefDto> columns = List.of(
+            new ColumnDefDto("C1", "Col 1", Enums.ColType.WEEK, 0, null, null, 1)
+        );
+        
+        String recursiveFilterJson = "{" +
+            "\"id\":\"root\"," +
+            "\"logicalOperator\":\"OR\"," +
+            "\"rules\":[" +
+                "{\"tableName\":\"fact_investments\",\"columnName\":\"a\",\"operator\":\"is\",\"value\":[\"1\"]}" +
+            "]," +
+            "\"childGroups\":[" +
+                "{" +
+                    "\"id\":\"child1\"," +
+                    "\"logicalOperator\":\"AND\"," +
+                    "\"rules\":[" +
+                        "{\"tableName\":\"fact_investments\",\"columnName\":\"b\",\"operator\":\"in list\",\"value\":[\"2\",\"3\"]}" +
+                    "]," +
+                    "\"childGroups\":[]" +
+                "}" +
+            "]" +
+        "}";
+        
+        List<ReportRowDto> rows = List.of(
+            new ReportRowDto("R1", "REP1", "Row 1", Enums.RowType.data, 
+                new MeasureDefinitionDTO("visual", "SUM", "amount", "fact_investments", null), 
+                null, "normal", 0, 1, Set.of("C1"), recursiveFilterJson)
+        );
+        
+        ReportConfigDto config = new ReportConfigDto(
+            "REP1", "Test Report", columns, rows, LocalDate.of(2026, 5, 26), 1, Enums.ReportStatus.draft,
+            "fact_investments", "weekly", null, null, false, null, null
+        );
+
+        // Act
+        String sql = service.generate(config, Collections.emptyMap());
+
+        // Assert
+        assertThat(sql).contains("(fact_investments.a = '1' OR (fact_investments.b IN ('2', '3')))");
     }
 }

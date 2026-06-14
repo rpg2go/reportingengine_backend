@@ -30,9 +30,42 @@ public class PostProcessorService {
         }
 
         // 2. Populate DATA rows from SQL database query results (flat matrix format)
+        List<String> granularityAliases = new ArrayList<>();
+        if (config.getGranularity() != null && !config.getGranularity().isBlank()) {
+            for (String s : config.getGranularity().split(",")) {
+                String trimmed = s.trim();
+                if (!trimmed.isEmpty()) {
+                    granularityAliases.add(SqlGeneratorService.getGranularityAlias(trimmed));
+                }
+            }
+        }
+
         if (dbResults != null) {
             for (Map<String, Object> map : dbResults) {
                 String rid = map.get("row_id") != null ? map.get("row_id").toString().toUpperCase() : "";
+
+                // Dynamically reconstruct row_id for breakdown rows if granularity is defined
+                if (!granularityAliases.isEmpty()) {
+                    boolean isBreakdown = false;
+                    for (String alias : granularityAliases) {
+                        if (getMapValueCaseInsensitive(map, alias) != null) {
+                            isBreakdown = true;
+                            break;
+                        }
+                    }
+                    if (isBreakdown) {
+                        StringBuilder sb = new StringBuilder(rid);
+                        for (String alias : granularityAliases) {
+                            sb.append("|");
+                            Object val = getMapValueCaseInsensitive(map, alias);
+                            if (val != null) {
+                                sb.append(val.toString());
+                            }
+                        }
+                        rid = sb.toString().toUpperCase();
+                    }
+                }
+
                 String cid = map.get("col_id") != null ? map.get("col_id").toString().toUpperCase() : "";
                 Object valObj = map.get("val");
                 double val = 0.0;
@@ -265,5 +298,20 @@ public class PostProcessorService {
         } catch (Exception e) {
             return 0.0;
         }
+    }
+
+    private Object getMapValueCaseInsensitive(Map<String, Object> map, String key) {
+        if (map == null || key == null) {
+            return null;
+        }
+        if (map.containsKey(key)) {
+            return map.get(key);
+        }
+        for (String mk : map.keySet()) {
+            if (mk.equalsIgnoreCase(key)) {
+                return map.get(mk);
+            }
+        }
+        return null;
     }
 }

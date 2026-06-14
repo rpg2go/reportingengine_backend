@@ -158,4 +158,43 @@ public class PostProcessorServiceTest {
         assertThat(matrix.get("R3").get("C7_2")).isEqualTo(350.0);
         assertThat(matrix.get("R3").get("C7_3")).isEqualTo(550.0);
     }
+
+    @Test
+    @DisplayName("process granularity unpivoted columns reconstructs row ID with suffixes")
+    public void process_granularityReconstruction() {
+        // Arrange
+        List<ColumnDefDto> columns = List.of(
+            new ColumnDefDto("C1", "Col 1", Enums.ColType.WEEK, 0, null, null, 1)
+        );
+
+        List<ReportRowDto> rows = List.of(
+            new ReportRowDto("R1", "REP1", "Row 1", Enums.RowType.data, new MeasureDefinitionDTO("raw", null, null, null, "m1"), null, "normal", 0, 1, Set.of("C1"), null)
+        );
+
+        // Config has granularity defined
+        ReportConfigDto config = new ReportConfigDto(
+            "REP1", "Test Report", columns, rows, null, 1, Enums.ReportStatus.draft,
+            "analytics.fact_sales", "dim_location.country_name", null, null, false, null, null
+        );
+
+        // Results have country_name as separate column
+        List<Map<String, Object>> dbResults = List.of(
+            // Total row
+            Map.of("row_id", "R1", "col_id", "C1", "val", 100.0),
+            // Germany breakdown row
+            Map.of("row_id", "R1", "col_id", "C1", "val", 40.0, "country_name", "Germany"),
+            // Romania breakdown row
+            Map.of("row_id", "R1", "col_id", "C1", "val", 60.0, "country_name", "Romania")
+        );
+
+        // Act
+        Map<String, Map<String, Double>> matrix = service.process(config, dbResults);
+
+        // Assert
+        // Standard total row
+        assertThat(matrix.get("R1").get("C1")).isEqualTo(100.0);
+        // Breakdown rows reconstruct the row_id with suffix
+        assertThat(matrix.get("R1|GERMANY").get("C1")).isEqualTo(40.0);
+        assertThat(matrix.get("R1|ROMANIA").get("C1")).isEqualTo(60.0);
+    }
 }

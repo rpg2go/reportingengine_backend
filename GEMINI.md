@@ -66,16 +66,23 @@ All backend APIs are prefixed with `/api` and listen on port `8101`.
 
 | HTTP Method | Endpoint | Description |
 | :--- | :--- | :--- |
+| **GET** | `/api/auth/login` | Validates Basic Auth and returns authenticated user info. |
 | **GET** | `/api/reports` | Lists all catalog reports. |
 | **GET** | `/api/reports/{id}` | Loads a single report definition config DTO. |
 | **POST** | `/api/reports` | Creates a new report config. |
 | **PUT** | `/api/reports/{id}` | Updates an existing report config. |
+| **POST** | `/api/reports/import` | Imports an Excel `.xlsx` template file (multipart). |
+| **POST** | `/api/reports/{id}/run` | Executes report generation and returns direct `.xlsx` download. |
+| **POST** | `/api/reports/{reportId}/execute` | Executes report and returns raw unpivoted grid coordinate values. |
+| **POST** | `/api/reports/preview-sql` | Dry-run query compilation to preview the generated SQL structure. |
+| **POST** | `/api/reports/validate` | Runs structural and semantic analysis to find configuration issues. |
 | **GET** | `/api/reports/tables` | Returns list of physical tables in the `analytics` schema. |
 | **GET** | `/api/reports/table-columns` | Returns column list for a table (e.g., `?table=fact_sales`). |
-| **GET** | `/api/reports/dimensions/values` | Performs lookups for unique autocomplete value lists: `SELECT DISTINCT <column> FROM <table> WHERE <column> IS NOT NULL ORDER BY <column> LIMIT 100` (e.g., `?table=fact_sales&column=region`). |
-| **DELETE** | `/api/reports/{id}` | Deletes a report and all child rows/columns. |
-| **POST** | `/api/reports/import` | Imports an Excel `.xlsx` template file (multipart). |
-| **POST** | `/api/reports/{id}/run` | Executes report generation and returns `.xlsx` download. |
+| **GET** | `/api/reports/column-types` | Returns database column types map for a given table. |
+| **GET** | `/api/reports/dimensions/values` | Autocomplete distinct values for a table column. |
+| **GET** | `/api/reports/dimension-joins` | Fetches join metadata from explore structures for a fact table. |
+| **GET** | `/api/reports/semantic-model` | Fetches the complete metadata explore/view/dimension/measure model. |
+| **GET** | `/api/metadata/distinct-values` | Security-validated distinct values search for dimension columns. |
 
 ---
 
@@ -86,16 +93,20 @@ Use the links below to navigate directly to the primary components:
 ### Backend Services & Controllers
 
 - **Controllers**:
-  - [ReportController.java](file:///G:/workspace/ReportTemplate_BackEnd/src/main/java/com/reporting/controller/ReportController.java) — Exposes metadata, table lists, columns, and autocomplete endpoints.
-  - [AuthController.java](file:///G:/workspace/ReportTemplate_BackEnd/src/main/java/com/reporting/controller/AuthController.java) — Manages login validation.
+  - [ReportController.java](src/main/java/com/reporting/controller/ReportController.java) — Exposes metadata, table lists, columns, and autocomplete endpoints.
+  - [AuthController.java](src/main/java/com/reporting/controller/AuthController.java) — Manages login validation.
+  - [ReportExecutionController.java](src/main/java/com/reporting/controller/ReportExecutionController.java) — Orchestrates raw cell query executions.
+  - [ReportPreviewController.java](src/main/java/com/reporting/controller/ReportPreviewController.java) — Previews dry-run generated SQL queries.
+  - [MetadataController.java](src/main/java/com/reporting/controller/MetadataController.java) — Provides security-sanitized distinct autocomplete values.
 - **Core Engine Services**:
-  - [SqlGeneratorService.java](file:///G:/workspace/ReportTemplate_BackEnd/src/main/java/com/reporting/service/SqlGeneratorService.java) — Compiles report filters, fact tables, and rolling date boundaries into dynamic CTE queries.
-  - [PostProcessorService.java](file:///G:/workspace/ReportTemplate_BackEnd/src/main/java/com/reporting/service/PostProcessorService.java) — Evaluates mathematical formulas at row/column intersections using `exp4j`.
-  - [LayoutRendererService.java](file:///G:/workspace/ReportTemplate_BackEnd/src/main/java/com/reporting/service/LayoutRendererService.java) — Renders POI styles, grid alignments, fonts, colors, and formatting into downloading templates.
-  - [ExcelParserService.java](file:///G:/workspace/ReportTemplate_BackEnd/src/main/java/com/reporting/service/ExcelParserService.java) — Handles extraction and ingestion of spreadsheet configurations.
+  - [SqlGeneratorService.java](src/main/java/com/reporting/service/SqlGeneratorService.java) — Compiles report filters, fact tables, and rolling date boundaries into dynamic CTE queries.
+  - [PostProcessorService.java](src/main/java/com/reporting/service/PostProcessorService.java) — Evaluates mathematical formulas at row/column intersections using `exp4j`.
+  - [LayoutRendererService.java](src/main/java/com/reporting/service/LayoutRendererService.java) — Renders POI styles, grid alignments, fonts, colors, and formatting into downloading templates.
+  - [ExcelParserService.java](src/main/java/com/reporting/service/ExcelParserService.java) — Handles extraction and ingestion of spreadsheet configurations.
+  - [ReportValidationService.java](src/main/java/com/reporting/service/ReportValidationService.java) — Validates cycle detections, schema checks, and expressions.
 - **Database Utilities**:
-  - [MigrationRunner.java](file:///G:/workspace/ReportTemplate_BackEnd/src/main/java/com/reporting/util/MigrationRunner.java) — Custom Java runner applying SQL migrations with tracking.
-  - [DbDumper.java](file:///G:/workspace/ReportTemplate_BackEnd/src/main/java/com/reporting/util/DbDumper.java) — Helper utility to dump local reporting templates into migration files.
+  - [MigrationRunner.java](src/main/java/com/reporting/util/MigrationRunner.java) — Custom Java runner applying SQL migrations with tracking.
+  - [DbDumper.java](src/main/java/com/reporting/util/DbDumper.java) — Helper utility to dump local reporting templates into migration files.
 
 ---
 

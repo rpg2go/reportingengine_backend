@@ -45,8 +45,8 @@ src/test/resources
 
 ## 📝 Test Class Naming Conventions
 
-* **Unit Tests**: Suffixed with `Test`, e.g., [DateUtilsTest](file:///G:/workspace/ReportTemplate_BackEnd/src/test/java/com/reporting/service/DateUtilsTest.java) for [DateUtils](file:///G:/workspace/ReportTemplate_BackEnd/src/main/java/com/reporting/service/DateUtils.java).
-* **Integration Tests**: Suffixed with `IT`, e.g., [ReportConfigServiceIT](file:///G:/workspace/ReportTemplate_BackEnd/src/test/java/com/reporting/service/ReportConfigServiceIT.java) for [ReportConfigService](file:///G:/workspace/ReportTemplate_BackEnd/src/main/java/com/reporting/service/ReportConfigService.java).
+* **Unit Tests**: Suffixed with `Test`, e.g., [DateUtilsTest](java/com/reporting/service/DateUtilsTest.java) for [DateUtils](../main/java/com/reporting/service/DateUtils.java).
+* **Integration Tests**: Suffixed with `IT`, e.g., [ReportConfigServiceIT](java/com/reporting/service/ReportConfigServiceIT.java) for [ReportConfigService](../main/java/com/reporting/service/ReportConfigService.java).
 * **Test Methods**: Follow the descriptive convention:
   `methodName_should_expectedBehavior_when_scenario`
   *Example*: `getPeriodBoundaries_weekOffsetMinusOne_shouldReturnPreviousFullWeek()`
@@ -106,7 +106,7 @@ public class MyServiceTest {
 Integration tests require a running database schema and application context.
 
 1. **Extend BaseIT**:
-   Always extend [BaseIT](file:///G:/workspace/ReportTemplate_BackEnd/src/test/java/com/reporting/BaseIT.java). This handles starting the Testcontainers PostgreSQL DB or falling back to the local database, applying migrations, and loading properties.
+   Always extend [BaseIT](java/com/reporting/BaseIT.java). This handles starting the Testcontainers PostgreSQL DB or falling back to the local database, applying migrations, and loading properties.
 2. **Handle Database State (Transactional Tests)**:
    Annotate test classes or methods with `@Transactional` so database modifications roll back automatically after each test runs, keeping the tests isolated and independent.
 3. **API Validation**:
@@ -140,7 +140,7 @@ public class MyControllerIT extends BaseIT {
 ## ⚠️ Common Gotchas & Avoidance Guidelines
 
 1. **Empty Context Short-Circuit in Formula Evaluation**:
-   In [PostProcessorService](file:///G:/workspace/ReportTemplate_BackEnd/src/main/java/com/reporting/service/PostProcessorService.java), `evaluateFormula(formula, context)` returns `0.0` immediately if the context map is empty. When testing simple math expressions that do not require variables, **always pass a dummy key-value pair in the context** (e.g. `Map.of("dummy", 0.0)`) to avoid this guard check.
+   In [PostProcessorService](../main/java/com/reporting/service/PostProcessorService.java), `evaluateFormula(formula, context)` returns `0.0` immediately if the context map is empty. When testing simple math expressions that do not require variables, **always pass a dummy key-value pair in the context** (e.g. `Map.of("dummy", 0.0)`) to avoid this guard check.
 2. **Case Sensitivity in Exp4J Variables**:
    Variable lookups inside `ExpressionBuilder` are case-sensitive. If your context keys are uppercase (e.g. `R1`), the formula variables **must** match that casing (e.g. `R1` instead of `r1`). Ensure test contexts align with formula cases.
 3. **Avoid Hardcoded Thread.sleep()**:

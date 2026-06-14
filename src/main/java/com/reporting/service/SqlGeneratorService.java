@@ -40,6 +40,19 @@ public class SqlGeneratorService {
     }
 
     public String generate(ReportConfigDto config, Map<String, ResolvedMetricDto> resolved) {
+        List<String> selectedGranularities = new ArrayList<>();
+        if (config.getGranularity() != null && !config.getGranularity().isBlank()) {
+            for (String s : config.getGranularity().split(",")) {
+                String trimmed = s.trim();
+                if (!trimmed.isEmpty()) {
+                    selectedGranularities.add(trimmed);
+                }
+            }
+        }
+        return generate(config, resolved, selectedGranularities);
+    }
+
+    public String generate(ReportConfigDto config, Map<String, ResolvedMetricDto> resolved, List<String> selectedGranularities) {
         // Parse Filters
         List<FilterCondition> generalFilters = parseGeneralFilters(config.getGeneralFilters());
         List<FilterCondition> quickFilters = parseGeneralFilters(config.getQuickFilters());
@@ -65,15 +78,7 @@ public class SqlGeneratorService {
         Map<String, Set<String>> tableColumnsCache = new HashMap<>();
         String conformedKey = findConformedKey(uniqueTables, tableColumnsCache);
 
-        List<String> granularities = new ArrayList<>();
-        if (config.getGranularity() != null && !config.getGranularity().isBlank()) {
-            for (String s : config.getGranularity().split(",")) {
-                String trimmed = s.trim();
-                if (!trimmed.isEmpty()) {
-                    granularities.add(trimmed);
-                }
-            }
-        }
+        List<String> granularities = new ArrayList<>(selectedGranularities);
         if (granularities.isEmpty()) {
             granularities.add(conformedKey);
         }
@@ -483,6 +488,13 @@ public class SqlGeneratorService {
         String timeKey = getTimeKeyForTable(firstTable);
         String timeKeyAlias = getGranularityAlias(timeKey);
 
+        StringBuilder granTotalCols = new StringBuilder();
+        StringBuilder granBreakdownCols = new StringBuilder();
+        for (String gAlias : granularityAliases) {
+            granTotalCols.append(", CAST(NULL AS VARCHAR) AS ").append(gAlias);
+            granBreakdownCols.append(", ").append(gAlias);
+        }
+
         for (ReportRowDto row : config.getRows()) {
             if (!row.isDataRow()) {
                 continue;
@@ -510,11 +522,12 @@ public class SqlGeneratorService {
 
                 // Standard total select
                 String select = String.format(
-                    "SELECT '%s' AS row_id, '%s' AS col_id, CAST(%s(%s) AS DOUBLE PRECISION) AS val FROM combined_data",
+                    "SELECT '%s' AS row_id, '%s' AS col_id, CAST(%s(%s) AS DOUBLE PRECISION) AS val%s FROM combined_data",
                     row.rowId().toUpperCase(),
                     col.colId().toUpperCase(),
                     finalAgg,
-                    alias
+                    alias,
+                    granTotalCols.toString()
                 );
                 finalSelects.add(select);
 
@@ -526,18 +539,13 @@ public class SqlGeneratorService {
 
                 // Granularity breakdown select
                 if (!granularityAliases.isEmpty()) {
-                    List<String> concatParts = new ArrayList<>();
-                    concatParts.add(String.format("'%s'", row.rowId().toUpperCase()));
-                    for (String gAlias : granularityAliases) {
-                        concatParts.add(String.format("COALESCE(%s::text, '')", gAlias));
-                    }
-                    String rowIdExpr = String.join(" || '|' || ", concatParts);
                     String selectGran = String.format(
-                        "SELECT %s AS row_id, '%s' AS col_id, CAST(%s(%s) AS DOUBLE PRECISION) AS val FROM combined_data%s GROUP BY %s",
-                        rowIdExpr,
+                        "SELECT '%s' AS row_id, '%s' AS col_id, CAST(%s(%s) AS DOUBLE PRECISION) AS val%s FROM combined_data%s GROUP BY %s",
+                        row.rowId().toUpperCase(),
                         col.colId().toUpperCase(),
                         finalAgg,
                         alias,
+                        granBreakdownCols.toString(),
                         filterClause,
                         String.join(", ", granularityAliases)
                     );
@@ -550,27 +558,23 @@ public class SqlGeneratorService {
                         String subColId = col.colId() + "_" + i;
                         String subAlias = "val_" + row.rowId().toLowerCase() + "_" + subColId.toLowerCase();
                         String subSelect = String.format(
-                            "SELECT '%s' AS row_id, '%s' AS col_id, CAST(%s(%s) AS DOUBLE PRECISION) AS val FROM combined_data",
+                            "SELECT '%s' AS row_id, '%s' AS col_id, CAST(%s(%s) AS DOUBLE PRECISION) AS val%s FROM combined_data",
                             row.rowId().toUpperCase(),
                             subColId.toUpperCase(),
                             finalAgg,
-                            subAlias
+                            subAlias,
+                            granTotalCols.toString()
                         );
                         finalSelects.add(subSelect);
 
                         if (!granularityAliases.isEmpty()) {
-                            List<String> concatParts = new ArrayList<>();
-                            concatParts.add(String.format("'%s'", row.rowId().toUpperCase()));
-                            for (String gAlias : granularityAliases) {
-                                concatParts.add(String.format("COALESCE(%s::text, '')", gAlias));
-                            }
-                            String rowIdExpr = String.join(" || '|' || ", concatParts);
                             String subSelectGran = String.format(
-                                "SELECT %s AS row_id, '%s' AS col_id, CAST(%s(%s) AS DOUBLE PRECISION) AS val FROM combined_data%s GROUP BY %s",
-                                rowIdExpr,
+                                "SELECT '%s' AS row_id, '%s' AS col_id, CAST(%s(%s) AS DOUBLE PRECISION) AS val%s FROM combined_data%s GROUP BY %s",
+                                row.rowId().toUpperCase(),
                                 subColId.toUpperCase(),
                                 finalAgg,
                                 subAlias,
+                                granBreakdownCols.toString(),
                                 filterClause,
                                 String.join(", ", granularityAliases)
                             );
@@ -582,7 +586,12 @@ public class SqlGeneratorService {
         }
 
         if (finalSelects.isEmpty()) {
-            return "SELECT '' AS row_id, '' AS col_id, 0.0::DOUBLE PRECISION AS val WHERE FALSE";
+            StringBuilder sb = new StringBuilder("SELECT '' AS row_id, '' AS col_id, 0.0::DOUBLE PRECISION AS val");
+            for (String gAlias : granularityAliases) {
+                sb.append(", CAST(NULL AS VARCHAR) AS ").append(gAlias);
+            }
+            sb.append(" WHERE FALSE");
+            return sb.toString();
         }
 
         StringBuilder sql = new StringBuilder("WITH\n");
@@ -599,7 +608,7 @@ public class SqlGeneratorService {
         return String.join(", ", granularities);
     }
 
-    private static String getGranularityAlias(String granularity) {
+    public static String getGranularityAlias(String granularity) {
         if (granularity.contains(".")) {
             return granularity.substring(granularity.lastIndexOf(".") + 1);
         }
@@ -1003,6 +1012,15 @@ public class SqlGeneratorService {
                 }
             }
             return sb.toString();
+        } else if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+            try {
+                ObjectMapper mapper = new ObjectMapper();
+                mapper.configure(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+                RowFilterGroup rootGroup = mapper.readValue(trimmed, RowFilterGroup.class);
+                return compileRowGroup(rootGroup);
+            } catch (Exception e) {
+                throw new IllegalArgumentException("Failed to parse recursive row filter group JSON: " + trimmed, e);
+            }
         } else {
             validateFilterExpr(trimmed);
             return trimmed;
@@ -1065,37 +1083,59 @@ public class SqlGeneratorService {
                 break;
             }
             case "is not":
-            case "!=": {
+            case "!=":
+            case "<>":
+            case "is different from": {
                 String escapedVal = (value != null ? value : "").replace("'", "''");
                 result = String.format("(%s <> '%s' OR %s IS NULL)", col, escapedVal, col);
                 break;
             }
+            case "contains":
             case "like": {
                 String escapedVal = (value != null ? value : "").replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_").replace("'", "''");
-                result = String.format("%s LIKE '%%%s%%' ESCAPE '\\'", col, escapedVal);
+                if ("contains".equals(op)) {
+                    result = String.format("%s ILIKE '%%%s%%' ESCAPE '\\'", col, escapedVal);
+                } else {
+                    result = String.format("%s LIKE '%%%s%%' ESCAPE '\\'", col, escapedVal);
+                }
                 break;
             }
+            case "does not contains":
             case "not like": {
                 String escapedVal = (value != null ? value : "").replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_").replace("'", "''");
-                result = String.format("(%s NOT LIKE '%%%s%%' ESCAPE '\\' OR %s IS NULL)", col, escapedVal, col);
+                if ("does not contains".equals(op)) {
+                    result = String.format("(%s NOT ILIKE '%%%s%%' ESCAPE '\\' OR %s IS NULL)", col, escapedVal, col);
+                } else {
+                    result = String.format("(%s NOT LIKE '%%%s%%' ESCAPE '\\' OR %s IS NULL)", col, escapedVal, col);
+                }
                 break;
             }
+            case "start with":
             case "starts with": {
                 String escapedVal = (value != null ? value : "").replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_").replace("'", "''");
-                result = String.format("%s LIKE '%s%%' ESCAPE '\\'", col, escapedVal);
+                if ("start with".equals(op)) {
+                    result = String.format("%s ILIKE '%s%%' ESCAPE '\\'", col, escapedVal);
+                } else {
+                    result = String.format("%s LIKE '%s%%' ESCAPE '\\'", col, escapedVal);
+                }
                 break;
             }
+            case "end with":
             case "ends with": {
                 String escapedVal = (value != null ? value : "").replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_").replace("'", "''");
-                result = String.format("%s LIKE '%%%s' ESCAPE '\\'", col, escapedVal);
+                if ("end with".equals(op)) {
+                    result = String.format("%s ILIKE '%%%s' ESCAPE '\\'", col, escapedVal);
+                } else {
+                    result = String.format("%s LIKE '%%%s' ESCAPE '\\'", col, escapedVal);
+                }
                 break;
             }
             case "is blank": {
-                result = String.format("(%s IS NULL OR TRIM(%s) = '')", col, col);
+                result = String.format("(%s IS NULL OR TRIM(CAST(%s AS TEXT)) = '')", col, col);
                 break;
             }
             case "is not blank": {
-                result = String.format("(%s IS NOT NULL AND TRIM(%s) <> '')", col, col);
+                result = String.format("(%s IS NOT NULL AND TRIM(CAST(%s AS TEXT)) <> '')", col, col);
                 break;
             }
             case "is null": {
@@ -1106,7 +1146,8 @@ public class SqlGeneratorService {
                 result = String.format("%s IS NOT NULL", col);
                 break;
             }
-            case "in": {
+            case "in":
+            case "in list": {
                 String valStr = value != null ? value : "";
                 String[] parts = valStr.split(",");
                 List<String> list = new ArrayList<>();
@@ -1120,22 +1161,45 @@ public class SqlGeneratorService {
                 }
                 break;
             }
-            case ">": {
+            case "not in":
+            case "not in list": {
+                String valStr = value != null ? value : "";
+                String[] parts = valStr.split(",");
+                List<String> list = new ArrayList<>();
+                for (String part : parts) {
+                    list.add("'" + part.trim().replace("'", "''") + "'");
+                }
+                if (list.isEmpty()) {
+                    result = String.format("%s NOT IN (NULL)", col);
+                } else {
+                    result = String.format("%s NOT IN (%s)", col, String.join(", ", list));
+                }
+                break;
+            }
+            case ">":
+            case "greater_than":
+            case "is greater then": {
                 String escapedVal = (value != null ? value : "").replace("'", "''");
                 result = String.format("%s > '%s'", col, escapedVal);
                 break;
             }
-            case ">=": {
+            case ">=":
+            case "greater_equal":
+            case "is greater or equal": {
                 String escapedVal = (value != null ? value : "").replace("'", "''");
                 result = String.format("%s >= '%s'", col, escapedVal);
                 break;
             }
-            case "<": {
+            case "<":
+            case "less_than":
+            case "is less then": {
                 String escapedVal = (value != null ? value : "").replace("'", "''");
                 result = String.format("%s < '%s'", col, escapedVal);
                 break;
             }
-            case "<=": {
+            case "<=":
+            case "less_equal":
+            case "is less or equal": {
                 String escapedVal = (value != null ? value : "").replace("'", "''");
                 result = String.format("%s <= '%s'", col, escapedVal);
                 break;
@@ -1183,6 +1247,253 @@ public class SqlGeneratorService {
         public void setValue(String value) { this.value = value; }
         public String getConjunction() { return conjunction; }
         public void setConjunction(String conjunction) { this.conjunction = conjunction; }
+    }
+
+    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+    public static class RowFilterRule {
+        private String tableName;
+        private String columnName;
+        private String operator;
+        private List<String> value;
+
+        public RowFilterRule() {}
+
+        public RowFilterRule(String tableName, String columnName, String operator, List<String> value) {
+            this.tableName = tableName;
+            this.columnName = columnName;
+            this.operator = operator;
+            this.value = value;
+        }
+
+        public String getTableName() { return tableName; }
+        public void setTableName(String tableName) { this.tableName = tableName; }
+        public String getColumnName() { return columnName; }
+        public void setColumnName(String columnName) { this.columnName = columnName; }
+        public String getOperator() { return operator; }
+        public void setOperator(String operator) { this.operator = operator; }
+        public List<String> getValue() { return value; }
+        public void setValue(List<String> value) { this.value = value; }
+    }
+
+    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+    public static class RowFilterGroup {
+        private String id;
+        private String logicalOperator;
+        private List<RowFilterRule> rules;
+        private List<RowFilterGroup> childGroups;
+
+        public RowFilterGroup() {}
+
+        public RowFilterGroup(String id, String logicalOperator, List<RowFilterRule> rules, List<RowFilterGroup> childGroups) {
+            this.id = id;
+            this.logicalOperator = logicalOperator;
+            this.rules = rules;
+            this.childGroups = childGroups;
+        }
+
+        public String getId() { return id; }
+        public void setId(String id) { this.id = id; }
+        public String getLogicalOperator() { return logicalOperator; }
+        public void setLogicalOperator(String logicalOperator) { this.logicalOperator = logicalOperator; }
+        public List<RowFilterRule> getRules() { return rules; }
+        public void setRules(List<RowFilterRule> rules) { this.rules = rules; }
+        public List<RowFilterGroup> getChildGroups() { return childGroups; }
+        public void setChildGroups(List<RowFilterGroup> childGroups) { this.childGroups = childGroups; }
+    }
+
+    public String compileRowFilterRule(RowFilterRule rule) {
+        if (rule == null || rule.getColumnName() == null || rule.getColumnName().isBlank()) {
+            return "";
+        }
+        
+        String col = (rule.getTableName() != null && !rule.getTableName().isBlank()) 
+            ? (rule.getTableName().trim() + "." + rule.getColumnName().trim()) 
+            : rule.getColumnName().trim();
+            
+        String op = rule.getOperator() != null ? rule.getOperator().trim().toLowerCase() : "is";
+        List<String> values = rule.getValue() != null ? rule.getValue() : Collections.emptyList();
+        
+        if (rule.getTableName() != null && !rule.getTableName().isBlank() && !rule.getTableName().matches("^[a-zA-Z0-9_\\.]+$")) {
+            throw new IllegalArgumentException("Invalid table name in filter: " + rule.getTableName());
+        }
+        if (!rule.getColumnName().matches("^[a-zA-Z0-9_]+$")) {
+            throw new IllegalArgumentException("Invalid column name in filter: " + rule.getColumnName());
+        }
+
+        String result;
+        switch (op) {
+            case "=":
+            case "is": {
+                String val = values.isEmpty() ? "" : values.get(0);
+                String escapedVal = val.replace("'", "''");
+                result = String.format("%s = '%s'", col, escapedVal);
+                break;
+            }
+            case "!=":
+            case "<>":
+            case "is not":
+            case "is different from": {
+                String val = values.isEmpty() ? "" : values.get(0);
+                String escapedVal = val.replace("'", "''");
+                result = String.format("(%s <> '%s' OR %s IS NULL)", col, escapedVal, col);
+                break;
+            }
+            case "contains":
+            case "like": {
+                String val = values.isEmpty() ? "" : values.get(0);
+                String escapedVal = val.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_").replace("'", "''");
+                if ("contains".equals(op)) {
+                    result = String.format("%s ILIKE '%%%s%%' ESCAPE '\\'", col, escapedVal);
+                } else {
+                    result = String.format("%s LIKE '%%%s%%' ESCAPE '\\'", col, escapedVal);
+                }
+                break;
+            }
+            case "does not contains":
+            case "not like": {
+                String val = values.isEmpty() ? "" : values.get(0);
+                String escapedVal = val.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_").replace("'", "''");
+                if ("does not contains".equals(op)) {
+                    result = String.format("(%s NOT ILIKE '%%%s%%' ESCAPE '\\' OR %s IS NULL)", col, escapedVal, col);
+                } else {
+                    result = String.format("(%s NOT LIKE '%%%s%%' ESCAPE '\\' OR %s IS NULL)", col, escapedVal, col);
+                }
+                break;
+            }
+            case "start with":
+            case "starts with": {
+                String val = values.isEmpty() ? "" : values.get(0);
+                String escapedVal = val.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_").replace("'", "''");
+                if ("start with".equals(op)) {
+                    result = String.format("%s ILIKE '%s%%' ESCAPE '\\'", col, escapedVal);
+                } else {
+                    result = String.format("%s LIKE '%s%%' ESCAPE '\\'", col, escapedVal);
+                }
+                break;
+            }
+            case "end with":
+            case "ends with": {
+                String val = values.isEmpty() ? "" : values.get(0);
+                String escapedVal = val.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_").replace("'", "''");
+                if ("end with".equals(op)) {
+                    result = String.format("%s ILIKE '%%%s' ESCAPE '\\'", col, escapedVal);
+                } else {
+                    result = String.format("%s LIKE '%%%s' ESCAPE '\\'", col, escapedVal);
+                }
+                break;
+            }
+            case "is blank": {
+                result = String.format("(%s IS NULL OR TRIM(CAST(%s AS TEXT)) = '')", col, col);
+                break;
+            }
+            case "is not blank": {
+                result = String.format("(%s IS NOT NULL AND TRIM(CAST(%s AS TEXT)) <> '')", col, col);
+                break;
+            }
+            case "is null": {
+                result = String.format("%s IS NULL", col);
+                break;
+            }
+            case "is not null": {
+                result = String.format("%s IS NOT NULL", col);
+                break;
+            }
+            case "in":
+            case "in list": {
+                List<String> quoted = new ArrayList<>();
+                for (String v : values) {
+                    quoted.add("'" + v.replace("'", "''") + "'");
+                }
+                if (quoted.isEmpty()) {
+                    result = String.format("%s IN (NULL)", col);
+                } else {
+                    result = String.format("%s IN (%s)", col, String.join(", ", quoted));
+                }
+                break;
+            }
+            case "not in":
+            case "not in list": {
+                List<String> quoted = new ArrayList<>();
+                for (String v : values) {
+                    quoted.add("'" + v.replace("'", "''") + "'");
+                }
+                if (quoted.isEmpty()) {
+                    result = String.format("%s NOT IN (NULL)", col);
+                } else {
+                    result = String.format("%s NOT IN (%s)", col, String.join(", ", quoted));
+                }
+                break;
+            }
+            case ">":
+            case "greater_than":
+            case "is greater then": {
+                String val = values.isEmpty() ? "" : values.get(0);
+                String escapedVal = val.replace("'", "''");
+                result = String.format("%s > '%s'", col, escapedVal);
+                break;
+            }
+            case ">=":
+            case "greater_equal":
+            case "is greater or equal": {
+                String val = values.isEmpty() ? "" : values.get(0);
+                String escapedVal = val.replace("'", "''");
+                result = String.format("%s >= '%s'", col, escapedVal);
+                break;
+            }
+            case "<":
+            case "less_than":
+            case "is less then": {
+                String val = values.isEmpty() ? "" : values.get(0);
+                String escapedVal = val.replace("'", "''");
+                result = String.format("%s < '%s'", col, escapedVal);
+                break;
+            }
+            case "<=":
+            case "less_equal":
+            case "is less or equal": {
+                String val = values.isEmpty() ? "" : values.get(0);
+                String escapedVal = val.replace("'", "''");
+                result = String.format("%s <= '%s'", col, escapedVal);
+                break;
+            }
+            default:
+                throw new IllegalArgumentException("Unsupported filter operator in recursive rules: " + op);
+        }
+        
+        validateFilterExpr(result);
+        return result;
+    }
+
+    public String compileRowGroup(RowFilterGroup group) {
+        if (group == null) {
+            return "";
+        }
+        List<String> parts = new ArrayList<>();
+        
+        if (group.getRules() != null) {
+            for (RowFilterRule rule : group.getRules()) {
+                String compiledRule = compileRowFilterRule(rule);
+                if (compiledRule != null && !compiledRule.isBlank()) {
+                    parts.add(compiledRule);
+                }
+            }
+        }
+        
+        if (group.getChildGroups() != null) {
+            for (RowFilterGroup child : group.getChildGroups()) {
+                String compiledChild = compileRowGroup(child);
+                if (compiledChild != null && !compiledChild.isBlank()) {
+                    parts.add(compiledChild);
+                }
+            }
+        }
+        
+        if (parts.isEmpty()) {
+            return "";
+        }
+        
+        String conj = " " + (group.getLogicalOperator() != null ? group.getLogicalOperator().trim().toUpperCase() : "AND") + " ";
+        return "(" + String.join(conj, parts) + ")";
     }
 
 

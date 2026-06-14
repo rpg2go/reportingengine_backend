@@ -53,8 +53,8 @@ The production deployment runs as containerized workloads:
 ## Configuration Management
 
 Configuration is handled through:
-- **Backend**: Configured via [application.properties](file:///G:/workspace/ReportTemplate_BackEnd/src/main/resources/application.properties) mapping ports, database URLs, usernames, passwords, and Hibernate logging levels.
-- **Frontend**: Configured in standard typescript providers ([app.config.ts](file:///G:/workspace/ReportTemplate_FrontEnd/src/app/app.config.ts)) and routing boundaries ([app.routes.ts](file:///G:/workspace/ReportTemplate_FrontEnd/src/app/app.routes.ts)).
+- **Backend**: Configured via [application.properties](../src/main/resources/application.properties) mapping ports, database URLs, usernames, passwords, and Hibernate logging levels.
+- **Frontend**: Configured in standard typescript providers ([app.config.ts](../../reportingengine_frontend/src/app/app.config.ts)) and routing boundaries ([app.routes.ts](../../reportingengine_frontend/src/app/app.routes.ts)).
 
 ---
 

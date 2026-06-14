@@ -62,7 +62,7 @@ To manually test REST APIs, you can run these simple PowerShell commands (ensure
 **1. Authentication Verification**:
 ```powershell
 Invoke-RestMethod -Uri "http://localhost:8101/api/auth/login" `
-  -Method Post `
+  -Method Get `
   -Headers @{ Authorization = "Basic " + [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes("admin:password")) }
 ```
 
