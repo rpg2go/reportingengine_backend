@@ -43,6 +43,7 @@ The backend ingests Excel layout templates, normalizes their configuration into 
 | [docs/testing.md](docs/testing.md) | Quality assurance guidelines, testing commands, and manual REST API checks |
 | [deployment/README.md](deployment/README.md) | Application packaging, Docker compose guidelines, and CI/CD stages |
 | [.agents/agents/validation_agents.md](.agents/agents/validation_agents.md) | Back-end validation agents specification and execution guide |
+| [docs/regional_distribution_template.md](docs/regional_distribution_template.md) | Detailed configuration reference for the Regional Distribution template |
 | [documentation/report_authoring_guide.md](documentation/report_authoring_guide.md) | Business user guide on how to design layout templates in Excel |
 | [documentation/implementation_plan.md](documentation/implementation_plan.md) | Base implementation plan for platform migration and dynamic filters |
 | [GEMINI.md](GEMINI.md) | Handoff state, schema layout, API endpoints, and phase 2 roadmap |
