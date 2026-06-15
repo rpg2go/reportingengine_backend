@@ -26,6 +26,15 @@
 ## 🔄 Phase 3: Validation, Verification & Polish (In Progress)
 - [x] Integration testing of the full execution pipeline.
 - [x] Unit tests for `SqlGeneratorService` and `PostProcessorService`.
+- [x] Unit tests for `ReportValidationService` (cyclic formula detection, schema expression checks).
+- [x] SQL Generator integration test (`SqlGeneratorServiceIT`) against seeded live database.
+- [x] Seeded report smoke-test (`ReportSeededValidationIT`) validating all 14 production templates.
+- [x] `MetadataControllerTest` covering injection rejection on dynamic table/column params.
+- [x] `ReportPreviewControllerTest` and `ReportControllerTest` unit test coverage.
+- [x] Schema catalog: `SchemaCatalogLoader` + `SchemaGraphRouter` (Dijkstra BFS multi-hop JOIN resolver) powered by `meta_*` tables (migration `010`).
+- [x] Report version lifecycle: `ReportVersionController` with `draft → in_review → published → fork` state machine and auto-clone on publish.
+- [x] `GlobalExceptionHandler` (`@ControllerAdvice`) for structured JSON error responses.
+- [x] `rpt_column_def` schema extensions: `rolling_grain` column, composite key adjustments, constraint relaxation (migrations `011`–`015`).
 - [ ] Frontend report detail view: run execution spinner and live status badges.
 - [ ] Edge case handling: divide-by-zero, cyclic formula references, missing metric expressions.
 - [ ] Column setup: fix "Rolling In" field behavior in Step 2.

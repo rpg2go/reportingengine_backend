@@ -3,13 +3,10 @@ package com.reporting.domain;
 import java.io.Serializable;
 import lombok.*;
 
-@Getter
-@Setter
+@Data
 @NoArgsConstructor
 @AllArgsConstructor
-@EqualsAndHashCode
-public class ReportRowId implements Serializable {
-    private String rowId;
+public class ReportPk implements Serializable {
     private String reportId;
     private Integer version;
 }

@@ -5,7 +5,7 @@ import lombok.*;
 
 @Entity
 @Table(name = "rpt_column_def", schema = "reporting",
-       uniqueConstraints = @UniqueConstraint(columnNames = {"report_id", "col_id"}))
+       uniqueConstraints = @UniqueConstraint(columnNames = {"report_id", "version", "col_id"}))
 @Getter
 @Setter
 @NoArgsConstructor
@@ -19,7 +19,10 @@ public class ColumnDef {
     private Integer columnDefId;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "report_id", referencedColumnName = "report_id", nullable = false)
+    @JoinColumns({
+        @JoinColumn(name = "report_id", referencedColumnName = "report_id", nullable = false),
+        @JoinColumn(name = "version", referencedColumnName = "version", nullable = false)
+    })
     private Report report;
 
     @Column(name = "col_id", nullable = false, length = 10)

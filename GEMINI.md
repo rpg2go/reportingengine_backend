@@ -34,9 +34,15 @@ This document serves as the architecture reference, implementation state, and co
 3. **Direct JDBC for Hot-Path Reads**:
    The `loadFromDb()` method in `ReportConfigService.java` was rewritten to use direct JDBC queries with `RowCallbackHandler` instead of 6 sequential JPA repository calls. This eliminated Hibernate entity-hydration overhead and unnecessary JOINs (e.g., `rpt_column_def` joining back to `rpt_report`), reducing the report config endpoint latency from ~163ms to ~59ms.
 4. **Database Migrations and Tracking**:
-   Database migration execution is managed by a custom utility `MigrationRunner.java`. It tracks applied SQL files (`000_*.sql` to `008_*.sql`) in the `reporting.schema_migrations` table.
+   Database migration execution is managed by a custom utility `MigrationRunner.java`. It tracks applied SQL files (`000_*.sql` to `015_*.sql`) in the `reporting.schema_migrations` table.
    - **Pre-Population Logic**: If database tables already exist (e.g. from local runs or Hibernate initialization), the runner automatically registers migrations `000` to `007` to skip execution, avoiding schema duplication errors.
    - **Report Seeds**: The migration `008_seed_report_templates.sql` seeds the system with 14 production report configurations.
+   - **Schema Catalog**: Migration `010_create_schema_catalog.sql` introduces the `meta_table`, `meta_column`, and `meta_relationship` tables that power the graph-based join router.
+   - **Column Def Extensions**: Migrations `011`–`015` extend `rpt_column_def` with `rolling_grain`, adjust composite keys, and relax constraints.
+5. **Catalog-Driven Join Graph (SchemaGraphRouter)**:
+   The `catalog` package (`SchemaCatalogLoader`, `SchemaGraphRouter`, `MetaTable`, `MetaColumn`, `MetaRelationship`) loads the `meta_*` schema catalog at startup into an in-memory graph and resolves multi-hop LEFT JOIN chains using a weighted Dijkstra BFS. Edge cost 1 = conformed dimension key, cost 2 = non-conformed FK. This replaces hardcoded join strings from the `sem_*` era.
+6. **Report Version Lifecycle**:
+   `ReportVersionController` manages a draft → in_review → published → (fork) lifecycle. Publishing a version auto-creates the next draft by cloning all child rows, columns, metrics, formulas, and column maps via direct JDBC `INSERT … SELECT` statements.
 
 ---
 
@@ -60,28 +66,60 @@ Represents the physical Data Warehouse (DWH) containing dimension and fact table
 
 ---
 
-## 🔌 API Endpoints (`ReportController.java`)
+## 🔌 API Endpoints
 
 All backend APIs are prefixed with `/api` and listen on port `8101`.
 
+### Report CRUD & Execution (`ReportController.java`)
+
 | HTTP Method | Endpoint | Description |
 | :--- | :--- | :--- |
-| **GET** | `/api/auth/login` | Validates Basic Auth and returns authenticated user info. |
-| **GET** | `/api/reports` | Lists all catalog reports. |
-| **GET** | `/api/reports/{id}` | Loads a single report definition config DTO. |
+| **GET** | `/api/reports` | Lists latest version per report (catalog view). |
+| **GET** | `/api/reports/{id}` | Loads a single report definition config DTO. Optional `?version=` and `?date=` params. |
 | **POST** | `/api/reports` | Creates a new report config. |
-| **PUT** | `/api/reports/{id}` | Updates an existing report config. |
+| **PUT** | `/api/reports/{id}` | Updates (cascade-overwrites) an existing report config. |
 | **POST** | `/api/reports/import` | Imports an Excel `.xlsx` template file (multipart). |
-| **POST** | `/api/reports/{id}/run` | Executes report generation and returns direct `.xlsx` download. |
-| **POST** | `/api/reports/{reportId}/execute` | Executes report and returns raw unpivoted grid coordinate values. |
-| **POST** | `/api/reports/preview-sql` | Dry-run query compilation to preview the generated SQL structure. |
+| **POST** | `/api/reports/{id}/run` | Executes report generation and returns direct `.xlsx` download. Optional `?version=` and `?date=`. |
 | **POST** | `/api/reports/validate` | Runs structural and semantic analysis to find configuration issues. |
 | **GET** | `/api/reports/tables` | Returns list of physical tables in the `analytics` schema. |
 | **GET** | `/api/reports/table-columns` | Returns column list for a table (e.g., `?table=fact_sales`). |
 | **GET** | `/api/reports/column-types` | Returns database column types map for a given table. |
 | **GET** | `/api/reports/dimensions/values` | Autocomplete distinct values for a table column. |
-| **GET** | `/api/reports/dimension-joins` | Fetches join metadata from explore structures for a fact table. |
-| **GET** | `/api/reports/semantic-model` | Fetches the complete metadata explore/view/dimension/measure model. |
+| **GET** | `/api/reports/dimension-joins` | Fetches join metadata from `sem_join` for a fact table. |
+| **GET** | `/api/reports/semantic-model` | Fetches the complete `sem_*` explore/view/dimension/measure model. |
+
+### Report Execution (`ReportExecutionController.java`)
+
+| HTTP Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| **POST** | `/api/reports/{reportId}/execute` | Executes report and returns raw unpivoted grid coordinate values. Validates date against `dim_date`. Optional `?version=` and runtime filters in request body. |
+
+### Report Version Lifecycle (`ReportVersionController.java`)
+
+| HTTP Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| **GET** | `/api/reports/{id}/version/list` | Lists all versions of a report, ordered by version descending. |
+| **POST** | `/api/reports/{id}/version/submit-review` | Transitions status `draft → in_review`. |
+| **POST** | `/api/reports/{id}/version/reject` | Transitions status `in_review → draft`. |
+| **POST** | `/api/reports/{id}/version/publish` | Publishes current version and auto-creates next draft (clones all child records). |
+| **POST** | `/api/reports/{id}/version/fork` | Manually forks a published version into a new draft. |
+
+### SQL Preview (`ReportPreviewController.java`)
+
+| HTTP Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| **POST** | `/api/reports/preview-sql` | Dry-run query compilation to preview the generated SQL structure. |
+
+### Authentication (`AuthController.java`)
+
+| HTTP Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| **GET** | `/api/auth/login` | Validates Basic Auth and returns authenticated user info. |
+
+### Metadata (`MetadataController.java`)
+
+| HTTP Method | Endpoint | Description |
+| :--- | :--- | :--- |
 | **GET** | `/api/metadata/distinct-values` | Security-validated distinct values search for dimension columns. |
 
 ---
@@ -93,19 +131,29 @@ Use the links below to navigate directly to the primary components:
 ### Backend Services & Controllers
 
 - **Controllers**:
-  - [ReportController.java](src/main/java/com/reporting/controller/ReportController.java) — Exposes metadata, table lists, columns, and autocomplete endpoints.
+  - [ReportController.java](src/main/java/com/reporting/controller/ReportController.java) — Report CRUD, import, run, validate, table metadata, and semantic-model endpoints.
   - [AuthController.java](src/main/java/com/reporting/controller/AuthController.java) — Manages login validation.
-  - [ReportExecutionController.java](src/main/java/com/reporting/controller/ReportExecutionController.java) — Orchestrates raw cell query executions.
+  - [ReportExecutionController.java](src/main/java/com/reporting/controller/ReportExecutionController.java) — Raw cell query execution with date validation against `dim_date`.
   - [ReportPreviewController.java](src/main/java/com/reporting/controller/ReportPreviewController.java) — Previews dry-run generated SQL queries.
+  - [ReportVersionController.java](src/main/java/com/reporting/controller/ReportVersionController.java) — Report version lifecycle: submit-review, reject, publish (with auto-fork), and manual fork.
   - [MetadataController.java](src/main/java/com/reporting/controller/MetadataController.java) — Provides security-sanitized distinct autocomplete values.
+  - [GlobalExceptionHandler.java](src/main/java/com/reporting/controller/GlobalExceptionHandler.java) — `@ControllerAdvice` mapping common exceptions to structured HTTP error responses.
 - **Core Engine Services**:
-  - [SqlGeneratorService.java](src/main/java/com/reporting/service/SqlGeneratorService.java) — Compiles report filters, fact tables, and rolling date boundaries into dynamic CTE queries.
+  - [ReportRunnerService.java](src/main/java/com/reporting/service/ReportRunnerService.java) — Orchestrates the full execution pipeline: Load → Resolve → Generate SQL → Execute → Post-Process → Render.
+  - [SqlGeneratorService.java](src/main/java/com/reporting/service/SqlGeneratorService.java) — Compiles report filters, fact tables, and rolling date boundaries into dynamic CTE queries. Delegates join resolution to `SchemaGraphRouter`.
   - [PostProcessorService.java](src/main/java/com/reporting/service/PostProcessorService.java) — Evaluates mathematical formulas at row/column intersections using `exp4j`.
   - [LayoutRendererService.java](src/main/java/com/reporting/service/LayoutRendererService.java) — Renders POI styles, grid alignments, fonts, colors, and formatting into downloading templates.
   - [ExcelParserService.java](src/main/java/com/reporting/service/ExcelParserService.java) — Handles extraction and ingestion of spreadsheet configurations.
+  - [ReportConfigService.java](src/main/java/com/reporting/service/ReportConfigService.java) — CRUD and config loading (hot-path JDBC read + cascade-delete JDBC write).
   - [ReportValidationService.java](src/main/java/com/reporting/service/ReportValidationService.java) — Validates cycle detections, schema checks, and expressions.
+  - [SemanticResolverService.java](src/main/java/com/reporting/service/SemanticResolverService.java) — Resolves metric metadata (legacy; bypassed in current execution flow).
+  - [DateUtils.java](src/main/java/com/reporting/service/DateUtils.java) — Period boundary calculations (start/end of week, month, quarter, year) for rolling columns.
+- **Catalog Package** (`com.reporting.catalog`):
+  - [SchemaCatalogLoader.java](src/main/java/com/reporting/catalog/SchemaCatalogLoader.java) — Loads `meta_table`, `meta_column`, `meta_relationship` into an in-memory graph at startup via `@PostConstruct`.
+  - [SchemaGraphRouter.java](src/main/java/com/reporting/catalog/SchemaGraphRouter.java) — Dijkstra BFS pathfinder resolving multi-hop LEFT JOIN chains between fact and dimension tables.
+  - [MetaTable.java](src/main/java/com/reporting/catalog/MetaTable.java), [MetaColumn.java](src/main/java/com/reporting/catalog/MetaColumn.java), [MetaRelationship.java](src/main/java/com/reporting/catalog/MetaRelationship.java) — In-memory graph node/edge models.
 - **Database Utilities**:
-  - [MigrationRunner.java](src/main/java/com/reporting/util/MigrationRunner.java) — Custom Java runner applying SQL migrations with tracking.
+  - [MigrationRunner.java](src/main/java/com/reporting/util/MigrationRunner.java) — Custom Java runner applying SQL migrations (`000–015`) with tracking in `schema_migrations`.
   - [DbDumper.java](src/main/java/com/reporting/util/DbDumper.java) — Helper utility to dump local reporting templates into migration files.
 
 ---

@@ -50,7 +50,7 @@ public abstract class BaseIT {
             registry.add("spring.datasource.password", postgres::getPassword);
         } else {
             // Fallback connection to the running docker container
-            registry.add("spring.datasource.url", () -> "jdbc:postgresql://127.0.0.1:5432/agentic_ai");
+            registry.add("spring.datasource.url", () -> "jdbc:postgresql://127.0.0.1:5433/agentic_ai");
             registry.add("spring.datasource.username", () -> "user");
             registry.add("spring.datasource.password", () -> "password");
         }
@@ -67,7 +67,7 @@ public abstract class BaseIT {
             username = postgres.getUsername();
             password = postgres.getPassword();
         } else {
-            jdbcUrl = "jdbc:postgresql://127.0.0.1:5432/agentic_ai";
+            jdbcUrl = "jdbc:postgresql://127.0.0.1:5433/agentic_ai";
             username = "user";
             password = "password";
         }

@@ -68,23 +68,38 @@ reportingengine_backend/
 │   ├── agents/                 # Validator specifications
 │   └── validation/             # Executable validation agent (agent.py, tools.py)
 ├── db/                         # Database container configuration
-│   ├── migrations/             # SQL migration scripts (000 to 008)
+│   ├── migrations/             # SQL migration scripts (000 to 015)
 │   └── Dockerfile              # Custom Postgres image bundling migrations
+├── docs/                       # Architecture, data model, and testing docs
+├── documentation/              # Business user design plans and authoring guides
 ├── src/                        # Spring Boot Java application source code
 │   ├── main/
 │   │   ├── java/com/reporting/
-│   │   │   ├── Application.java # Bootloader application class
-│   │   │   ├── config/         # Security & CORS settings
-│   │   │   ├── controller/     # REST Endpoints (Auth, Reports, Metadata)
-│   │   │   ├── domain/         # JPA Entities (rpt_* tables)
-│   │   │   ├── dto/            # Data Transfer Objects
-│   │   │   ├── repository/     # Data repositories
-│   │   │   ├── service/        # Core services (Parser, SQL, POI, formulas)
-│   │   │   └── util/           # MigrationRunner, DbDumper utilities
+│   │   │   ├── Application.java          # Bootloader application class
+│   │   │   ├── catalog/                  # Schema catalog & graph router
+│   │   │   │   ├── SchemaCatalogLoader.java  # Loads meta_* tables into in-memory graph
+│   │   │   │   ├── SchemaGraphRouter.java    # Dijkstra BFS join path resolver
+│   │   │   │   ├── MetaTable.java
+│   │   │   │   ├── MetaColumn.java
+│   │   │   │   └── MetaRelationship.java
+│   │   │   ├── config/                   # Security & CORS settings
+│   │   │   ├── controller/               # REST Endpoints
+│   │   │   │   ├── AuthController.java
+│   │   │   │   ├── GlobalExceptionHandler.java
+│   │   │   │   ├── MetadataController.java
+│   │   │   │   ├── ReportController.java
+│   │   │   │   ├── ReportExecutionController.java
+│   │   │   │   ├── ReportPreviewController.java
+│   │   │   │   └── ReportVersionController.java
+│   │   │   ├── domain/                   # JPA Entities (rpt_* tables)
+│   │   │   ├── dto/                      # Data Transfer Objects
+│   │   │   ├── exception/                # Custom exception types
+│   │   │   ├── repository/               # Spring Data repositories
+│   │   │   ├── service/                  # Core services (Parser, SQL, POI, formulas)
+│   │   │   └── util/                     # MigrationRunner, DbDumper utilities
 │   │   └── resources/
-│   │       └── application.properties # Server and datasource config
-│   └── test/                   # JUnit unit & integration tests
-├── documentation/              # Design plans and authoring guides
+│   │       └── application.properties    # Server and datasource config
+│   └── test/                             # JUnit unit & integration tests
 ├── maven/                      # Embedded Apache Maven 3.9.6 wrapper
 ├── docker-compose.yml          # Container composition orchestration
 ├── pom.xml                     # Maven POM dependencies build script
@@ -118,13 +133,17 @@ The architecture is built for clean separation of concerns:
 flowchart TD
     A["Angular Frontend (UI / SPA on :4200)"] -->|HTTP / REST APIs| B["Spring Boot Backend (REST APIs on :8101)"]
     B --> C["Excel Parser (Apache POI)"]
-    B --> D["SQL Generator (Conditional Aggregation)"]
+    B --> D["SQL Generator (Conditional Aggregation CTEs)"]
     B --> E["Post-Processor (exp4j Formula Evaluation)"]
     B --> F["Layout Renderer (Apache POI)"]
+    B --> H["Schema Catalog (SchemaCatalogLoader)"]
+    H --> I["Graph Router (SchemaGraphRouter / Dijkstra BFS)"]
+    D --> I
     C --> G[("PostgreSQL Database (Docker port :5433)")]
     D --> G
     E --> G
     F --> G
+    H --> G
 ```
 
 ---

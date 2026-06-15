@@ -137,7 +137,7 @@ public class ExcelParserServiceTest {
         ImportRun mockRun = ImportRun.builder().runId(1).build();
         when(importRunRepository.save(any(ImportRun.class))).thenReturn(mockRun);
         when(styleRepository.findAll()).thenReturn(List.of(Style.builder().styleId(1).name("normal").build()));
-        when(reportRepository.findById("RPT_001")).thenReturn(Optional.empty());
+        when(reportRepository.findFirstByReportIdOrderByVersionDesc("RPT_001")).thenReturn(Optional.empty());
         when(reportRepository.save(any(Report.class))).thenAnswer(i -> i.getArgument(0));
         when(jdbcTemplate.queryForList(anyString(), eq(Integer.class), eq("sales_total")))
             .thenReturn(List.of(99)); // mock measure lookup ID = 99

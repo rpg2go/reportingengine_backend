@@ -5,7 +5,7 @@ import lombok.*;
 
 @Entity
 @Table(name = "rpt_row_column_map", schema = "reporting",
-       uniqueConstraints = @UniqueConstraint(columnNames = {"report_id", "row_id", "col_id"}))
+       uniqueConstraints = @UniqueConstraint(columnNames = {"report_id", "version", "row_id", "col_id"}))
 @Getter
 @Setter
 @NoArgsConstructor
@@ -20,6 +20,9 @@ public class RowColumnMap {
 
     @Column(name = "report_id", nullable = false, length = 50)
     private String reportId;
+
+    @Column(name = "version", nullable = false)
+    private Integer version = 1;
 
     @Column(name = "row_id", nullable = false, length = 50)
     private String rowId;

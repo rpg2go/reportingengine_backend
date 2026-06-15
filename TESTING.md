@@ -22,23 +22,28 @@ All test sources must reside in `src/test/java`, paralleling the package structu
 ```
 src/test/java
 ├── com.reporting
-│   ├── BaseIT.java                           <-- Base Integration Test Class
+│   ├── BaseIT.java                               <-- Base Integration Test Class
+│   ├── ReportSeededValidationIT.java             <-- Seeded report smoke-test IT
 │   ├── controller
-│   │   ├── AuthControllerTest.java           <-- Unit/Security Controller Test
-│   │   ├── ReportControllerTest.java         <-- Unit/API Controller Test
-│   │   └── ReportControllerIT.java           <-- Integration Controller/Security Test
+│   │   ├── AuthControllerTest.java               <-- Unit/Security Controller Test
+│   │   ├── MetadataControllerTest.java           <-- Security & Injection Controller Test
+│   │   ├── ReportControllerTest.java             <-- Unit/API Controller Test
+│   │   ├── ReportControllerIT.java               <-- Integration Controller/Security Test
+│   │   └── ReportPreviewControllerTest.java      <-- Preview SQL Controller Test
 │   └── service
-│       ├── DateUtilsTest.java                <-- Utility Unit Test
-│       ├── ExcelParserServiceTest.java       <-- Service Parser Unit Test
-│       ├── LayoutRendererServiceTest.java    <-- Service Excel Generation Unit Test
-│       ├── PostProcessorServiceTest.java     <-- Service Formula Processor Unit Test
-│       ├── SemanticResolverServiceTest.java  <-- Service Metadata Resolver Unit Test
-│       ├── SqlGeneratorServiceTest.java      <-- Service SQL Generator Unit Test
-│       ├── ReportConfigServiceTest.java      <-- Service Config Unit Test
-│       ├── ReportConfigServiceIT.java        <-- Service Config Integration Test
-│       └── ReportRunnerServiceIT.java        <-- E2E Runner Pipeline Integration Test
+│       ├── DateUtilsTest.java                    <-- Utility Unit Test
+│       ├── ExcelParserServiceTest.java           <-- Service Parser Unit Test
+│       ├── LayoutRendererServiceTest.java        <-- Service Excel Generation Unit Test
+│       ├── PostProcessorServiceTest.java         <-- Service Formula Processor Unit Test
+│       ├── ReportValidationServiceTest.java      <-- Validation Service Unit Test
+│       ├── SemanticResolverServiceTest.java      <-- Service Metadata Resolver Unit Test
+│       ├── SqlGeneratorServiceTest.java          <-- Service SQL Generator Unit Test
+│       ├── SqlGeneratorServiceIT.java            <-- SQL Generator Integration Test (live DB)
+│       ├── ReportConfigServiceTest.java          <-- Service Config Unit Test
+│       ├── ReportConfigServiceIT.java            <-- Service Config Integration Test
+│       └── ReportRunnerServiceIT.java            <-- E2E Runner Pipeline Integration Test
 src/test/resources
-└── application-test.properties               <-- Test environment properties
+└── application-test.properties                   <-- Test environment properties
 ```
 
 ---

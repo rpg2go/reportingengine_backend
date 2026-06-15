@@ -10,6 +10,6 @@ public class Enums {
     }
 
     public enum ReportStatus {
-        draft, published
+        draft, in_review, published
     }
 }

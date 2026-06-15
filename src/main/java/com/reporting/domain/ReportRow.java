@@ -21,8 +21,15 @@ public class ReportRow {
     @Column(name = "report_id", length = 50)
     private String reportId;
 
+    @Id
+    @Column(name = "version", nullable = false)
+    private Integer version = 1;
+
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "report_id", referencedColumnName = "report_id", insertable = false, updatable = false)
+    @JoinColumns({
+        @JoinColumn(name = "report_id", referencedColumnName = "report_id", insertable = false, updatable = false),
+        @JoinColumn(name = "version", referencedColumnName = "version", insertable = false, updatable = false)
+    })
     private Report report;
 
     @Column(name = "parent_row_id", length = 50)

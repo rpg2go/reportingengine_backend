@@ -52,14 +52,18 @@ public class ReportController {
 
     @GetMapping
     public ResponseEntity<List<Report>> listReports() {
-        return ResponseEntity.ok(reportRepository.findAll());
+        return ResponseEntity.ok(reportRepository.findLatestVersionPerReport());
     }
 
     @GetMapping("/{id}")
     public ResponseEntity<ReportConfigDto> getReportConfig(
             @PathVariable("id") String id,
+            @RequestParam(value = "version", required = false) Integer version,
             @RequestParam(value = "date", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
         LocalDate refDate = date != null ? date : LocalDate.now();
+        if (version != null) {
+            return ResponseEntity.ok(configService.loadFromDb(id, version, refDate));
+        }
         return ResponseEntity.ok(configService.loadFromDb(id, refDate));
     }
 
@@ -81,11 +85,12 @@ public class ReportController {
     @PostMapping("/{id}/run")
     public ResponseEntity<byte[]> runReport(
             @PathVariable("id") String id,
+            @RequestParam(value = "version", required = false) Integer version,
             @RequestParam(value = "date", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
         LocalDate refDate = date != null ? date : LocalDate.now();
         try {
-            log.info("Running report generation for report ID: {} with refDate: {}", id, refDate);
-            byte[] xlsxBytes = runnerService.runReport(id, refDate);
+            log.info("Running report generation for report ID: {} version: {} with refDate: {}", id, version, refDate);
+            byte[] xlsxBytes = runnerService.runReport(id, version, refDate);
             String filename = String.format("%s_%s.xlsx", id, refDate.toString());
 
             return ResponseEntity.ok()

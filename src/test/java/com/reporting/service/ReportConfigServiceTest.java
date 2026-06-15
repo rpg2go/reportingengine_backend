@@ -35,7 +35,7 @@ public class ReportConfigServiceTest {
     @Test
     @DisplayName("loadFromDb throws IllegalArgumentException if report does not exist")
     public void loadFromDb_nonExistentReport_shouldThrowException() {
-        when(reportRepository.findById("INVALID_ID")).thenReturn(Optional.empty());
+        when(reportRepository.findFirstByReportIdOrderByVersionDesc("INVALID_ID")).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.loadFromDb("INVALID_ID", LocalDate.now()))
             .isInstanceOf(IllegalArgumentException.class)
@@ -43,27 +43,29 @@ public class ReportConfigServiceTest {
     }
 
     @Test
-    @DisplayName("saveToDb throws IllegalArgumentException on status transition from draft to published if version is not exactly +1")
-    public void saveToDb_versionMismatchOnPublish_shouldThrowException() {
+    @DisplayName("saveToDb throws IllegalStateException if attempting to modify a published report")
+    public void saveToDb_onPublishedReport_shouldThrowException() {
         ReportConfigDto dto = new ReportConfigDto();
         dto.setReportId("RPT_1");
-        dto.setStatus(Enums.ReportStatus.published);
-        dto.setVersion(1); // Mismatch: existing is 1, so publishing requires version 2
+        dto.setStatus(Enums.ReportStatus.draft);
+        dto.setVersion(1);
 
         when(jdbcTemplate.queryForObject(
-            org.mockito.ArgumentMatchers.eq("SELECT EXISTS(SELECT 1 FROM reporting.rpt_report WHERE report_id = ?)"),
+            org.mockito.ArgumentMatchers.eq("SELECT EXISTS(SELECT 1 FROM reporting.rpt_report WHERE report_id = ? AND version = ?)"),
             org.mockito.ArgumentMatchers.eq(Boolean.class),
-            org.mockito.ArgumentMatchers.eq("RPT_1")
+            org.mockito.ArgumentMatchers.eq("RPT_1"),
+            org.mockito.ArgumentMatchers.eq(1)
         )).thenReturn(true);
 
-        java.util.Map<String, Object> mockRecord = java.util.Map.of("version", 1, "status", "draft");
+        java.util.Map<String, Object> mockRecord = java.util.Map.of("status", "published");
         when(jdbcTemplate.queryForMap(
-            org.mockito.ArgumentMatchers.eq("SELECT version, status FROM reporting.rpt_report WHERE report_id = ?"),
-            org.mockito.ArgumentMatchers.eq("RPT_1")
+            org.mockito.ArgumentMatchers.eq("SELECT status FROM reporting.rpt_report WHERE report_id = ? AND version = ?"),
+            org.mockito.ArgumentMatchers.eq("RPT_1"),
+            org.mockito.ArgumentMatchers.eq(1)
         )).thenReturn(mockRecord);
 
         assertThatThrownBy(() -> service.saveToDb(dto))
-            .isInstanceOf(IllegalArgumentException.class)
-            .hasMessageContaining("Version mismatch. To publish, version must be exactly 2");
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("is PUBLISHED and cannot be modified");
     }
 }

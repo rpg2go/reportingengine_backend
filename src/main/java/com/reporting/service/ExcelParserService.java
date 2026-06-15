@@ -186,11 +186,10 @@ public class ExcelParserService {
                 String reportId = entry.getKey();
                 List<ParsedRow> rRows = entry.getValue();
 
-                // Delete old config to ensure clean import
-                deleteReportConfigCascade(reportId);
+                // Find existing report to determine version & status
+                Report r = reportRepository.findFirstByReportIdOrderByVersionDesc(reportId).orElse(null);
+                int version = 1;
 
-                // Insert or Update Report (preserves PK identity context in JPA transaction)
-                Report r = reportRepository.findById(reportId).orElse(null);
                 if (r == null) {
                     r = Report.builder()
                         .reportId(reportId)
@@ -200,11 +199,27 @@ public class ExcelParserService {
                         .createdAt(LocalDateTime.now())
                         .updatedAt(LocalDateTime.now())
                         .build();
+                    r = reportRepository.save(r);
+                } else if ("published".equalsIgnoreCase(r.getStatus()) || "in_review".equalsIgnoreCase(r.getStatus())) {
+                    // Fork a new draft version!
+                    version = r.getVersion() + 1;
+                    r = Report.builder()
+                        .reportId(reportId)
+                        .name(convertToTitle(reportId))
+                        .status("draft")
+                        .version(version)
+                        .createdAt(LocalDateTime.now())
+                        .updatedAt(LocalDateTime.now())
+                        .build();
+                    r = reportRepository.save(r);
                 } else {
+                    // Overwrite the existing draft
+                    version = r.getVersion();
+                    deleteReportConfigCascade(reportId, version);
                     r.setName(convertToTitle(reportId));
                     r.setUpdatedAt(LocalDateTime.now());
+                    r = reportRepository.save(r);
                 }
-                r = reportRepository.save(r);
 
                 // Insert Columns
                 for (ParsedColumn pc : parsedCols) {
@@ -231,6 +246,7 @@ public class ExcelParserService {
                     ReportRow rr = ReportRow.builder()
                         .rowId(pr.getRowId())
                         .reportId(reportId)
+                        .version(version)
                         .parentRowId(pr.getParentRowId() != null && !pr.getParentRowId().isBlank() ? pr.getParentRowId() : null)
                         .label(pr.getLabel())
                         .rowType(pr.getRowType())
@@ -248,6 +264,7 @@ public class ExcelParserService {
                         if (!ids.isEmpty()) {
                             RowMetric rm = RowMetric.builder()
                                 .reportId(reportId)
+                                .version(version)
                                 .rowId(pr.getRowId())
                                 .measureId(ids.get(0))
                                 .build();
@@ -259,6 +276,7 @@ public class ExcelParserService {
                     if (pr.getRowType().equalsIgnoreCase("calc") && pr.getSource() != null && !pr.getSource().isBlank()) {
                         RowFormula rf = RowFormula.builder()
                             .reportId(reportId)
+                            .version(version)
                             .rowId(pr.getRowId())
                             .formulaExpr(pr.getSource())
                             .build();
@@ -270,6 +288,7 @@ public class ExcelParserService {
                         boolean isEnabled = pr.getActiveCols().contains(pc.getColId().toUpperCase());
                         RowColumnMap rcm = RowColumnMap.builder()
                             .reportId(reportId)
+                            .version(version)
                             .rowId(pr.getRowId())
                             .colId(pc.getColId())
                             .isEnabled(isEnabled)
@@ -292,12 +311,12 @@ public class ExcelParserService {
         }
     }
 
-    private void deleteReportConfigCascade(String reportId) {
-        jdbcTemplate.update("DELETE FROM reporting.rpt_row_column_map WHERE report_id = ?", reportId);
-        jdbcTemplate.update("DELETE FROM reporting.rpt_row_formula WHERE report_id = ?", reportId);
-        jdbcTemplate.update("DELETE FROM reporting.rpt_row_metric WHERE report_id = ?", reportId);
-        jdbcTemplate.update("DELETE FROM reporting.rpt_row WHERE report_id = ?", reportId);
-        jdbcTemplate.update("DELETE FROM reporting.rpt_column_def WHERE report_id = ?", reportId);
+    private void deleteReportConfigCascade(String reportId, int version) {
+        jdbcTemplate.update("DELETE FROM reporting.rpt_row_column_map WHERE report_id = ? AND version = ?", reportId, version);
+        jdbcTemplate.update("DELETE FROM reporting.rpt_row_formula WHERE report_id = ? AND version = ?", reportId, version);
+        jdbcTemplate.update("DELETE FROM reporting.rpt_row_metric WHERE report_id = ? AND version = ?", reportId, version);
+        jdbcTemplate.update("DELETE FROM reporting.rpt_row WHERE report_id = ? AND version = ?", reportId, version);
+        jdbcTemplate.update("DELETE FROM reporting.rpt_column_def WHERE report_id = ? AND version = ?", reportId, version);
     }
 
     private Map<String, Integer> getHeaderMap(Row row) {

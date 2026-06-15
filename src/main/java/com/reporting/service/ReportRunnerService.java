@@ -37,12 +37,18 @@ public class ReportRunnerService {
     }
 
     public byte[] runReport(String reportId, LocalDate referenceDate) throws Exception {
+        return runReport(reportId, null, referenceDate);
+    }
+
+    public byte[] runReport(String reportId, Integer version, LocalDate referenceDate) throws Exception {
         LocalDate refDate = referenceDate != null ? referenceDate : LocalDate.now();
 
-        log.info("Starting report run execution for reportId: {} with referenceDate: {}", reportId, refDate);
+        log.info("Starting report run execution for reportId: {} version: {} with referenceDate: {}", reportId, version, refDate);
 
         // 1. Load Config
-        ReportConfigDto config = configService.loadFromDb(reportId, refDate);
+        ReportConfigDto config = version != null
+            ? configService.loadFromDb(reportId, version, refDate)
+            : configService.loadFromDb(reportId, refDate);
         log.info("Loaded configuration for reportId: {}, Columns count: {}, Rows count: {}", 
             reportId, config.getColumns().size(), config.getRows().size());
 

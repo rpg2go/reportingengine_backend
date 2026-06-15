@@ -35,9 +35,10 @@ public class ReportExecutionController {
     @PostMapping("/{reportId}/execute")
     public ResponseEntity<?> executeReport(
             @PathVariable("reportId") String reportId,
+            @RequestParam(value = "version", required = false) Integer version,
             @RequestBody ExecuteRequest request) {
         try {
-            log.info("Executing report execution endpoint for reportId: {} with date: {} and filters: {}", reportId, request.getReportingDate(), request.getRuntimeFilters());
+            log.info("Executing report execution endpoint for reportId: {} with version: {}, date: {} and filters: {}", reportId, version, request.getReportingDate(), request.getRuntimeFilters());
 
             LocalDate refDate;
             if (request.getReportingDate() != null && !request.getReportingDate().isBlank()) {
@@ -59,7 +60,9 @@ public class ReportExecutionController {
             }
 
             // 3. Load the master template config DTO
-            ReportConfigDto config = configService.loadFromDb(reportId, refDate);
+            ReportConfigDto config = version != null
+                ? configService.loadFromDb(reportId, version, refDate)
+                : configService.loadFromDb(reportId, refDate);
 
             // 2. Inject consumer's runtime quick filter overrides
             overrideQuickFilters(config, request.getRuntimeFilters());

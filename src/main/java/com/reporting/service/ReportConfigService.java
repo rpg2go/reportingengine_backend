@@ -24,13 +24,13 @@ public class ReportConfigService {
     private final org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
 
     public ReportConfigService(ReportRepository reportRepository,
-                               ColumnDefRepository columnDefRepository,
-                               ReportRowRepository reportRowRepository,
-                               RowMetricRepository rowMetricRepository,
-                               RowFormulaRepository rowFormulaRepository,
-                               RowColumnMapRepository rowColumnMapRepository,
-                               StyleRepository styleRepository,
-                               org.springframework.jdbc.core.JdbcTemplate jdbcTemplate) {
+                              ColumnDefRepository columnDefRepository,
+                              ReportRowRepository reportRowRepository,
+                              RowMetricRepository rowMetricRepository,
+                              RowFormulaRepository rowFormulaRepository,
+                              RowColumnMapRepository rowColumnMapRepository,
+                              StyleRepository styleRepository,
+                              org.springframework.jdbc.core.JdbcTemplate jdbcTemplate) {
         this.reportRepository = reportRepository;
         this.columnDefRepository = columnDefRepository;
         this.reportRowRepository = reportRowRepository;
@@ -43,19 +43,22 @@ public class ReportConfigService {
 
     @Transactional(readOnly = true)
     public ReportConfigDto loadFromDb(String reportId, LocalDate referenceDate) {
-        // ── Single-pass optimized load using direct JDBC queries ────────────────────
-        // Replaces 6+ sequential JPA repository calls with 4 targeted JDBC queries,
-        // drastically reducing DB round-trips and JPA entity-hydration overhead.
-
-        // 1. Report header (JPA — single PK lookup, fast)
-        Report report = reportRepository.findById(reportId)
+        Report report = reportRepository.findFirstByReportIdOrderByVersionDesc(reportId)
             .orElseThrow(() -> new IllegalArgumentException("Report not found: " + reportId));
+        return loadFromDb(reportId, report.getVersion(), referenceDate);
+    }
 
-        // 2. Columns — direct JDBC avoids JPA JOIN on parent Report entity
+    @Transactional(readOnly = true)
+    public ReportConfigDto loadFromDb(String reportId, Integer version, LocalDate referenceDate) {
+        // 1. Report header
+        Report report = reportRepository.findById(new ReportPk(reportId, version))
+            .orElseThrow(() -> new IllegalArgumentException("Report not found: " + reportId + " v" + version));
+
+        // 2. Columns — direct JDBC query filtered by version
         List<ColumnDefDto> columns = jdbcTemplate.query(
             "SELECT col_id, label, col_type, COALESCE(period_offset,0) AS period_offset, " +
             "rolling_n, rolling_grain, formula_expr, display_order " +
-            "FROM reporting.rpt_column_def WHERE report_id = ? ORDER BY display_order",
+            "FROM reporting.rpt_column_def WHERE report_id = ? AND version = ? ORDER BY display_order",
             (rs, rowNum) -> new ColumnDefDto(
                 rs.getString("col_id"),
                 rs.getString("label"),
@@ -65,9 +68,8 @@ public class ReportConfigService {
                 rs.getString("rolling_grain"),
                 rs.getString("formula_expr"),
                 rs.getInt("display_order")
-            ), reportId);
+            ), reportId, version);
 
-        // 3. Row metrics — sql_expr or fallback to measure_definition JSON
         // 2.5 Load semantic measures for translation lookup
         Map<String, SemanticMeasureInfo> semMeasures = new HashMap<>();
         jdbcTemplate.query(
@@ -95,7 +97,7 @@ public class ReportConfigService {
             }
         );
 
-        // 3. Row metrics — sql_expr or fallback to measure_definition JSON
+        // 3. Row metrics — filtered by version
         Map<String, MeasureDefinitionDTO> measuresByRow = new HashMap<>();
         com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
         jdbcTemplate.query(
@@ -103,7 +105,7 @@ public class ReportConfigService {
             "FROM reporting.rpt_row_metric rm " +
             "LEFT JOIN reporting.sem_measure sm ON sm.measure_id = rm.measure_id " +
             "LEFT JOIN reporting.sem_view sv ON sv.view_id = sm.view_id " +
-            "WHERE rm.report_id = ?",
+            "WHERE rm.report_id = ? AND rm.version = ?",
             (RowCallbackHandler) rs -> {
                 String rid = rs.getString("row_id").toUpperCase();
                 String measureDefStr = rs.getString("measure_definition");
@@ -116,7 +118,6 @@ public class ReportConfigService {
                     }
                 }
                 if (mdef == null) {
-                    // Fallback to sql_expr or sem_sql_expr or sem_name
                     String expr = rs.getString("sql_expr");
                     if (expr == null || expr.isBlank()) {
                         expr = rs.getString("sem_sql_expr");
@@ -134,7 +135,6 @@ public class ReportConfigService {
                         .build();
                 }
 
-                // Apply fallback translation layer if rawSql matches a semantic measure
                 if (mdef.getRawSql() != null) {
                     String cleanSql = mdef.getRawSql().trim().toLowerCase();
                     if (semMeasures.containsKey(cleanSql)) {
@@ -146,7 +146,6 @@ public class ReportConfigService {
                     }
                 }
 
-                // Resilient Table Detection: If table is null/blank, scan rawSql for known table_refs
                 if (mdef.getTable() == null || mdef.getTable().isBlank()) {
                     if (mdef.getRawSql() != null && !mdef.getRawSql().isBlank()) {
                         String raw = mdef.getRawSql();
@@ -171,37 +170,36 @@ public class ReportConfigService {
 
                 measuresByRow.put(rid, mdef);
             },
-            reportId);
-
+            reportId, version);
 
         // 4. Row formulas
         Map<String, String> formulasByRow = new HashMap<>();
         jdbcTemplate.query(
-            "SELECT row_id, formula_expr FROM reporting.rpt_row_formula WHERE report_id = ?",
+            "SELECT row_id, formula_expr FROM reporting.rpt_row_formula WHERE report_id = ? AND version = ?",
             (RowCallbackHandler) rs -> formulasByRow.put(rs.getString("row_id").toUpperCase(), rs.getString("formula_expr")),
-            reportId);
+            reportId, version);
 
-        // 5. Active column flags (row × col mapping) — single query
+        // 5. Active column flags
         Map<String, Set<String>> activeColsByRow = new HashMap<>();
         jdbcTemplate.query(
             "SELECT row_id, col_id FROM reporting.rpt_row_column_map " +
-            "WHERE report_id = ? AND is_enabled = TRUE",
+            "WHERE report_id = ? AND version = ? AND is_enabled = TRUE",
             (RowCallbackHandler) rs -> activeColsByRow
                 .computeIfAbsent(rs.getString("row_id").toUpperCase(), k -> new HashSet<>())
                 .add(rs.getString("col_id").toUpperCase()),
-            reportId);
+            reportId, version);
 
-        // 6. Style name map — tiny table, single query
+        // 6. Style name map
         Map<Integer, String> styleNameMap = new HashMap<>();
         jdbcTemplate.query(
             "SELECT style_id, name FROM reporting.rpt_style",
             (RowCallbackHandler) rs -> styleNameMap.put(rs.getInt("style_id"), rs.getString("name")));
 
-        // 7. Rows joined with style name — single query
+        // 7. Rows
         List<ReportRowDto> rows = jdbcTemplate.query(
             "SELECT r.row_id, r.report_id, r.label, r.row_type, r.parent_row_id, " +
             "r.indent_level, r.display_order, r.filter_expr, r.style_id " +
-            "FROM reporting.rpt_row r WHERE r.report_id = ? ORDER BY r.display_order",
+            "FROM reporting.rpt_row r WHERE r.report_id = ? AND r.version = ? ORDER BY r.display_order",
             (rs, rowNum) -> {
                 String rid = rs.getString("row_id").toUpperCase();
                 String rowType = rs.getString("row_type");
@@ -229,7 +227,7 @@ public class ReportConfigService {
                     activeColsByRow.getOrDefault(rid, Collections.emptySet()),
                     rs.getString("filter_expr")
                 );
-            }, reportId);
+            }, reportId, version);
 
         ReportConfigDto dto = new ReportConfigDto(
             report.getReportId(),
@@ -253,14 +251,15 @@ public class ReportConfigService {
     @Transactional
     public void saveToDb(ReportConfigDto dto) {
         String reportId = dto.getReportId();
+        Integer version = dto.getVersion() != null ? dto.getVersion() : 1;
         com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
 
-        // 1. Delete previous configuration cascade to ensure clean overwrite (only delete child tables)
-        jdbcTemplate.update("DELETE FROM reporting.rpt_row_column_map WHERE report_id = ?", reportId);
-        jdbcTemplate.update("DELETE FROM reporting.rpt_row_formula WHERE report_id = ?", reportId);
-        jdbcTemplate.update("DELETE FROM reporting.rpt_row_metric WHERE report_id = ?", reportId);
-        jdbcTemplate.update("DELETE FROM reporting.rpt_row WHERE report_id = ?", reportId);
-        jdbcTemplate.update("DELETE FROM reporting.rpt_column_def WHERE report_id = ?", reportId);
+        // 1. Delete previous configuration cascade for this specific version only
+        jdbcTemplate.update("DELETE FROM reporting.rpt_row_column_map WHERE report_id = ? AND version = ?", reportId, version);
+        jdbcTemplate.update("DELETE FROM reporting.rpt_row_formula WHERE report_id = ? AND version = ?", reportId, version);
+        jdbcTemplate.update("DELETE FROM reporting.rpt_row_metric WHERE report_id = ? AND version = ?", reportId, version);
+        jdbcTemplate.update("DELETE FROM reporting.rpt_row WHERE report_id = ? AND version = ?", reportId, version);
+        jdbcTemplate.update("DELETE FROM reporting.rpt_column_def WHERE report_id = ? AND version = ?", reportId, version);
 
         // 2. Get standard styles name map
         List<Style> dbStyles = styleRepository.findAll();
@@ -271,51 +270,42 @@ public class ReportConfigService {
 
         // 3. Save or Update Report Header
         boolean exists = jdbcTemplate.queryForObject(
-            "SELECT EXISTS(SELECT 1 FROM reporting.rpt_report WHERE report_id = ?)",
+            "SELECT EXISTS(SELECT 1 FROM reporting.rpt_report WHERE report_id = ? AND version = ?)",
             Boolean.class,
-            reportId
+            reportId,
+            version
         );
 
         String incomingStatus = dto.getStatus() != null ? dto.getStatus().name() : "draft";
-        Integer newVersion = 1;
 
         if (exists) {
-            // Retrieve current version and status from DB
             Map<String, Object> currentRecord = jdbcTemplate.queryForMap(
-                "SELECT version, status FROM reporting.rpt_report WHERE report_id = ?",
-                reportId
+                "SELECT status FROM reporting.rpt_report WHERE report_id = ? AND version = ?",
+                reportId,
+                version
             );
-            int currentVersion = ((Number) currentRecord.get("version")).intValue();
             String currentStatus = (String) currentRecord.get("status");
-
-            // Validate status transitions and version integrity
-            if ("draft".equalsIgnoreCase(currentStatus) && "published".equalsIgnoreCase(incomingStatus)) {
-                if (dto.getVersion() == null || dto.getVersion() != currentVersion + 1) {
-                    throw new IllegalArgumentException("Version mismatch. To publish, version must be exactly " + (currentVersion + 1) + " (incoming: " + dto.getVersion() + ").");
-                }
-                newVersion = dto.getVersion();
-            } else {
-                newVersion = dto.getVersion() != null ? dto.getVersion() : currentVersion;
+            if ("published".equalsIgnoreCase(currentStatus)) {
+                throw new IllegalStateException("Report " + reportId + " version " + version + " is PUBLISHED and cannot be modified.");
             }
 
             jdbcTemplate.update(
-                "UPDATE reporting.rpt_report SET name = ?, explore_id = ?, version = ?, status = ?, granularity = ?, " +
+                "UPDATE reporting.rpt_report SET name = ?, explore_id = ?, status = ?, granularity = ?, " +
                 "timeframe_start = ?, timeframe_end = ?, timeframe_today = ?, quick_filters = ?, general_filters = ?, " +
-                "updated_at = NOW() WHERE report_id = ?",
+                "updated_at = NOW() WHERE report_id = ? AND version = ?",
                 dto.getName(),
                 dto.getExploreId(),
-                newVersion,
-                incomingStatus,
+                incomingStatus.toLowerCase(),
                 dto.getGranularity(),
                 dto.getTimeframeStart(),
                 dto.getTimeframeEnd(),
                 dto.getTimeframeToday() != null ? dto.getTimeframeToday() : false,
                 dto.getQuickFilters(),
                 dto.getGeneralFilters(),
-                reportId
+                reportId,
+                version
             );
         } else {
-            newVersion = dto.getVersion() != null ? dto.getVersion() : 1;
             jdbcTemplate.update(
                 "INSERT INTO reporting.rpt_report (report_id, name, description, explore_id, version, status, granularity, " +
                 "timeframe_start, timeframe_end, timeframe_today, quick_filters, general_filters, created_at, updated_at) " +
@@ -323,8 +313,8 @@ public class ReportConfigService {
                 reportId,
                 dto.getName(),
                 dto.getExploreId(),
-                newVersion,
-                incomingStatus,
+                version,
+                incomingStatus.toLowerCase(),
                 dto.getGranularity(),
                 dto.getTimeframeStart(),
                 dto.getTimeframeEnd(),
@@ -336,13 +326,14 @@ public class ReportConfigService {
 
         // 4. Save Column Definitions via JDBC
         if (dto.getColumns() != null) {
-            String insertColSql = "INSERT INTO reporting.rpt_column_def (report_id, col_id, label, col_type, period_offset, rolling_n, rolling_grain, formula_expr, display_order) " +
-                                  "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
+            String insertColSql = "INSERT INTO reporting.rpt_column_def (report_id, version, col_id, label, col_type, period_offset, rolling_n, rolling_grain, formula_expr, display_order) " +
+                                  "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
             for (int i = 0; i < dto.getColumns().size(); i++) {
                 ColumnDefDto cdDto = dto.getColumns().get(i);
                 jdbcTemplate.update(
                     insertColSql,
                     reportId,
+                    version,
                     cdDto.colId(),
                     cdDto.label(),
                     cdDto.colType().name(),
@@ -357,14 +348,14 @@ public class ReportConfigService {
 
         // 5. Save Report Rows via JDBC
         if (dto.getRows() != null) {
-            String insertRowSql = "INSERT INTO reporting.rpt_row (row_id, report_id, parent_row_id, label, row_type, display_order, indent_level, style_id, filter_expr) " +
-                                  "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
-            String insertMetricSql = "INSERT INTO reporting.rpt_row_metric (report_id, row_id, sql_expr, measure_definition, explore_id) " +
+            String insertRowSql = "INSERT INTO reporting.rpt_row (row_id, report_id, version, parent_row_id, label, row_type, display_order, indent_level, style_id, filter_expr) " +
+                                  "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+            String insertMetricSql = "INSERT INTO reporting.rpt_row_metric (report_id, version, row_id, sql_expr, measure_definition, explore_id) " +
+                                     "VALUES (?, ?, ?, ?, ?, ?)";
+            String insertFormulaSql = "INSERT INTO reporting.rpt_row_formula (report_id, version, row_id, formula_expr) " +
+                                      "VALUES (?, ?, ?, ?)";
+            String insertColMapSql = "INSERT INTO reporting.rpt_row_column_map (report_id, version, row_id, col_id, is_enabled) " +
                                      "VALUES (?, ?, ?, ?, ?)";
-            String insertFormulaSql = "INSERT INTO reporting.rpt_row_formula (report_id, row_id, formula_expr) " +
-                                      "VALUES (?, ?, ?)";
-            String insertColMapSql = "INSERT INTO reporting.rpt_row_column_map (report_id, row_id, col_id, is_enabled) " +
-                                     "VALUES (?, ?, ?, ?)";
 
             for (int i = 0; i < dto.getRows().size(); i++) {
                 ReportRowDto rrDto = dto.getRows().get(i);
@@ -380,6 +371,7 @@ public class ReportConfigService {
                     insertRowSql,
                     rrDto.rowId(),
                     reportId,
+                    version,
                     parentRowId,
                     rrDto.label(),
                     rrDto.rowType().name(),
@@ -408,6 +400,7 @@ public class ReportConfigService {
                     jdbcTemplate.update(
                         insertMetricSql,
                         reportId,
+                        version,
                         rrDto.rowId(),
                         sqlExpr,
                         defJson,
@@ -421,6 +414,7 @@ public class ReportConfigService {
                     jdbcTemplate.update(
                         insertFormulaSql,
                         reportId,
+                        version,
                         rrDto.rowId(),
                         formulaExpr
                     );
@@ -433,6 +427,7 @@ public class ReportConfigService {
                         jdbcTemplate.update(
                             insertColMapSql,
                             reportId,
+                            version,
                             rrDto.rowId(),
                             col.colId(),
                             isEnabled

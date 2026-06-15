@@ -45,15 +45,29 @@ Run the following commands in their respective environments to check quality met
 ## Test Categories
 
 ### 1. Unit Tests
+
 - **Backend**:
-  - Test formula parsing calculations inside `PostProcessorService` with sample expressions (e.g., `R2 / R3` or `C1 - C2`) and assert expected outputs.
-  - Test parameter sanitization in `MetadataControllerTest` to ensure dynamic table/column queries reject injection patterns (e.g., SQL statements appended via semicolons).
+  - [PostProcessorServiceTest](../src/test/java/com/reporting/service/PostProcessorServiceTest.java): Tests formula parsing calculations with sample expressions (e.g., `R2 / R3`, `C1 - C2`) and asserts expected outputs.
+  - [SqlGeneratorServiceTest](../src/test/java/com/reporting/service/SqlGeneratorServiceTest.java): Tests CTE generation, granularity column mappings, and filter pushdown logic using mocked config DTOs.
+  - [ReportValidationServiceTest](../src/test/java/com/reporting/service/ReportValidationServiceTest.java): Tests cyclic formula detection, schema expression validation, and missing metric error paths.
+  - [DateUtilsTest](../src/test/java/com/reporting/service/DateUtilsTest.java): Tests period boundary calculations (week, month, quarter, year) across rolling column offsets.
+  - [ExcelParserServiceTest](../src/test/java/com/reporting/service/ExcelParserServiceTest.java): Tests template import parsing from `.xlsx` files.
+  - [LayoutRendererServiceTest](../src/test/java/com/reporting/service/LayoutRendererServiceTest.java): Tests POI cell styling and Excel rendering logic.
+  - [SemanticResolverServiceTest](../src/test/java/com/reporting/service/SemanticResolverServiceTest.java): Tests metric metadata resolution (legacy path).
+  - [ReportConfigServiceTest](../src/test/java/com/reporting/service/ReportConfigServiceTest.java): Tests JDBC save and cascade-delete behaviour with mocked templates.
+  - [MetadataControllerTest](../src/test/java/com/reporting/controller/MetadataControllerTest.java): Tests injection rejection — malformed strings, SQL keywords (e.g. `;`, `UNION`) return `400 Bad Request`.
+  - [ReportPreviewControllerTest](../src/test/java/com/reporting/controller/ReportPreviewControllerTest.java): Tests the SQL preview endpoint with mocked generator output.
+  - [AuthControllerTest](../src/test/java/com/reporting/controller/AuthControllerTest.java): Tests Basic Auth response with valid and invalid credentials.
+  - [ReportControllerTest](../src/test/java/com/reporting/controller/ReportControllerTest.java): Tests report CRUD endpoints (list, get, save, import, run, validate).
 - **Frontend**: Verify authentication guards block page access, and components emit events when layout coordinates change.
 
 ### 2. Integration Tests
-- **API Endpoint Checks**: Bootstrap mock MVC web context and test `/api/reports` returns listing payloads with valid HTTP status codes (`200 OK` or `201 Created`).
-- **SQL Generation Checks**: Run `SqlGeneratorService` with config mocks and verify output SQL contains required Common Table Expressions (`WITH cte_...`). Also verify in `SqlGeneratorServiceTest` that filters are pushed down into the respective fact table CTEs instead of being applied at the unified spine level.
-- **JDBC Persistence Writes**: Test cascade deletion and JDBC Template saves under `ReportConfigServiceTest` to ensure database configurations are cleanly written and updated.
+
+- **[ReportControllerIT](../src/test/java/com/reporting/controller/ReportControllerIT.java)**: Bootstraps a full Spring MVC context against a live Testcontainers PostgreSQL DB. Validates `/api/reports` returns 200 with a list, and that protected endpoints correctly reject unauthenticated requests.
+- **[SqlGeneratorServiceIT](../src/test/java/com/reporting/service/SqlGeneratorServiceIT.java)**: Runs `SqlGeneratorService` against a live seeded database. Verifies the generated CTE SQL structure and asserts that filter pushdown lands in the correct fact CTE scope.
+- **[ReportConfigServiceIT](../src/test/java/com/reporting/service/ReportConfigServiceIT.java)**: Tests cascade deletion and JDBC Template saves against a real database to ensure configurations are cleanly written and updated.
+- **[ReportRunnerServiceIT](../src/test/java/com/reporting/service/ReportRunnerServiceIT.java)**: End-to-end pipeline test: config load → SQL generation → database execution → post-processing → Excel rendering, against a seeded Testcontainers database.
+- **[ReportSeededValidationIT](../src/test/java/com/reporting/ReportSeededValidationIT.java)**: Smoke-tests all 14 seeded production report templates: validates that each report's configuration passes `ReportValidationService` checks without errors.
 
 
 ### 3. Manual Verification
