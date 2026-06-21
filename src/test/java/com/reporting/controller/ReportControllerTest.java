@@ -6,7 +6,6 @@ import com.reporting.domain.Report;
 import com.reporting.dto.Enums;
 import com.reporting.dto.ReportConfigDto;
 import com.reporting.repository.ReportRepository;
-import com.reporting.service.ExcelParserService;
 import com.reporting.service.ReportConfigService;
 import com.reporting.service.ReportRunnerService;
 import com.reporting.service.ReportValidationService;
@@ -48,7 +47,6 @@ public class ReportControllerTest {
 
     @MockBean private ReportRepository reportRepository;
     @MockBean private ReportConfigService configService;
-    @MockBean private ExcelParserService parserService;
     @MockBean private ReportRunnerService runnerService;
     @MockBean private ReportValidationService validationService;
     @MockBean private NamedParameterJdbcTemplate jdbcTemplate;
@@ -57,7 +55,7 @@ public class ReportControllerTest {
     @DisplayName("GET /api/reports: lists reports successfully")
     public void listReports_shouldReturnReportsList() throws Exception {
         Report report = Report.builder().reportId("RPT_1").name("Sales").status("draft").build();
-        when(reportRepository.findAll()).thenReturn(List.of(report));
+        when(reportRepository.findLatestVersionPerReport()).thenReturn(List.of(report));
 
         mockMvc.perform(get("/api/reports"))
                 .andExpect(status().isOk())
@@ -79,26 +77,7 @@ public class ReportControllerTest {
                 .andExpect(jsonPath("$.name").value("Weekly Sales"));
     }
 
-    @Test
-    @DisplayName("POST /api/reports/import: parses empty file returns Bad Request")
-    public void importTemplate_emptyFile_shouldReturnBadRequest() throws Exception {
-        MockMultipartFile emptyFile = new MockMultipartFile("file", "empty.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", new byte[0]);
 
-        mockMvc.perform(multipart("/api/reports/import").file(emptyFile).with(csrf()))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message").value("File is empty"));
-    }
-
-    @Test
-    @DisplayName("POST /api/reports/import: successfully imports Excel spreadsheet")
-    public void importTemplate_validFile_shouldReturnSuccess() throws Exception {
-        MockMultipartFile file = new MockMultipartFile("file", "template.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "excel-mock-bytes".getBytes());
-        doNothing().when(parserService).importTemplate(any(), eq("template.xlsx"));
-
-        mockMvc.perform(multipart("/api/reports/import").file(file).with(csrf()))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.message").value("Template imported successfully"));
-    }
 
     private ReportConfigDto createValidReportConfigDto() {
         ReportConfigDto dto = new ReportConfigDto();

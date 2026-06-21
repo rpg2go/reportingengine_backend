@@ -4,7 +4,7 @@
 - [x] Database migrations 000–007 (Schema setup for `reporting` and `analytics` schemas).
 - [x] Spring Boot backend structure, JPA entity mappings, CORS, and Basic Auth security.
 - [x] Angular 21 standalone frontend components (Login, Dashboard, Report Builder, Detail, Semantic Viewer).
-- [x] Excel template parsing and import via Apache POI (`ExcelParserService`).
+- [x] Removed Excel template parsing and import via Apache POI (completed).
 - [x] Visual Report Builder: drag-and-drop row reordering, step-based column/row setup wizards.
 - [x] Row and column delete actions in builder setup steps.
 - [x] Quick filter search bars on Dashboard catalog and Semantic Layer pages.

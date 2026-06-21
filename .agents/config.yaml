@@ -1,23 +1,27 @@
 skills:
-  enabled: true
-  auto_discover: true
-  path: .agents/skills
+    enabled: true
+    auto_discover: true
+    path: .agents/skills
 
 default_skills:
-  - springboot-patterns
-  - springboot-security
-  - java-junit
+    - agent-skills
+    - springboot-patterns
+    - springboot-security
+    - java-junit
 
 skill_settings:
-  springboot-patterns:
-    priority: high
+    agent-skills:
+        priority: high
 
-  springboot-security:
-    priority: high
+    springboot-patterns:
+        priority: high
 
-  java-junit:
-    priority: high
+    springboot-security:
+        priority: high
+
+    java-junit:
+        priority: high
 
 context_paths:
-  - GEMINI.md
-  - README.md
+    - GEMINI.md
+    - README.md

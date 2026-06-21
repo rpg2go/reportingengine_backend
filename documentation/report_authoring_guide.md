@@ -20,7 +20,6 @@ This guide explains how to create, configure, and manage financial reports using
 The Dashboard lists all report templates. From here you can:
 - **Search** reports using the quick filter bar at the top.
 - **Click a report card** to open it in the Report Builder for editing.
-- **Import a template** by dragging an Excel `.xlsx` file onto the upload zone — the backend parses it via `ExcelParserService` and automatically populates the report metadata.
 - **Create a new report** using the **+ New Report** button.
 
 ---

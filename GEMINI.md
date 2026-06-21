@@ -78,7 +78,6 @@ All backend APIs are prefixed with `/api` and listen on port `8101`.
 | **GET** | `/api/reports/{id}` | Loads a single report definition config DTO. Optional `?version=` and `?date=` params. |
 | **POST** | `/api/reports` | Creates a new report config. |
 | **PUT** | `/api/reports/{id}` | Updates (cascade-overwrites) an existing report config. |
-| **POST** | `/api/reports/import` | Imports an Excel `.xlsx` template file (multipart). |
 | **POST** | `/api/reports/{id}/run` | Executes report generation and returns direct `.xlsx` download. Optional `?version=` and `?date=`. |
 | **POST** | `/api/reports/validate` | Runs structural and semantic analysis to find configuration issues. |
 | **GET** | `/api/reports/tables` | Returns list of physical tables in the `analytics` schema. |
@@ -131,7 +130,7 @@ Use the links below to navigate directly to the primary components:
 ### Backend Services & Controllers
 
 - **Controllers**:
-  - [ReportController.java](src/main/java/com/reporting/controller/ReportController.java) — Report CRUD, import, run, validate, table metadata, and semantic-model endpoints.
+  - [ReportController.java](src/main/java/com/reporting/controller/ReportController.java) — Report CRUD, run, validate, table metadata, and semantic-model endpoints.
   - [AuthController.java](src/main/java/com/reporting/controller/AuthController.java) — Manages login validation.
   - [ReportExecutionController.java](src/main/java/com/reporting/controller/ReportExecutionController.java) — Raw cell query execution with date validation against `dim_date`.
   - [ReportPreviewController.java](src/main/java/com/reporting/controller/ReportPreviewController.java) — Previews dry-run generated SQL queries.
@@ -143,7 +142,6 @@ Use the links below to navigate directly to the primary components:
   - [SqlGeneratorService.java](src/main/java/com/reporting/service/SqlGeneratorService.java) — Compiles report filters, fact tables, and rolling date boundaries into dynamic CTE queries. Delegates join resolution to `SchemaGraphRouter`.
   - [PostProcessorService.java](src/main/java/com/reporting/service/PostProcessorService.java) — Evaluates mathematical formulas at row/column intersections using `exp4j`.
   - [LayoutRendererService.java](src/main/java/com/reporting/service/LayoutRendererService.java) — Renders POI styles, grid alignments, fonts, colors, and formatting into downloading templates.
-  - [ExcelParserService.java](src/main/java/com/reporting/service/ExcelParserService.java) — Handles extraction and ingestion of spreadsheet configurations.
   - [ReportConfigService.java](src/main/java/com/reporting/service/ReportConfigService.java) — CRUD and config loading (hot-path JDBC read + cascade-delete JDBC write).
   - [ReportValidationService.java](src/main/java/com/reporting/service/ReportValidationService.java) — Validates cycle detections, schema checks, and expressions.
   - [SemanticResolverService.java](src/main/java/com/reporting/service/SemanticResolverService.java) — Resolves metric metadata (legacy; bypassed in current execution flow).

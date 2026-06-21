@@ -33,7 +33,6 @@ The system follows a classic decoupled 3-tier architecture:
    - Run on port `8101`.
    - Spring Security implements Basic Auth validating credentials against stored users.
    - Core Services:
-     - **`ExcelParserService`**: Extracts template headers, variables, and columns using Apache POI.
      - **`SqlGeneratorService`**: Constructs dynamic PostgreSQL queries using Common Table Expressions (CTEs) and conditional date boundaries. Delegates multi-hop JOIN resolution to `SchemaGraphRouter`.
      - **`PostProcessorService`**: Solves math formulas in grid cells using `exp4j`.
      - **`LayoutRendererService`**: Writes styled workbook data sheets back to POI cells.
@@ -82,13 +81,6 @@ The PostgreSQL instance manages two main schemas:
 ---
 
 ## User Journeys
-
-### Journey 1: Template Upload & Parsing
-
-1. A business user selects an Excel template (e.g. `hybrid_reporting_template.xlsx`) and drags it onto the Dashboard.
-2. The frontend makes a `POST /api/reports/import` multipart request uploading the file.
-3. The `ExcelParserService` parses sheet ranges, reading report IDs, column offsets, and metric definitions.
-4. Database transactions insert records into `rpt_report`, `rpt_row`, etc., and the Dashboard catalog auto-refreshes.
 
 ### Journey 2: Visual Layout Modification
 

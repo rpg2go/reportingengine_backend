@@ -32,7 +32,6 @@ src/test/java
 │   │   └── ReportPreviewControllerTest.java      <-- Preview SQL Controller Test
 │   └── service
 │       ├── DateUtilsTest.java                    <-- Utility Unit Test
-│       ├── ExcelParserServiceTest.java           <-- Service Parser Unit Test
 │       ├── LayoutRendererServiceTest.java        <-- Service Excel Generation Unit Test
 │       ├── PostProcessorServiceTest.java         <-- Service Formula Processor Unit Test
 │       ├── ReportValidationServiceTest.java      <-- Validation Service Unit Test

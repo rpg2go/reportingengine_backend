@@ -4,7 +4,6 @@ import com.reporting.domain.Report;
 import com.reporting.dto.ReportConfigDto;
 import com.reporting.dto.ValidationResult;
 import com.reporting.repository.ReportRepository;
-import com.reporting.service.ExcelParserService;
 import com.reporting.service.ReportConfigService;
 import com.reporting.service.ReportRunnerService;
 import com.reporting.service.ReportValidationService;
@@ -31,20 +30,17 @@ public class ReportController {
 
     private final ReportRepository reportRepository;
     private final ReportConfigService configService;
-    private final ExcelParserService parserService;
     private final ReportRunnerService runnerService;
     private final ReportValidationService validationService;
     private final NamedParameterJdbcTemplate jdbcTemplate;
 
     public ReportController(ReportRepository reportRepository,
                             ReportConfigService configService,
-                            ExcelParserService parserService,
                             ReportRunnerService runnerService,
                             ReportValidationService validationService,
                             NamedParameterJdbcTemplate jdbcTemplate) {
         this.reportRepository = reportRepository;
         this.configService = configService;
-        this.parserService = parserService;
         this.runnerService = runnerService;
         this.validationService = validationService;
         this.jdbcTemplate = jdbcTemplate;
@@ -65,21 +61,6 @@ public class ReportController {
             return ResponseEntity.ok(configService.loadFromDb(id, version, refDate));
         }
         return ResponseEntity.ok(configService.loadFromDb(id, refDate));
-    }
-
-    @PostMapping("/import")
-    public ResponseEntity<?> importTemplate(@RequestParam("file") MultipartFile file) {
-        if (file.isEmpty()) {
-            return ResponseEntity.badRequest().body(Map.of("message", "File is empty"));
-        }
-        try {
-            log.info("Importing report template: {}", file.getOriginalFilename());
-            parserService.importTemplate(file.getInputStream(), file.getOriginalFilename());
-            return ResponseEntity.ok(Map.of("message", "Template imported successfully"));
-        } catch (Exception e) {
-            log.error("Failed to import template {}: {}", file.getOriginalFilename(), e.getMessage(), e);
-            return ResponseEntity.status(500).body(Map.of("message", "Failed to import template: " + e.getMessage()));
-        }
     }
 
     @PostMapping("/{id}/run")

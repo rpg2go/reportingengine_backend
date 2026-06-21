@@ -29,7 +29,6 @@ src/test/java
 │   │   └── ReportControllerIT.java           <-- Integration Controller/Security Test
 │   └── service
 │       ├── DateUtilsTest.java                <-- Utility Unit Test
-│       ├── ExcelParserServiceTest.java       <-- Service Parser Unit Test
 │       ├── LayoutRendererServiceTest.java    <-- Service Excel Generation Unit Test
 │       ├── PostProcessorServiceTest.java     <-- Service Formula Processor Unit Test
 │       ├── SemanticResolverServiceTest.java  <-- Service Metadata Resolver Unit Test

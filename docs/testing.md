@@ -51,14 +51,13 @@ Run the following commands in their respective environments to check quality met
   - [SqlGeneratorServiceTest](../src/test/java/com/reporting/service/SqlGeneratorServiceTest.java): Tests CTE generation, granularity column mappings, and filter pushdown logic using mocked config DTOs.
   - [ReportValidationServiceTest](../src/test/java/com/reporting/service/ReportValidationServiceTest.java): Tests cyclic formula detection, schema expression validation, and missing metric error paths.
   - [DateUtilsTest](../src/test/java/com/reporting/service/DateUtilsTest.java): Tests period boundary calculations (week, month, quarter, year) across rolling column offsets.
-  - [ExcelParserServiceTest](../src/test/java/com/reporting/service/ExcelParserServiceTest.java): Tests template import parsing from `.xlsx` files.
   - [LayoutRendererServiceTest](../src/test/java/com/reporting/service/LayoutRendererServiceTest.java): Tests POI cell styling and Excel rendering logic.
   - [SemanticResolverServiceTest](../src/test/java/com/reporting/service/SemanticResolverServiceTest.java): Tests metric metadata resolution (legacy path).
   - [ReportConfigServiceTest](../src/test/java/com/reporting/service/ReportConfigServiceTest.java): Tests JDBC save and cascade-delete behaviour with mocked templates.
   - [MetadataControllerTest](../src/test/java/com/reporting/controller/MetadataControllerTest.java): Tests injection rejection — malformed strings, SQL keywords (e.g. `;`, `UNION`) return `400 Bad Request`.
   - [ReportPreviewControllerTest](../src/test/java/com/reporting/controller/ReportPreviewControllerTest.java): Tests the SQL preview endpoint with mocked generator output.
   - [AuthControllerTest](../src/test/java/com/reporting/controller/AuthControllerTest.java): Tests Basic Auth response with valid and invalid credentials.
-  - [ReportControllerTest](../src/test/java/com/reporting/controller/ReportControllerTest.java): Tests report CRUD endpoints (list, get, save, import, run, validate).
+  - [ReportControllerTest](../src/test/java/com/reporting/controller/ReportControllerTest.java): Tests report CRUD endpoints (list, get, save, run, validate).
 - **Frontend**: Verify authentication guards block page access, and components emit events when layout coordinates change.
 
 ### 2. Integration Tests
