@@ -54,6 +54,12 @@ public class Report {
     @Column(name = "general_filters")
     private String generalFilters;
 
+    @Column(name = "source_table", length = 150)
+    private String sourceTable;
+
+    @Column(name = "source_field", length = 150)
+    private String sourceField;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
 

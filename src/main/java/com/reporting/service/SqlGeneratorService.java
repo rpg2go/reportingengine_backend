@@ -54,7 +54,6 @@ public class SqlGeneratorService {
 
     public String generate(ReportConfigDto config, Map<String, ResolvedMetricDto> resolved, List<String> selectedGranularities) {
         // Parse Filters
-        List<FilterCondition> generalFilters = parseGeneralFilters(config.getGeneralFilters());
         List<FilterCondition> quickFilters = parseGeneralFilters(config.getQuickFilters());
 
         // 1. Discover all unique sourceTable entries
@@ -126,20 +125,29 @@ public class SqlGeneratorService {
                                         dimensionTargets.add(cond.getDimTable().trim());
                                     }
                                 }
+                            } else if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+                                try {
+                                    ObjectMapper mapper = new ObjectMapper();
+                                    mapper.configure(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+                                    RowFilterGroup rootGroup = mapper.readValue(trimmed, RowFilterGroup.class);
+                                    collectReferencedTables(rootGroup, factTable, dimensionTargets, tableColumnsCache);
+                                } catch (Exception e) {
+                                    // ignore/handle parsing errors in compilation later
+                                }
                             }
                         }
                     }
                 }
             }
 
-            // Add global filter dimensions that are applicable to this fact table
-            for (FilterCondition cond : generalFilters) {
-                if (cond.getDimTable() != null && !cond.getDimTable().isBlank()) {
-                    if (isFilterApplicable(factTable, cond, tableColumnsCache)) {
-                        dimensionTargets.add(cond.getDimTable().trim());
-                    }
-                }
+            // Process general filters: collect targets and compile SQL block for this table
+            String generalBlock = compileGeneralFiltersForTable(config.getGeneralFilters(), factTable, dimensionTargets, tableColumnsCache);
+            if (generalBlock != null && !generalBlock.isBlank()) {
+                generalBlock = "(" + generalBlock + ")";
+            } else {
+                generalBlock = "";
             }
+
             for (FilterCondition cond : quickFilters) {
                 if (cond.getDimTable() != null && !cond.getDimTable().isBlank()) {
                     if (isFilterApplicable(factTable, cond, tableColumnsCache)) {
@@ -237,33 +245,6 @@ public class SqlGeneratorService {
             String quickBlock = "";
             if (quickBuilder.length() > 0) {
                 quickBlock = "(" + quickBuilder.toString() + ")";
-            }
-
-            // 2. Compile General Filters Block
-            StringBuilder generalBuilder = new StringBuilder();
-            FilterCondition lastGenCond = null;
-            for (FilterCondition cond : generalFilters) {
-                if (isFilterApplicable(factTable, cond, tableColumnsCache)) {
-                    String sqlCond = compileFactFilter(factTable, cond);
-                    if (sqlCond != null && !sqlCond.isBlank()) {
-                        if (generalBuilder.length() > 0) {
-                            String conj = "AND";
-                            if (lastGenCond != null && lastGenCond.getConjunction() != null) {
-                                String c = lastGenCond.getConjunction().trim().toUpperCase();
-                                if ("AND".equals(c) || "OR".equals(c)) {
-                                    conj = c;
-                                }
-                            }
-                            generalBuilder.append(" ").append(conj).append(" ");
-                        }
-                        generalBuilder.append("(").append(sqlCond).append(")");
-                        lastGenCond = cond;
-                    }
-                }
-            }
-            String generalBlock = "";
-            if (generalBuilder.length() > 0) {
-                generalBlock = "(" + generalBuilder.toString() + ")";
             }
 
             // 3. Master Logic Intersection Execution
@@ -1276,6 +1257,23 @@ public class SqlGeneratorService {
     }
 
     @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+    public static class TableFilterScope {
+        private String tableName;
+        private RowFilterGroup filtersGroup;
+
+        public TableFilterScope() {}
+        public TableFilterScope(String tableName, RowFilterGroup filtersGroup) {
+            this.tableName = tableName;
+            this.filtersGroup = filtersGroup;
+        }
+
+        public String getTableName() { return tableName; }
+        public void setTableName(String tableName) { this.tableName = tableName; }
+        public RowFilterGroup getFiltersGroup() { return filtersGroup; }
+        public void setFiltersGroup(RowFilterGroup filtersGroup) { this.filtersGroup = filtersGroup; }
+    }
+
+    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
     public static class RowFilterGroup {
         private String id;
         private String logicalOperator;
@@ -1496,6 +1494,219 @@ public class SqlGeneratorService {
         return "(" + String.join(conj, parts) + ")";
     }
 
+
+    private boolean isRuleApplicable(String factTable, RowFilterRule rule, Map<String, Set<String>> cache) {
+        if (rule == null) return false;
+        String tbl = rule.getTableName();
+        String col = rule.getColumnName();
+        if (tbl == null || tbl.isBlank()) {
+            return columnExists(factTable, col, cache);
+        }
+        if (tbl.trim().equalsIgnoreCase(factTable.trim())) {
+            return true;
+        }
+        if (schemaGraphRouter != null) {
+            try {
+                String resolvedDim = resolveConformedDimension(findConformedKey(Set.of(factTable), cache));
+                if (resolvedDim != null && resolvedDim.trim().equalsIgnoreCase(tbl.trim())) {
+                    return true;
+                }
+                List<String> joins = schemaGraphRouter.computeJoinClauses(factTable, Set.of(tbl.trim()));
+                return joins != null && !joins.isEmpty();
+            } catch (Exception e) {
+                return false;
+            }
+        }
+        return false;
+    }
+
+    private RowFilterGroup pruneGroupForTable(RowFilterGroup group, String factTable, Map<String, Set<String>> cache) {
+        if (group == null) return null;
+        
+        List<RowFilterRule> applicableRules = new ArrayList<>();
+        if (group.getRules() != null) {
+            for (RowFilterRule rule : group.getRules()) {
+                if (isRuleApplicable(factTable, rule, cache)) {
+                    applicableRules.add(rule);
+                }
+            }
+        }
+        
+        List<RowFilterGroup> applicableChildren = new ArrayList<>();
+        if (group.getChildGroups() != null) {
+            for (RowFilterGroup child : group.getChildGroups()) {
+                RowFilterGroup prunedChild = pruneGroupForTable(child, factTable, cache);
+                if (prunedChild != null) {
+                    applicableChildren.add(prunedChild);
+                }
+            }
+        }
+        
+        if (applicableRules.isEmpty() && applicableChildren.isEmpty()) {
+            return null;
+        }
+        
+        return new RowFilterGroup(
+            group.getId(),
+            group.getLogicalOperator(),
+            applicableRules,
+            applicableChildren
+        );
+    }
+
+    private void collectReferencedTables(RowFilterGroup group, String factTable, Set<String> targets, Map<String, Set<String>> cache) {
+        if (group == null) return;
+        if (group.getRules() != null) {
+            for (RowFilterRule rule : group.getRules()) {
+                if (isRuleApplicable(factTable, rule, cache)) {
+                    String tbl = rule.getTableName();
+                    if (tbl != null && !tbl.isBlank() && !tbl.trim().equalsIgnoreCase(factTable.trim())) {
+                        targets.add(tbl.trim());
+                    }
+                }
+            }
+        }
+        if (group.getChildGroups() != null) {
+            for (RowFilterGroup child : group.getChildGroups()) {
+                collectReferencedTables(child, factTable, targets, cache);
+            }
+        }
+    }
+
+    private String compileGeneralFiltersForTable(
+            String generalFiltersStr,
+            String factTable,
+            Set<String> dimensionTargets,
+            Map<String, Set<String>> cache) {
+        if (generalFiltersStr == null || generalFiltersStr.isBlank()) {
+            return "";
+        }
+        String trimmed = generalFiltersStr.trim();
+        if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+            try {
+                ObjectMapper mapper = new ObjectMapper();
+                mapper.configure(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+                RowFilterGroup rootGroup = mapper.readValue(trimmed, RowFilterGroup.class);
+                collectReferencedTables(rootGroup, factTable, dimensionTargets, cache);
+                RowFilterGroup pruned = pruneGroupForTable(rootGroup, factTable, cache);
+                return compileRowGroup(pruned);
+            } catch (Exception e) {
+                throw new IllegalArgumentException("Failed to parse recursive general filter group JSON: " + trimmed, e);
+            }
+        } else if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+            try {
+                ObjectMapper mapper = new ObjectMapper();
+                mapper.configure(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+                List<TableFilterScope> scopes = mapper.readValue(trimmed, new TypeReference<List<TableFilterScope>>() {});
+                
+                boolean isScopedModel = false;
+                if (!scopes.isEmpty()) {
+                    TableFilterScope first = scopes.get(0);
+                    if (first.getTableName() != null || first.getFiltersGroup() != null) {
+                        isScopedModel = true;
+                    }
+                }
+                
+                if (isScopedModel) {
+                    List<String> compiledScopes = new ArrayList<>();
+                    for (TableFilterScope scope : scopes) {
+                        String scopeTable = scope.getTableName();
+                        RowFilterGroup group = scope.getFiltersGroup();
+                        if (group == null) continue;
+                        
+                        if (isTableScopeApplicable(factTable, scopeTable, cache)) {
+                            mapScopeTable(group, scopeTable);
+                            collectReferencedTables(group, factTable, dimensionTargets, cache);
+                            RowFilterGroup pruned = pruneGroupForTable(group, factTable, cache);
+                            String compiledGroup = compileRowGroup(pruned);
+                            if (compiledGroup != null && !compiledGroup.isBlank()) {
+                                compiledScopes.add(compiledGroup);
+                            }
+                        }
+                    }
+                    if (compiledScopes.isEmpty()) {
+                        return "";
+                    }
+                    return String.join(" AND ", compiledScopes);
+                }
+            } catch (Exception e) {
+                // Fall through to legacy flat condition parsing
+            }
+
+            List<FilterCondition> conds = parseGeneralFilters(trimmed);
+            for (FilterCondition cond : conds) {
+                if (cond.getDimTable() != null && !cond.getDimTable().isBlank()) {
+                    if (isFilterApplicable(factTable, cond, cache)) {
+                        dimensionTargets.add(cond.getDimTable().trim());
+                    }
+                }
+            }
+            StringBuilder generalBuilder = new StringBuilder();
+            FilterCondition lastGenCond = null;
+            for (FilterCondition cond : conds) {
+                if (isFilterApplicable(factTable, cond, cache)) {
+                    String sqlCond = compileFactFilter(factTable, cond);
+                    if (sqlCond != null && !sqlCond.isBlank()) {
+                        if (generalBuilder.length() > 0) {
+                            String conj = "AND";
+                            if (lastGenCond != null && lastGenCond.getConjunction() != null) {
+                                String c = lastGenCond.getConjunction().trim().toUpperCase();
+                                if ("AND".equals(c) || "OR".equals(c)) {
+                                    conj = c;
+                                }
+                            }
+                            generalBuilder.append(" ").append(conj).append(" ");
+                        }
+                        generalBuilder.append("(").append(sqlCond).append(")");
+                        lastGenCond = cond;
+                    }
+                }
+            }
+            return generalBuilder.toString();
+        } else {
+            validateFilterExpr(trimmed);
+            return trimmed;
+        }
+    }
+
+    private boolean isTableScopeApplicable(String factTable, String scopeTable, Map<String, Set<String>> cache) {
+        if (scopeTable == null || scopeTable.isBlank()) {
+            return true;
+        }
+        if (scopeTable.trim().equalsIgnoreCase(factTable.trim())) {
+            return true;
+        }
+        if (schemaGraphRouter != null) {
+            try {
+                String conformedKey = findConformedKey(Set.of(factTable), cache);
+                String resolvedDim = resolveConformedDimension(conformedKey);
+                if (resolvedDim != null && resolvedDim.trim().equalsIgnoreCase(scopeTable.trim())) {
+                    return true;
+                }
+                List<String> joins = schemaGraphRouter.computeJoinClauses(factTable, Set.of(scopeTable.trim()));
+                return joins != null && !joins.isEmpty();
+            } catch (Exception e) {
+                return false;
+            }
+        }
+        return false;
+    }
+
+    private void mapScopeTable(RowFilterGroup group, String scopeTable) {
+        if (group == null) return;
+        if (group.getRules() != null) {
+            for (RowFilterRule rule : group.getRules()) {
+                if (rule.getTableName() == null || rule.getTableName().isBlank()) {
+                    rule.setTableName(scopeTable);
+                }
+            }
+        }
+        if (group.getChildGroups() != null) {
+            for (RowFilterGroup child : group.getChildGroups()) {
+                mapScopeTable(child, scopeTable);
+            }
+        }
+    }
 
     private boolean isFilterApplicable(String factTable, FilterCondition cond, Map<String, Set<String>> cache) {
         if (cond == null) {

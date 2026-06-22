@@ -732,4 +732,48 @@ public class SqlGeneratorServiceTest {
         // Assert
         assertThat(sql).contains("(fact_investments.a = '1' OR (fact_investments.b IN ('2', '3')))");
     }
+
+    @Test
+    @DisplayName("generate with recursive general filter groups compiles nested parenthetical rules")
+    public void generate_withRecursiveGeneralFilters_shouldCompileNestedParentheses() {
+        // Arrange
+        List<ColumnDefDto> columns = List.of(
+            new ColumnDefDto("C1", "Col 1", Enums.ColType.WEEK, 0, null, null, 1)
+        );
+        List<ReportRowDto> rows = List.of(
+            new ReportRowDto("R1", "REP1", "Row 1", Enums.RowType.data, 
+                new MeasureDefinitionDTO("visual", "SUM", "amount", "analytics.fact_sales", null), 
+                null, "normal", 0, 1, Set.of("C1"), null)
+        );
+        
+        String recursiveFilterJson = "{" +
+            "\"id\":\"root\"," +
+            "\"logicalOperator\":\"OR\"," +
+            "\"rules\":[" +
+                "{\"tableName\":\"analytics.fact_sales\",\"columnName\":\"region\",\"operator\":\"=\",\"value\":[\"North\"]}" +
+            "]," +
+            "\"childGroups\":[" +
+                "{" +
+                    "\"id\":\"child1\"," +
+                    "\"logicalOperator\":\"AND\"," +
+                    "\"rules\":[" +
+                        "{\"tableName\":\"analytics.fact_sales\",\"columnName\":\"status\",\"operator\":\"in list\",\"value\":[\"active\",\"pending\"]}" +
+                    "]," +
+                    "\"childGroups\":[]" +
+                "}" +
+            "]" +
+        "}";
+        
+        ReportConfigDto config = new ReportConfigDto(
+            "REP1", "Test Report", columns, rows, LocalDate.of(2026, 5, 26), 1, Enums.ReportStatus.draft,
+            "analytics.fact_sales", "weekly", null, null, false, null, recursiveFilterJson
+        );
+
+        // Act
+        String sql = service.generate(config, Collections.emptyMap());
+
+        // Assert
+        assertThat(sql).contains("(analytics.fact_sales.region = 'North' OR (analytics.fact_sales.status IN ('active', 'pending')))");
+    }
 }
+

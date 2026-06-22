@@ -101,6 +101,8 @@ public class ReportVersionController {
                 .timeframeToday(report.getTimeframeToday())
                 .quickFilters(report.getQuickFilters())
                 .generalFilters(report.getGeneralFilters())
+                .sourceTable(report.getSourceTable())
+                .sourceField(report.getSourceField())
                 .createdAt(LocalDateTime.now())
                 .updatedAt(LocalDateTime.now())
                 .build();
@@ -189,6 +191,8 @@ public class ReportVersionController {
                 .timeframeToday(report.getTimeframeToday())
                 .quickFilters(report.getQuickFilters())
                 .generalFilters(report.getGeneralFilters())
+                .sourceTable(report.getSourceTable())
+                .sourceField(report.getSourceField())
                 .createdAt(LocalDateTime.now())
                 .updatedAt(LocalDateTime.now())
                 .build();

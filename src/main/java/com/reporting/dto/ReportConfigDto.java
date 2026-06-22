@@ -46,6 +46,8 @@ public class ReportConfigDto {
     private String quickFilters;
     private String generalFilters;
     private Integer version;
+    private String sourceTable;
+    private String sourceField;
 
     public ReportConfigDto() {
         this.referenceDate = LocalDate.now();
@@ -130,6 +132,12 @@ public class ReportConfigDto {
 
     public Integer getVersion() { return version; }
     public void setVersion(Integer version) { this.version = version; }
+
+    public String getSourceTable() { return sourceTable; }
+    public void setSourceTable(String sourceTable) { this.sourceTable = sourceTable; }
+
+    public String getSourceField() { return sourceField; }
+    public void setSourceField(String sourceField) { this.sourceField = sourceField; }
 
     // Convenience Getters
     @JsonIgnore

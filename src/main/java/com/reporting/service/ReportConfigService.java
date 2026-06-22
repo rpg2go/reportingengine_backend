@@ -244,6 +244,8 @@ public class ReportConfigService {
             report.getQuickFilters(),
             report.getGeneralFilters()
         );
+        dto.setSourceTable(report.getSourceTable());
+        dto.setSourceField(report.getSourceField());
         dto.setVersion(report.getVersion());
         return dto;
     }
@@ -292,6 +294,7 @@ public class ReportConfigService {
             jdbcTemplate.update(
                 "UPDATE reporting.rpt_report SET name = ?, explore_id = ?, status = ?, granularity = ?, " +
                 "timeframe_start = ?, timeframe_end = ?, timeframe_today = ?, quick_filters = ?, general_filters = ?, " +
+                "source_table = ?, source_field = ?, " +
                 "updated_at = NOW() WHERE report_id = ? AND version = ?",
                 dto.getName(),
                 dto.getExploreId(),
@@ -302,14 +305,16 @@ public class ReportConfigService {
                 dto.getTimeframeToday() != null ? dto.getTimeframeToday() : false,
                 dto.getQuickFilters(),
                 dto.getGeneralFilters(),
+                dto.getSourceTable(),
+                dto.getSourceField(),
                 reportId,
                 version
             );
         } else {
             jdbcTemplate.update(
                 "INSERT INTO reporting.rpt_report (report_id, name, description, explore_id, version, status, granularity, " +
-                "timeframe_start, timeframe_end, timeframe_today, quick_filters, general_filters, created_at, updated_at) " +
-                "VALUES (?, ?, 'Report defined via UI builder', ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())",
+                "timeframe_start, timeframe_end, timeframe_today, quick_filters, general_filters, source_table, source_field, created_at, updated_at) " +
+                "VALUES (?, ?, 'Report defined via UI builder', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())",
                 reportId,
                 dto.getName(),
                 dto.getExploreId(),
@@ -320,7 +325,9 @@ public class ReportConfigService {
                 dto.getTimeframeEnd(),
                 dto.getTimeframeToday() != null ? dto.getTimeframeToday() : false,
                 dto.getQuickFilters(),
-                dto.getGeneralFilters()
+                dto.getGeneralFilters(),
+                dto.getSourceTable(),
+                dto.getSourceField()
             );
         }
 
