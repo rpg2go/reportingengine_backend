@@ -75,7 +75,7 @@ public class SqlGeneratorServiceTest {
     public void generate_validConfigAndMetrics_shouldCompileCteSql() {
         // Arrange
         List<ColumnDefDto> columns = List.of(
-            new ColumnDefDto("C1", "Col 1", Enums.ColType.WEEK, 0, null, null, 1)
+            new ColumnDefDto("C1", "Col 1", Enums.ColType.WTD, 0, null, null, 1)
         );
         List<ReportRowDto> rows = List.of(
             new ReportRowDto("R1", "REP1", "Row 1", Enums.RowType.data, 
@@ -101,7 +101,7 @@ public class SqlGeneratorServiceTest {
     public void generate_withDistinctAggregations_shouldHandleDistinctClause() {
         // Arrange
         List<ColumnDefDto> columns = List.of(
-            new ColumnDefDto("C1", "Col 1", Enums.ColType.WEEK, 0, null, null, 1)
+            new ColumnDefDto("C1", "Col 1", Enums.ColType.WTD, 0, null, null, 1)
         );
         List<ReportRowDto> rows = List.of(
             new ReportRowDto("R1", "REP1", "Row 1", Enums.RowType.data, 
@@ -123,7 +123,7 @@ public class SqlGeneratorServiceTest {
     @Test
     @DisplayName("validateFilterExpr should prevent SQL injection tokens")
     public void validateFilterExpr_sqlInjectionTokens_shouldThrowException() {
-        List<ColumnDefDto> columns = List.of(new ColumnDefDto("C1", "Col 1", Enums.ColType.WEEK, 0, null, null, 1));
+        List<ColumnDefDto> columns = List.of(new ColumnDefDto("C1", "Col 1", Enums.ColType.WTD, 0, null, null, 1));
         
         // UNION injection
         List<ReportRowDto> rowsUnion = List.of(
@@ -152,7 +152,7 @@ public class SqlGeneratorServiceTest {
     @Test
     @DisplayName("validateFilterExpr should check matching parentheses")
     public void validateFilterExpr_unmatchedParentheses_shouldThrowException() {
-        List<ColumnDefDto> columns = List.of(new ColumnDefDto("C1", "Col 1", Enums.ColType.WEEK, 0, null, null, 1));
+        List<ColumnDefDto> columns = List.of(new ColumnDefDto("C1", "Col 1", Enums.ColType.WTD, 0, null, null, 1));
 
         // Unmatched open parenthesis
         List<ReportRowDto> rowsOpen = List.of(
@@ -182,7 +182,7 @@ public class SqlGeneratorServiceTest {
     public void generate_withGeneralFilters_shouldMapOperators() {
         // Arrange
         List<ColumnDefDto> columns = List.of(
-            new ColumnDefDto("C1", "Col 1", Enums.ColType.WEEK, 0, null, null, 1)
+            new ColumnDefDto("C1", "Col 1", Enums.ColType.WTD, 0, null, null, 1)
         );
         List<ReportRowDto> rows = List.of(
             new ReportRowDto("R1", "REP1", "Row 1", Enums.RowType.data, 
@@ -212,7 +212,7 @@ public class SqlGeneratorServiceTest {
     public void generate_withGeneralFiltersNegation_shouldBeNullSafe() {
         // Arrange
         List<ColumnDefDto> columns = List.of(
-            new ColumnDefDto("C1", "Col 1", Enums.ColType.WEEK, 0, null, null, 1)
+            new ColumnDefDto("C1", "Col 1", Enums.ColType.WTD, 0, null, null, 1)
         );
         List<ReportRowDto> rows = List.of(
             new ReportRowDto("R1", "REP1", "Row 1", Enums.RowType.data, 
@@ -245,7 +245,7 @@ public class SqlGeneratorServiceTest {
     public void generate_withGeneralFiltersIn_shouldSplitValues() {
         // Arrange
         List<ColumnDefDto> columns = List.of(
-            new ColumnDefDto("C1", "Col 1", Enums.ColType.WEEK, 0, null, null, 1)
+            new ColumnDefDto("C1", "Col 1", Enums.ColType.WTD, 0, null, null, 1)
         );
         List<ReportRowDto> rows = List.of(
             new ReportRowDto("R1", "REP1", "Row 1", Enums.RowType.data, 
@@ -274,7 +274,7 @@ public class SqlGeneratorServiceTest {
     public void generate_withGeneralFiltersSpecial_shouldIgnoreValue() {
         // Arrange
         List<ColumnDefDto> columns = List.of(
-            new ColumnDefDto("C1", "Col 1", Enums.ColType.WEEK, 0, null, null, 1)
+            new ColumnDefDto("C1", "Col 1", Enums.ColType.WTD, 0, null, null, 1)
         );
         List<ReportRowDto> rows = List.of(
             new ReportRowDto("R1", "REP1", "Row 1", Enums.RowType.data, 
@@ -309,7 +309,7 @@ public class SqlGeneratorServiceTest {
     public void generate_withGeneralFiltersWildcards_shouldEscape() {
         // Arrange
         List<ColumnDefDto> columns = List.of(
-            new ColumnDefDto("C1", "Col 1", Enums.ColType.WEEK, 0, null, null, 1)
+            new ColumnDefDto("C1", "Col 1", Enums.ColType.WTD, 0, null, null, 1)
         );
         List<ReportRowDto> rows = List.of(
             new ReportRowDto("R1", "REP1", "Row 1", Enums.RowType.data, 
@@ -342,7 +342,7 @@ public class SqlGeneratorServiceTest {
     public void generate_withGeneralFiltersComparison_shouldCompile() {
         // Arrange
         List<ColumnDefDto> columns = List.of(
-            new ColumnDefDto("C1", "Col 1", Enums.ColType.WEEK, 0, null, null, 1)
+            new ColumnDefDto("C1", "Col 1", Enums.ColType.WTD, 0, null, null, 1)
         );
         List<ReportRowDto> rows = List.of(
             new ReportRowDto("R1", "REP1", "Row 1", Enums.RowType.data, 
@@ -377,7 +377,7 @@ public class SqlGeneratorServiceTest {
     public void generate_withAllSixteenOperators_shouldCompile() {
         // Arrange
         List<ColumnDefDto> columns = List.of(
-            new ColumnDefDto("C1", "Col 1", Enums.ColType.WEEK, 0, null, null, 1)
+            new ColumnDefDto("C1", "Col 1", Enums.ColType.WTD, 0, null, null, 1)
         );
         List<ReportRowDto> rows = List.of(
             new ReportRowDto("R1", "REP1", "Row 1", Enums.RowType.data, 
@@ -438,7 +438,7 @@ public class SqlGeneratorServiceTest {
     public void generate_withConjunctionAndUnknownFilterProperties_shouldParseAndCompile() {
         // Arrange
         List<ColumnDefDto> columns = List.of(
-            new ColumnDefDto("C1", "Col 1", Enums.ColType.WEEK, 0, null, null, 1)
+            new ColumnDefDto("C1", "Col 1", Enums.ColType.WTD, 0, null, null, 1)
         );
         List<ReportRowDto> rows = List.of(
             new ReportRowDto("R1", "REP1", "Row 1", Enums.RowType.data, 
@@ -467,7 +467,7 @@ public class SqlGeneratorServiceTest {
     public void generate_withRawSqlRowFilter_shouldCompileSuccessfully() {
         // Arrange
         List<ColumnDefDto> columns = List.of(
-            new ColumnDefDto("C1", "Col 1", Enums.ColType.WEEK, 0, null, null, 1)
+            new ColumnDefDto("C1", "Col 1", Enums.ColType.WTD, 0, null, null, 1)
         );
         List<ReportRowDto> rows = List.of(
             new ReportRowDto("R1", "REP1", "Row 1", Enums.RowType.data, 
@@ -492,7 +492,7 @@ public class SqlGeneratorServiceTest {
     public void generate_withJsonArrayRowFilter_shouldParseAndCompileSuccessfully() {
         // Arrange
         List<ColumnDefDto> columns = List.of(
-            new ColumnDefDto("C1", "Col 1", Enums.ColType.WEEK, 0, null, null, 1)
+            new ColumnDefDto("C1", "Col 1", Enums.ColType.WTD, 0, null, null, 1)
         );
         String rowFilterJson = "[" +
             "{\"dimTable\":\"\",\"attribute\":\"location_id\",\"operator\":\"=\",\"value\":\"1\"}," +
@@ -520,7 +520,7 @@ public class SqlGeneratorServiceTest {
     @DisplayName("generate with quick filters compiles with sequential AND and single outer parenthesis")
     public void generate_withQuickFilters_shouldCompileWithSequentialAnd() {
         // Arrange
-        List<ColumnDefDto> columns = List.of(new ColumnDefDto("C1", "Col 1", Enums.ColType.WEEK, 0, null, null, 1));
+        List<ColumnDefDto> columns = List.of(new ColumnDefDto("C1", "Col 1", Enums.ColType.WTD, 0, null, null, 1));
         List<ReportRowDto> rows = List.of(
             new ReportRowDto("R1", "REP1", "Row 1", Enums.RowType.data, 
                 new MeasureDefinitionDTO("raw", null, null, null, "SUM(amount)"), 
@@ -546,7 +546,7 @@ public class SqlGeneratorServiceTest {
     @DisplayName("generate with both quick and general filters welds them together using AND")
     public void generate_withBothQuickAndGeneralFilters_shouldWeldWithAnd() {
         // Arrange
-        List<ColumnDefDto> columns = List.of(new ColumnDefDto("C1", "Col 1", Enums.ColType.WEEK, 0, null, null, 1));
+        List<ColumnDefDto> columns = List.of(new ColumnDefDto("C1", "Col 1", Enums.ColType.WTD, 0, null, null, 1));
         List<ReportRowDto> rows = List.of(
             new ReportRowDto("R1", "REP1", "Row 1", Enums.RowType.data, 
                 new MeasureDefinitionDTO("raw", null, null, null, "SUM(amount)"), 
@@ -577,7 +577,7 @@ public class SqlGeneratorServiceTest {
     @DisplayName("generate with quick filters ignores individual conjunction properties and links using AND")
     public void generate_withQuickFiltersHavingConjunction_shouldIgnoreConjunction() {
         // Arrange
-        List<ColumnDefDto> columns = List.of(new ColumnDefDto("C1", "Col 1", Enums.ColType.WEEK, 0, null, null, 1));
+        List<ColumnDefDto> columns = List.of(new ColumnDefDto("C1", "Col 1", Enums.ColType.WTD, 0, null, null, 1));
         List<ReportRowDto> rows = List.of(
             new ReportRowDto("R1", "REP1", "Row 1", Enums.RowType.data, 
                 new MeasureDefinitionDTO("raw", null, null, null, "SUM(amount)"), 
@@ -603,7 +603,7 @@ public class SqlGeneratorServiceTest {
     @DisplayName("generate with general filters respecting UI toggled OR conjunction")
     public void generate_withGeneralFiltersOrConjunction_shouldRespectOr() {
         // Arrange
-        List<ColumnDefDto> columns = List.of(new ColumnDefDto("C1", "Col 1", Enums.ColType.WEEK, 0, null, null, 1));
+        List<ColumnDefDto> columns = List.of(new ColumnDefDto("C1", "Col 1", Enums.ColType.WTD, 0, null, null, 1));
         List<ReportRowDto> rows = List.of(
             new ReportRowDto("R1", "REP1", "Row 1", Enums.RowType.data, 
                 new MeasureDefinitionDTO("raw", null, null, null, "SUM(amount)"), 
@@ -664,7 +664,7 @@ public class SqlGeneratorServiceTest {
     public void generate_withGranularity_shouldIncludeSubRowsUnpivotingAndJoins() {
         // Arrange
         List<ColumnDefDto> columns = List.of(
-            new ColumnDefDto("C1", "Col 1", Enums.ColType.WEEK, 0, null, null, 1)
+            new ColumnDefDto("C1", "Col 1", Enums.ColType.WTD, 0, null, null, 1)
         );
         List<ReportRowDto> rows = List.of(
             new ReportRowDto("R1", "REP1", "Row 1", Enums.RowType.data, 
@@ -694,7 +694,7 @@ public class SqlGeneratorServiceTest {
     public void generate_withRecursiveRowFilters_shouldCompileNestedParentheses() {
         // Arrange
         List<ColumnDefDto> columns = List.of(
-            new ColumnDefDto("C1", "Col 1", Enums.ColType.WEEK, 0, null, null, 1)
+            new ColumnDefDto("C1", "Col 1", Enums.ColType.WTD, 0, null, null, 1)
         );
         
         String recursiveFilterJson = "{" +
@@ -738,7 +738,7 @@ public class SqlGeneratorServiceTest {
     public void generate_withRecursiveGeneralFilters_shouldCompileNestedParentheses() {
         // Arrange
         List<ColumnDefDto> columns = List.of(
-            new ColumnDefDto("C1", "Col 1", Enums.ColType.WEEK, 0, null, null, 1)
+            new ColumnDefDto("C1", "Col 1", Enums.ColType.WTD, 0, null, null, 1)
         );
         List<ReportRowDto> rows = List.of(
             new ReportRowDto("R1", "REP1", "Row 1", Enums.RowType.data, 
@@ -774,6 +774,82 @@ public class SqlGeneratorServiceTest {
 
         // Assert
         assertThat(sql).contains("(analytics.fact_sales.region = 'North' OR (analytics.fact_sales.status IN ('active', 'pending')))");
+    }
+
+    @Test
+    @DisplayName("generate with ROLLING colType and YEAR grain should compile sub-columns like rolling columns")
+    public void generate_rollingWithYearGrain_shouldCompileSubColumns() {
+        // Arrange
+        List<ColumnDefDto> columns = List.of(
+            new ColumnDefDto("C1", "Col 1", Enums.ColType.ROLLING, 0, 3, "YEAR", null, "L1", null, null, 1)
+        );
+        List<ReportRowDto> rows = List.of(
+            new ReportRowDto("R1", "REP1", "Row 1", Enums.RowType.data, 
+                new MeasureDefinitionDTO("visual", "SUM", "amount", "analytics.fact_sales", null), 
+                null, "normal", 0, 1, Set.of("C1"), null)
+        );
+        ReportConfigDto config = new ReportConfigDto(
+            "REP1", "Test Report", columns, rows, LocalDate.of(2026, 5, 26), 1, Enums.ReportStatus.draft,
+            "analytics.fact_sales", "weekly", null, null, false, null, null
+        );
+
+        // Act
+        String sql = service.generate(config, Collections.emptyMap());
+
+        // Assert
+        assertThat(sql).contains("val_r1_c1_1");
+        assertThat(sql).contains("val_r1_c1_2");
+        assertThat(sql).contains("val_r1_c1_3");
+    }
+
+    @Test
+    @DisplayName("generate with HEADER colType should skip header columns during SQL generation")
+    public void generate_withHeaderColType_shouldIgnoreHeaderColumn() {
+        // Arrange
+        List<ColumnDefDto> columns = List.of(
+            new ColumnDefDto("C1", "Header Col", Enums.ColType.HEADER, 0, 0, null, null, "L1", null, null, 1),
+            new ColumnDefDto("C2", "Col 2", Enums.ColType.WTD, 0, 0, null, null, "L1", null, null, 2)
+        );
+        List<ReportRowDto> rows = List.of(
+            new ReportRowDto("R1", "REP1", "Row 1", Enums.RowType.data, 
+                new MeasureDefinitionDTO("visual", "SUM", "amount", "analytics.fact_sales", null), 
+                null, "normal", 0, 1, Set.of("C1", "C2"), null)
+        );
+        ReportConfigDto config = new ReportConfigDto(
+            "REP1", "Test Report", columns, rows, LocalDate.of(2026, 5, 26), 1, Enums.ReportStatus.draft,
+            "analytics.fact_sales", "weekly", null, null, false, null, null
+        );
+
+        // Act
+        String sql = service.generate(config, Collections.emptyMap());
+
+        // Assert
+        assertThat(sql).doesNotContain("val_r1_c1");
+        assertThat(sql).contains("val_r1_c2");
+    }
+
+    @Test
+    @DisplayName("generate with PREVIOUS_YEAR periodType should subtract one year from reference date")
+    public void generate_withPreviousYearPeriodType_shouldSubtractOneYear() {
+        // Arrange
+        List<ColumnDefDto> columns = List.of(
+            new ColumnDefDto("C1", "Col 1", Enums.ColType.WTD, 0, 0, null, null, "L1", null, "PREVIOUS_YEAR", 1)
+        );
+        List<ReportRowDto> rows = List.of(
+            new ReportRowDto("R1", "REP1", "Row 1", Enums.RowType.data, 
+                new MeasureDefinitionDTO("visual", "SUM", "amount", "analytics.fact_sales", null), 
+                null, "normal", 0, 1, Set.of("C1"), null)
+        );
+        ReportConfigDto config = new ReportConfigDto(
+            "REP1", "Test Report", columns, rows, LocalDate.of(2026, 5, 26), 1, Enums.ReportStatus.draft,
+            "analytics.fact_sales", "weekly", null, null, false, null, null
+        );
+
+        // Act
+        String sql = service.generate(config, Collections.emptyMap());
+
+        // Assert
+        assertThat(sql).contains("analytics.fact_sales.order_date >= '2025-05-26' AND analytics.fact_sales.order_date <= '2025-05-26'");
     }
 }
 

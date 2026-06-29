@@ -45,7 +45,7 @@ public class ReportRunnerServiceIT extends BaseIT {
 
         String reportId = "RPT_RUNNER_IT";
         List<ColumnDefDto> columns = List.of(
-            new ColumnDefDto("C1", "This Week", Enums.ColType.WEEK, 0, null, null, 1)
+            new ColumnDefDto("C1", "This Week", Enums.ColType.WTD, 0, null, null, 1)
         );
         // R1 points to 'total_revenue' which resolves to SUM(analytics.fact_sales.amount)
         List<ReportRowDto> rows = List.of(

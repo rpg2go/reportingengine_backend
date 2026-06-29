@@ -46,6 +46,15 @@ public class ColumnDef {
     @Column(name = "formula_expr")
     private String formulaExpr;
 
+    @Column(name = "tier_level", nullable = false, length = 10)
+    private String tierLevel = "L1"; // L1 | L2
+
+    @Column(name = "parent_id", length = 50)
+    private String parentId;
+
+    @Column(name = "period_type", length = 50)
+    private String periodType;
+
     @Column(name = "display_order", nullable = false)
     private Integer displayOrder;
 }

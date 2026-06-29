@@ -59,7 +59,7 @@ public class SemanticResolverServiceTest {
     @DisplayName("resolveAll with successfully resolved measures and joins returns mapped results")
     public void resolveAll_validMeasuresAndJoins_shouldReturnResolvedMetricsMap() {
         // Arrange
-        List<ColumnDefDto> columns = List.of(new ColumnDefDto("C1", "Col 1", Enums.ColType.WEEK, 0, null, null, 1));
+        List<ColumnDefDto> columns = List.of(new ColumnDefDto("C1", "Col 1", Enums.ColType.WTD, 0, null, null, 1));
         List<ReportRowDto> rows = List.of(
             new ReportRowDto("R1", "REP1", "Sales", Enums.RowType.data, new MeasureDefinitionDTO("raw", null, null, null, "fact_sales_amount"), null, "normal", 0, 1, Set.of("C1"), null)
         );
@@ -113,7 +113,7 @@ public class SemanticResolverServiceTest {
     @DisplayName("resolveAll throws MetricNotFoundException when measures are missing in DB")
     public void resolveAll_missingMeasure_shouldThrowMetricNotFoundException() {
         // Arrange
-        List<ColumnDefDto> columns = List.of(new ColumnDefDto("C1", "Col 1", Enums.ColType.WEEK, 0, null, null, 1));
+        List<ColumnDefDto> columns = List.of(new ColumnDefDto("C1", "Col 1", Enums.ColType.WTD, 0, null, null, 1));
         List<ReportRowDto> rows = List.of(
             new ReportRowDto("R1", "REP1", "Sales", Enums.RowType.data, new MeasureDefinitionDTO("raw", null, null, null, "non_existent_measure"), null, "normal", 0, 1, Set.of("C1"), null)
         );

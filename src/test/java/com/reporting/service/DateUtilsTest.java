@@ -15,19 +15,27 @@ public class DateUtilsTest {
     private final LocalDate refDate = LocalDate.of(2026, 5, 26); // Tuesday
 
     @Test
-    @DisplayName("WEEK with offset 0: should return Monday to refDate")
-    public void getPeriodBoundaries_weekOffsetZero_shouldReturnMondayToRefDate() {
-        LocalDate[] boundaries = DateUtils.getPeriodBoundaries(refDate, ColType.WEEK, 0, null);
+    @DisplayName("WTD with offset 0: should return Monday to refDate")
+    public void getPeriodBoundaries_wtdOffsetZero_shouldReturnMondayToRefDate() {
+        LocalDate[] boundaries = DateUtils.getPeriodBoundaries(refDate, ColType.WTD, 0, null);
         assertThat(boundaries[0]).isEqualTo(LocalDate.of(2026, 5, 25)); // Monday
         assertThat(boundaries[1]).isEqualTo(LocalDate.of(2026, 5, 26)); // Tuesday (refDate)
     }
 
     @Test
-    @DisplayName("WEEK with offset -1: should return previous week Monday to Sunday")
-    public void getPeriodBoundaries_weekOffsetMinusOne_shouldReturnPreviousFullWeek() {
-        LocalDate[] boundaries = DateUtils.getPeriodBoundaries(refDate, ColType.WEEK, -1, null);
+    @DisplayName("WTD with offset -1: should return previous week Monday to Sunday")
+    public void getPeriodBoundaries_wtdOffsetMinusOne_shouldReturnPreviousFullWeek() {
+        LocalDate[] boundaries = DateUtils.getPeriodBoundaries(refDate, ColType.WTD, -1, null);
         assertThat(boundaries[0]).isEqualTo(LocalDate.of(2026, 5, 18)); // Previous Monday
         assertThat(boundaries[1]).isEqualTo(LocalDate.of(2026, 5, 24)); // Previous Sunday
+    }
+
+    @Test
+    @DisplayName("WTD with timeframe length 3: should look back 3 weeks starting from Monday")
+    public void getPeriodBoundaries_wtdTimeframeLength_shouldLookbackThreeWeeks() {
+        LocalDate[] boundaries = DateUtils.getPeriodBoundaries(refDate, ColType.WTD, 0, 3);
+        assertThat(boundaries[0]).isEqualTo(LocalDate.of(2026, 5, 11)); // Monday 2 weeks ago
+        assertThat(boundaries[1]).isEqualTo(LocalDate.of(2026, 5, 26));
     }
 
     @Test

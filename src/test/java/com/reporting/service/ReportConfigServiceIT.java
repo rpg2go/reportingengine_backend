@@ -35,7 +35,7 @@ public class ReportConfigServiceIT extends BaseIT {
         // Arrange
         String reportId = "RPT_IT_TEST";
         List<ColumnDefDto> columns = List.of(
-            new ColumnDefDto("C1", "Revenue Week", Enums.ColType.WEEK, 0, null, null, 1),
+            new ColumnDefDto("C1", "Revenue Week", Enums.ColType.WTD, 0, null, null, 1),
             new ColumnDefDto("C2", "Calc Growth", Enums.ColType.CALC, 0, null, "C1 * 1.1", 2)
         );
         List<ReportRowDto> rows = List.of(
@@ -75,7 +75,7 @@ public class ReportConfigServiceIT extends BaseIT {
     public void saveConfig_shouldPerformCascadeDeletionsOnUpdate() {
         // Arrange first save
         String reportId = "RPT_IT_CASCADE";
-        List<ColumnDefDto> cols1 = List.of(new ColumnDefDto("C1", "C1", Enums.ColType.WEEK, 0, null, null, 1));
+        List<ColumnDefDto> cols1 = List.of(new ColumnDefDto("C1", "C1", Enums.ColType.WTD, 0, null, null, 1));
         List<ReportRowDto> rows1 = List.of(new ReportRowDto("R1", reportId, "R1", Enums.RowType.data, new MeasureDefinitionDTO("raw", null, null, null, "SUM(a)"), null, "normal", 0, 1, Set.of("C1"), null));
         ReportConfigDto config1 = new ReportConfigDto(reportId, "First save", cols1, rows1, LocalDate.now(), 1, null, "a", "w", null, null, false, null, null);
         configService.saveToDb(config1);

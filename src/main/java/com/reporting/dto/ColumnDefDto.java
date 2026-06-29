@@ -35,22 +35,36 @@ public record ColumnDefDto(
      * {@code null} is treated as {@code "WEEK"} (legacy default).
      */
     @Pattern(
-        regexp = "^(DAY|WEEK|MONTH)$",
-        message = "rollingGrain must be one of: DAY, WEEK, MONTH"
+        regexp = "^(DAY|WEEK|MONTH|YEAR)$",
+        message = "rollingGrain must be one of: DAY, WEEK, MONTH, YEAR"
     )
     String rollingGrain,
 
     @Size(max = 1000, message = "Formula expression must be at most 1000 characters")
     String formulaExpr,
 
+    String tierLevel,
+
+    String parentId,
+
+    String periodType,
+
     int displayOrder
 ) {
     public ColumnDefDto(String colId, String label, Enums.ColType colType, int periodOffset, Integer rollingN, String formulaExpr, int displayOrder) {
-        this(colId, label, colType, periodOffset, rollingN, null, formulaExpr, displayOrder);
+        this(colId, label, colType, periodOffset, rollingN, null, formulaExpr, "L1", null, null, displayOrder);
+    }
+
+    public ColumnDefDto(String colId, String label, Enums.ColType colType, int periodOffset, Integer rollingN, String rollingGrain, String formulaExpr, int displayOrder) {
+        this(colId, label, colType, periodOffset, rollingN, rollingGrain, formulaExpr, "L1", null, null, displayOrder);
+    }
+
+    public ColumnDefDto(String colId, String label, Enums.ColType colType, int periodOffset, Integer rollingN, String rollingGrain, String formulaExpr, String tierLevel, String parentId, int displayOrder) {
+        this(colId, label, colType, periodOffset, rollingN, rollingGrain, formulaExpr, tierLevel, parentId, null, displayOrder);
     }
 
     public boolean isSqlColumn() {
-        return colType != Enums.ColType.CALC;
+        return colType != Enums.ColType.CALC && colType != Enums.ColType.HEADER;
     }
 
     /**

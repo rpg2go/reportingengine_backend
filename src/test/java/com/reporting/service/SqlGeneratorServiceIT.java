@@ -40,7 +40,7 @@ public class SqlGeneratorServiceIT extends BaseIT {
     public void previewSql_shouldReturnCompiledCteString() throws Exception {
         // Arrange
         List<ColumnDefDto> columns = List.of(
-            new ColumnDefDto("C1", "WTD no.", Enums.ColType.WEEK, 0, null, null, 1)
+            new ColumnDefDto("C1", "WTD no.", Enums.ColType.WTD, 0, null, null, 1)
         );
         List<ReportRowDto> rows = List.of(
             new ReportRowDto("R1", "RPT_IT", "GBS gross", Enums.RowType.data, 

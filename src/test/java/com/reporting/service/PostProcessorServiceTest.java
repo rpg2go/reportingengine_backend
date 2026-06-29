@@ -61,8 +61,8 @@ public class PostProcessorServiceTest {
         // Arrange
         // Columns: C1 (SQL), C2 (SQL), C3 (CALC formula: C1 - C2)
         List<ColumnDefDto> columns = List.of(
-            new ColumnDefDto("C1", "Col 1", Enums.ColType.WEEK, 0, null, null, 1),
-            new ColumnDefDto("C2", "Col 2", Enums.ColType.WEEK, -1, null, null, 2),
+            new ColumnDefDto("C1", "Col 1", Enums.ColType.WTD, 0, null, null, 1),
+            new ColumnDefDto("C2", "Col 2", Enums.ColType.WTD, -1, null, null, 2),
             new ColumnDefDto("C3", "Col 3", Enums.ColType.CALC, 0, null, "C1 - C2", 3)
         );
 
@@ -164,7 +164,7 @@ public class PostProcessorServiceTest {
     public void process_granularityReconstruction() {
         // Arrange
         List<ColumnDefDto> columns = List.of(
-            new ColumnDefDto("C1", "Col 1", Enums.ColType.WEEK, 0, null, null, 1)
+            new ColumnDefDto("C1", "Col 1", Enums.ColType.WTD, 0, null, null, 1)
         );
 
         List<ReportRowDto> rows = List.of(

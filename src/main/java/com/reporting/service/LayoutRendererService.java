@@ -69,6 +69,11 @@ public class LayoutRendererService {
         LocalDate refDate = config.getReferenceDate() != null ? config.getReferenceDate() : LocalDate.now();
 
         for (ColumnDefDto col : config.getColumns()) {
+            LocalDate colRefDate = refDate;
+            if (col.periodType() != null && "PREVIOUS_YEAR".equalsIgnoreCase(col.periodType().trim())) {
+                colRefDate = colRefDate.minusYears(1);
+            }
+
             if (col.colType() == Enums.ColType.ROLLING) {
                 int rollingN = col.rollingN() != null ? col.rollingN() : 1;
                 String grain = col.effectiveRollingGrain();
@@ -79,18 +84,23 @@ public class LayoutRendererService {
 
                     switch (grain) {
                         case "DAY": {
-                            LocalDate target = refDate.minusDays(i);
+                            LocalDate target = colRefDate.minusDays(i);
                             label = formatShortDay(target);
                             break;
                         }
                         case "MONTH": {
-                            LocalDate target = refDate.minusMonths(i);
+                            LocalDate target = colRefDate.minusMonths(i);
                             label = formatMonthYear(target);
+                            break;
+                        }
+                        case "YEAR": {
+                            LocalDate target = colRefDate.minusYears(i);
+                            label = String.valueOf(target.getYear());
                             break;
                         }
                         case "WEEK":
                         default: {
-                            LocalDate refMonday = refDate.with(java.time.temporal.TemporalAdjusters.previousOrSame(java.time.DayOfWeek.MONDAY));
+                            LocalDate refMonday = colRefDate.with(java.time.temporal.TemporalAdjusters.previousOrSame(java.time.DayOfWeek.MONDAY));
                             LocalDate targetMonday = refMonday.minusWeeks(i);
                             LocalDate targetSunday = targetMonday.plusDays(6);
                             label = formatWeekRange(targetMonday, targetSunday);

@@ -137,7 +137,7 @@ public class ReportValidationServiceTest {
     public void validate_nakedDivision_shouldNotTriggerWarning() {
         // Arrange: C1 is visual/regular column, C2 is CALC referencing C1 with division
         List<ColumnDefDto> columns = List.of(
-            new ColumnDefDto("C1", "Col 1", Enums.ColType.WEEK, 0, null, null, 1),
+            new ColumnDefDto("C1", "Col 1", Enums.ColType.WTD, 0, null, null, 1),
             new ColumnDefDto("C2", "Col 2", Enums.ColType.CALC, 0, null, "100 / C1", 2)
         );
         ReportConfigDto config = new ReportConfigDto(
@@ -231,7 +231,7 @@ public class ReportValidationServiceTest {
             new ReportRowDto("R4", "RPT1", "Row 4", Enums.RowType.calc, new MeasureDefinitionDTO("raw", null, null, null, "R3"), null, "normal", 0, 2, Set.of("C1"), null)
         );
         ReportConfigDto config = new ReportConfigDto(
-            "RPT1", "Test", List.of(new ColumnDefDto("C1", "C1", Enums.ColType.WEEK, 0, null, null, 1)), rows, null, 1, Enums.ReportStatus.draft,
+            "RPT1", "Test", List.of(new ColumnDefDto("C1", "C1", Enums.ColType.WTD, 0, null, null, 1)), rows, null, 1, Enums.ReportStatus.draft,
             "analytics.fact_sales", "reporting_date", null, null, false, null, null
         );
 
@@ -244,12 +244,12 @@ public class ReportValidationServiceTest {
     @DisplayName("validateConfiguration - calculated column formula references non-existent column ID")
     public void validate_calculatedColumnFormulaReferencesNonExistentColId() {
         List<ColumnDefDto> columns = List.of(
-            new ColumnDefDto("C1", "C1", Enums.ColType.WEEK, 0, null, null, 1),
-            new ColumnDefDto("C2", "C2", Enums.ColType.WEEK, 0, null, null, 2),
-            new ColumnDefDto("C3", "C3", Enums.ColType.WEEK, 0, null, null, 3),
-            new ColumnDefDto("C4", "C4", Enums.ColType.WEEK, 0, null, null, 4),
-            new ColumnDefDto("C5", "C5", Enums.ColType.WEEK, 0, null, null, 5),
-            new ColumnDefDto("C6", "C6", Enums.ColType.WEEK, 0, null, null, 6),
+            new ColumnDefDto("C1", "C1", Enums.ColType.WTD, 0, null, null, 1),
+            new ColumnDefDto("C2", "C2", Enums.ColType.WTD, 0, null, null, 2),
+            new ColumnDefDto("C3", "C3", Enums.ColType.WTD, 0, null, null, 3),
+            new ColumnDefDto("C4", "C4", Enums.ColType.WTD, 0, null, null, 4),
+            new ColumnDefDto("C5", "C5", Enums.ColType.WTD, 0, null, null, 5),
+            new ColumnDefDto("C6", "C6", Enums.ColType.WTD, 0, null, null, 6),
             new ColumnDefDto("C7", "C7", Enums.ColType.CALC, 0, null, "C9 + C1", 7)
         );
         ReportConfigDto config = new ReportConfigDto(
@@ -361,8 +361,8 @@ public class ReportValidationServiceTest {
     @DisplayName("validateConfiguration - formula with NULLIF passes validation when active column IDs exist")
     public void testValidateConfiguration_formulaWithNullif_shouldPassValidation() {
         List<ColumnDefDto> columns = List.of(
-            new ColumnDefDto("C1", "Col 1", Enums.ColType.WEEK, 0, null, null, 1),
-            new ColumnDefDto("C2", "Col 2", Enums.ColType.WEEK, 0, null, null, 2),
+            new ColumnDefDto("C1", "Col 1", Enums.ColType.WTD, 0, null, null, 1),
+            new ColumnDefDto("C2", "Col 2", Enums.ColType.WTD, 0, null, null, 2),
             new ColumnDefDto("C3", "Formula Col", Enums.ColType.CALC, 0, null, "(C1 - C2) / NULLIF(C2, 0)", 3)
         );
         ReportConfigDto config = new ReportConfigDto(

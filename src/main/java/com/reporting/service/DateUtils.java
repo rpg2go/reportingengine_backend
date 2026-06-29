@@ -59,30 +59,32 @@ public class DateUtils {
 
         switch (colType) {
 
-            case WEEK: {
-                // ISO Week: Monday–Sunday window shifted by {@code offset} whole weeks.
+            case WTD: {
+                // ISO Week: Monday–Sunday window shifted by {@code offset} whole weeks, look back n weeks.
                 LocalDate monday = refDate.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
                 LocalDate mondayOffset = monday.plusWeeks(offset);
-                start = mondayOffset;
+                int n = (rollingN != null && rollingN > 0) ? rollingN : 1;
+                start = mondayOffset.minusWeeks(n - 1);
                 end   = (offset == 0) ? refDate : mondayOffset.plusDays(6);
                 break;
             }
 
             case MTD: {
-                // Month-to-date window shifted by {@code offset} months.
+                // Month-to-date window shifted by {@code offset} months, look back n months.
                 LocalDate targetMonthDate = refDate.plusMonths(offset);
-                start = targetMonthDate.withDayOfMonth(1);
+                int n = (rollingN != null && rollingN > 0) ? rollingN : 1;
+                start = targetMonthDate.withDayOfMonth(1).minusMonths(n - 1);
                 int endDay = Math.min(refDate.getDayOfMonth(), targetMonthDate.lengthOfMonth());
                 end = targetMonthDate.withDayOfMonth(endDay);
                 break;
             }
 
             case YTD: {
-                // Year-to-date window shifted by {@code offset} years.
-                // If offset ≥ 12 it is interpreted as a month count (legacy behavior).
+                // Year-to-date window shifted by {@code offset} years, look back n years.
                 int yearShift = (Math.abs(offset) >= 12) ? offset / 12 : offset;
                 LocalDate targetYearDate = refDate.plusYears(yearShift);
-                start = LocalDate.of(targetYearDate.getYear(), 1, 1);
+                int n = (rollingN != null && rollingN > 0) ? rollingN : 1;
+                start = LocalDate.of(targetYearDate.getYear(), 1, 1).minusYears(n - 1);
                 LocalDate refMonthInTargetYear =
                     LocalDate.of(targetYearDate.getYear(), refDate.getMonthValue(), 1);
                 int endDay = Math.min(refDate.getDayOfMonth(), refMonthInTargetYear.lengthOfMonth());

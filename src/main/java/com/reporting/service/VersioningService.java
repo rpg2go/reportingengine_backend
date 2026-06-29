@@ -245,8 +245,8 @@ public class VersioningService {
     private void cloneChildRecords(String reportId, int fromVersion, int toVersion) {
         jdbcTemplate.update(
             "INSERT INTO reporting.rpt_column_def " +
-            "  (report_id, version, col_id, label, col_type, period_offset, rolling_n, rolling_grain, formula_expr, display_order) " +
-            "SELECT report_id, ? AS version, col_id, label, col_type, period_offset, rolling_n, rolling_grain, formula_expr, display_order " +
+            "  (report_id, version, col_id, label, col_type, period_offset, rolling_n, rolling_grain, formula_expr, tier_level, parent_id, period_type, display_order) " +
+            "SELECT report_id, ? AS version, col_id, label, col_type, period_offset, rolling_n, rolling_grain, formula_expr, tier_level, parent_id, period_type, display_order " +
             "FROM reporting.rpt_column_def WHERE report_id = ? AND version = ?",
             toVersion, reportId, fromVersion
         );

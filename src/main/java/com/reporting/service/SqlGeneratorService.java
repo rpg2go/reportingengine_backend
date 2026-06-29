@@ -289,7 +289,7 @@ public class SqlGeneratorService {
                 }
 
                 for (ColumnDefDto col : config.getColumns()) {
-                    if (col.colType() == Enums.ColType.CALC) {
+                    if (!col.isSqlColumn()) {
                         continue;
                     }
                     if (!row.isEnabledFor(col.colId())) {
@@ -301,8 +301,13 @@ public class SqlGeneratorService {
                     String timeKey = getTimeKeyForTable(factTable);
                     String prefixedTimeKey = factTable + "." + timeKey;
 
+                    LocalDate colRefDate = config.getReferenceDate();
+                    if (col.periodType() != null && "PREVIOUS_YEAR".equalsIgnoreCase(col.periodType().trim())) {
+                        colRefDate = colRefDate.minusYears(1);
+                    }
+
                     LocalDate[] boundaries = DateUtils.getPeriodBoundaries(
-                        config.getReferenceDate(),
+                        colRefDate,
                         col.colType(),
                         col.periodOffset(),
                         col.rollingN(),
@@ -333,14 +338,18 @@ public class SqlGeneratorService {
                             LocalDate subStart;
                             LocalDate subEnd;
                             if ("DAY".equals(grain)) {
-                                subStart = config.getReferenceDate().minusDays(i);
-                                subEnd = config.getReferenceDate().minusDays(i);
+                                subStart = colRefDate.minusDays(i);
+                                subEnd = colRefDate.minusDays(i);
                             } else if ("MONTH".equals(grain)) {
-                                LocalDate[] b = DateUtils.getPeriodBoundaries(config.getReferenceDate(), Enums.ColType.MTD, -i, null, null);
+                                LocalDate[] b = DateUtils.getPeriodBoundaries(colRefDate, Enums.ColType.MTD, -i, null, null);
+                                subStart = b[0];
+                                subEnd = b[1];
+                            } else if ("YEAR".equals(grain)) {
+                                LocalDate[] b = DateUtils.getPeriodBoundaries(colRefDate, Enums.ColType.YTD, -i, null, null);
                                 subStart = b[0];
                                 subEnd = b[1];
                             } else { // WEEK
-                                LocalDate[] b = DateUtils.getPeriodBoundaries(config.getReferenceDate(), Enums.ColType.WEEK, -i, null, null);
+                                LocalDate[] b = DateUtils.getPeriodBoundaries(colRefDate, Enums.ColType.WTD, -i, null, null);
                                 subStart = b[0];
                                 subEnd = b[1];
                             }
@@ -410,7 +419,7 @@ public class SqlGeneratorService {
                     continue;
                 }
                 for (ColumnDefDto col : config.getColumns()) {
-                    if (col.colType() == Enums.ColType.CALC) {
+                    if (!col.isSqlColumn()) {
                         continue;
                     }
                     if (!row.isEnabledFor(col.colId())) {
@@ -451,27 +460,60 @@ public class SqlGeneratorService {
         // 6. Build final selects for unpivoting
         List<String> finalSelects = new ArrayList<>();
 
-        // Find first non-CALC column to define the report's current reference date boundaries
-        ColumnDefDto currentPeriodCol = null;
-        for (ColumnDefDto col : config.getColumns()) {
-            if (col.colType() != Enums.ColType.CALC) {
-                currentPeriodCol = col;
-                break;
-            }
-        }
-
+        // Find outer query timeKey boundary limits to encompass all column definitions (including PREVIOUS_YEAR and ROLLING offsets)
         LocalDate startBound = null;
         LocalDate endBound = null;
-        if (currentPeriodCol != null) {
-            LocalDate[] boundaries = DateUtils.getPeriodBoundaries(
-                config.getReferenceDate(),
-                currentPeriodCol.colType(),
-                currentPeriodCol.periodOffset(),
-                currentPeriodCol.rollingN(),
-                currentPeriodCol.effectiveRollingGrain()
-            );
-            startBound = boundaries[0];
-            endBound = boundaries[1];
+        for (ColumnDefDto col : config.getColumns()) {
+            if (col.isSqlColumn()) {
+                LocalDate colRefDate = config.getReferenceDate();
+                if (col.periodType() != null && "PREVIOUS_YEAR".equalsIgnoreCase(col.periodType().trim())) {
+                    colRefDate = colRefDate.minusYears(1);
+                }
+                LocalDate[] boundaries = DateUtils.getPeriodBoundaries(
+                    colRefDate,
+                    col.colType(),
+                    col.periodOffset(),
+                    col.rollingN(),
+                    col.effectiveRollingGrain()
+                );
+                if (startBound == null || boundaries[0].isBefore(startBound)) {
+                    startBound = boundaries[0];
+                }
+                if (endBound == null || boundaries[1].isAfter(endBound)) {
+                    endBound = boundaries[1];
+                }
+ 
+                if (col.colType() == Enums.ColType.ROLLING) {
+                    int rollingN = col.rollingN() != null ? col.rollingN() : 1;
+                    String grain = col.effectiveRollingGrain();
+                    for (int i = 1; i <= rollingN; i++) {
+                        LocalDate subStart;
+                        LocalDate subEnd;
+                        if ("DAY".equals(grain)) {
+                            subStart = colRefDate.minusDays(i);
+                            subEnd = colRefDate.minusDays(i);
+                        } else if ("MONTH".equals(grain)) {
+                            LocalDate[] b = DateUtils.getPeriodBoundaries(colRefDate, Enums.ColType.MTD, -i, null, null);
+                            subStart = b[0];
+                            subEnd = b[1];
+                        } else if ("YEAR".equals(grain)) {
+                            LocalDate[] b = DateUtils.getPeriodBoundaries(colRefDate, Enums.ColType.YTD, -i, null, null);
+                            subStart = b[0];
+                            subEnd = b[1];
+                        } else { // WEEK
+                            LocalDate[] b = DateUtils.getPeriodBoundaries(colRefDate, Enums.ColType.WTD, -i, null, null);
+                            subStart = b[0];
+                            subEnd = b[1];
+                        }
+                        if (subStart.isBefore(startBound)) {
+                            startBound = subStart;
+                        }
+                        if (subEnd.isAfter(endBound)) {
+                            endBound = subEnd;
+                        }
+                    }
+                }
+            }
         }
 
         String firstTable = uniqueTables.iterator().next();
@@ -494,7 +536,7 @@ public class SqlGeneratorService {
                 continue;
             }
             for (ColumnDefDto col : config.getColumns()) {
-                if (col.colType() == Enums.ColType.CALC) {
+                if (!col.isSqlColumn()) {
                     continue;
                 }
                 if (!row.isEnabledFor(col.colId())) {

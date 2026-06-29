@@ -30,7 +30,7 @@ public class LayoutRendererServiceTest {
     public void render_validReportData_shouldGenerateCorrectExcel() throws IOException {
         // Arrange
         List<ColumnDefDto> columns = List.of(
-            new ColumnDefDto("C1", "Col 1 Label", Enums.ColType.WEEK, 0, null, null, 1)
+            new ColumnDefDto("C1", "Col 1 Label", Enums.ColType.WTD, 0, null, null, 1)
         );
         List<ReportRowDto> rows = List.of(
             new ReportRowDto("R1", "REP1", "Revenue", Enums.RowType.data, new MeasureDefinitionDTO("raw", null, null, null, "m1"), null, "section", 0, 1, Set.of("C1"), null),
@@ -137,7 +137,7 @@ public class LayoutRendererServiceTest {
     public void render_withGranularitySubRows_shouldRenderThemSortedAndIndented() throws IOException {
         // Arrange
         List<ColumnDefDto> columns = List.of(
-            new ColumnDefDto("C1", "Col 1 Label", Enums.ColType.WEEK, 0, null, null, 1)
+            new ColumnDefDto("C1", "Col 1 Label", Enums.ColType.WTD, 0, null, null, 1)
         );
         List<ReportRowDto> rows = List.of(
             new ReportRowDto("R1", "REP1", "Revenue", Enums.RowType.data, new MeasureDefinitionDTO("raw", null, null, null, "m1"), null, "normal", 0, 1, Set.of("C1"), null)
