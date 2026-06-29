@@ -49,6 +49,8 @@ gcloud run deploy ${BACKEND_SERVICE_NAME} \
   --port 8080 \
   --set-env-vars="SPRING_DATASOURCE_URL=${SPRING_DATASOURCE_URL},SPRING_DATASOURCE_USERNAME=${SPRING_DATASOURCE_USERNAME},SPRING_DATASOURCE_PASSWORD=${SPRING_DATASOURCE_PASSWORD}" \
   --allow-unauthenticated \
+  --liveness-probe=httpGet.path=/actuator/health/liveness,httpGet.port=8080 \
+  --startup-probe=httpGet.path=/actuator/health/readiness,httpGet.port=8080 \
   --quiet
 
 echo "Retrieving Backend URL..."

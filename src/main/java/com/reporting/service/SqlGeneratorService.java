@@ -1,5 +1,6 @@
 package com.reporting.service;
 
+import com.reporting.cache.MetadataCache;
 import com.reporting.catalog.SchemaGraphRouter;
 import com.reporting.dto.*;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -25,14 +26,22 @@ public class SqlGeneratorService {
      */
     private final SchemaGraphRouter schemaGraphRouter;
 
+    /**
+     * Startup-loaded metadata cache: column sets, time-keys, sem-measures.
+     * Eliminates repeated {@code information_schema} and {@code sem_view} round-trips
+     * during query generation.
+     */
+    private final MetadataCache metadataCache;
+
     @Autowired
-    public SqlGeneratorService(JdbcTemplate jdbcTemplate, SchemaGraphRouter schemaGraphRouter) {
+    public SqlGeneratorService(JdbcTemplate jdbcTemplate, SchemaGraphRouter schemaGraphRouter, MetadataCache metadataCache) {
         this.jdbcTemplate    = jdbcTemplate;
         this.schemaGraphRouter = schemaGraphRouter;
+        this.metadataCache   = metadataCache;
     }
 
     public SqlGeneratorService(JdbcTemplate jdbcTemplate) {
-        this(jdbcTemplate, null);
+        this(jdbcTemplate, null, null);
     }
 
     public String generateMatrixQuery(ReportConfigDto config) {
@@ -746,6 +755,14 @@ public class SqlGeneratorService {
     }
 
     private String getTimeKeyForTable(String table) {
+        // Fast path: check startup cache first (avoids a live DB round-trip per CTE)
+        if (metadataCache != null) {
+            String cached = metadataCache.getTimeKey(table);
+            if (cached != null) {
+                return cached;
+            }
+        }
+        // Fallback: live query (handles tables not in sem_view or cache miss)
         try {
             return jdbcTemplate.queryForObject(
                 "SELECT time_key FROM reporting.sem_view WHERE table_ref = ?",
@@ -762,9 +779,14 @@ public class SqlGeneratorService {
             return false;
         }
         String cleanTable = table.trim().toLowerCase();
-        String cleanCol = column.trim().toLowerCase();
+        String cleanCol   = column.trim().toLowerCase();
 
-        Set<String> columns = cache.computeIfAbsent(cleanTable, t -> {
+        // Use the shared startup cache (backed by the per-request map for non-analytics tables)
+        Map<String, Set<String>> effectiveCache = (metadataCache != null)
+            ? metadataCache.getTableColumnsCache()
+            : cache;
+
+        Set<String> columns = effectiveCache.computeIfAbsent(cleanTable, t -> {
             String schema = "analytics";
             String tableName = t;
             if (t.contains(".")) {
@@ -772,6 +794,7 @@ public class SqlGeneratorService {
                 schema = parts[0].trim();
                 tableName = parts[1].trim();
             }
+            // Only reaches here for tables not pre-loaded at startup (e.g. reporting schema tables)
             String sql = "SELECT column_name FROM information_schema.columns WHERE table_schema = ? AND table_name = ?";
             try {
                 List<String> list = jdbcTemplate.queryForList(sql, String.class, schema, tableName);

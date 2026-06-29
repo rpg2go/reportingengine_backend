@@ -1,5 +1,6 @@
 package com.reporting.service;
 
+import com.reporting.cache.MetadataCache;
 import com.reporting.domain.*;
 import com.reporting.dto.*;
 import com.reporting.repository.*;
@@ -22,6 +23,7 @@ public class ReportConfigService {
     private final RowColumnMapRepository rowColumnMapRepository;
     private final StyleRepository styleRepository;
     private final org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
+    private final MetadataCache metadataCache;
 
     public ReportConfigService(ReportRepository reportRepository,
                               ColumnDefRepository columnDefRepository,
@@ -30,7 +32,8 @@ public class ReportConfigService {
                               RowFormulaRepository rowFormulaRepository,
                               RowColumnMapRepository rowColumnMapRepository,
                               StyleRepository styleRepository,
-                              org.springframework.jdbc.core.JdbcTemplate jdbcTemplate) {
+                              org.springframework.jdbc.core.JdbcTemplate jdbcTemplate,
+                              MetadataCache metadataCache) {
         this.reportRepository = reportRepository;
         this.columnDefRepository = columnDefRepository;
         this.reportRowRepository = reportRowRepository;
@@ -39,6 +42,7 @@ public class ReportConfigService {
         this.rowColumnMapRepository = rowColumnMapRepository;
         this.styleRepository = styleRepository;
         this.jdbcTemplate = jdbcTemplate;
+        this.metadataCache = metadataCache;
     }
 
     @Transactional(readOnly = true)
@@ -71,31 +75,42 @@ public class ReportConfigService {
             ), reportId, version);
 
         // 2.5 Load semantic measures for translation lookup
+        // Fast path: use startup cache; fall back to a live query if cache is empty.
         Map<String, SemanticMeasureInfo> semMeasures = new HashMap<>();
-        jdbcTemplate.query(
-            "SELECT sm.name, sm.sql_expr, sv.table_ref " +
-            "FROM reporting.sem_measure sm " +
-            "JOIN reporting.sem_view sv ON sv.view_id = sm.view_id",
-            (RowCallbackHandler) rs -> {
-                String name = rs.getString("name").toLowerCase();
-                semMeasures.put(name, new SemanticMeasureInfo(
-                    rs.getString("sql_expr"),
-                    rs.getString("table_ref")
-                ));
+        Map<String, MetadataCache.SemMeasureInfo> cachedMeasures = metadataCache.getSemMeasures();
+        if (!cachedMeasures.isEmpty()) {
+            for (Map.Entry<String, MetadataCache.SemMeasureInfo> e : cachedMeasures.entrySet()) {
+                semMeasures.put(e.getKey(), new SemanticMeasureInfo(e.getValue().sqlExpr(), e.getValue().tableRef()));
             }
-        );
+        } else {
+            jdbcTemplate.query(
+                "SELECT sm.name, sm.sql_expr, sv.table_ref " +
+                "FROM reporting.sem_measure sm " +
+                "JOIN reporting.sem_view sv ON sv.view_id = sm.view_id",
+                (RowCallbackHandler) rs -> {
+                    String name = rs.getString("name").toLowerCase();
+                    semMeasures.put(name, new SemanticMeasureInfo(
+                        rs.getString("sql_expr"),
+                        rs.getString("table_ref")
+                    ));
+                }
+            );
+        }
 
         // 2.6 Load semantic view table references for resilient table detection
-        Set<String> semViewTables = new LinkedHashSet<>();
-        jdbcTemplate.query(
-            "SELECT DISTINCT table_ref FROM reporting.sem_view WHERE table_ref IS NOT NULL",
-            (RowCallbackHandler) rs -> {
-                String tbl = rs.getString("table_ref");
-                if (tbl != null && !tbl.isBlank()) {
-                    semViewTables.add(tbl.trim());
+        // Fast path: use startup cache.
+        Set<String> semViewTables = new LinkedHashSet<>(metadataCache.getSemViewTables());
+        if (semViewTables.isEmpty()) {
+            jdbcTemplate.query(
+                "SELECT DISTINCT table_ref FROM reporting.sem_view WHERE table_ref IS NOT NULL",
+                (RowCallbackHandler) rs -> {
+                    String tbl = rs.getString("table_ref");
+                    if (tbl != null && !tbl.isBlank()) {
+                        semViewTables.add(tbl.trim());
+                    }
                 }
-            }
-        );
+            );
+        }
 
         // 3. Row metrics — filtered by version
         Map<String, MeasureDefinitionDTO> measuresByRow = new HashMap<>();

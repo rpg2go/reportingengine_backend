@@ -57,7 +57,7 @@ Run the following commands in their respective environments to check quality met
   - [MetadataControllerTest](../src/test/java/com/reporting/controller/MetadataControllerTest.java): Tests injection rejection — malformed strings, SQL keywords (e.g. `;`, `UNION`) return `400 Bad Request`.
   - [ReportPreviewControllerTest](../src/test/java/com/reporting/controller/ReportPreviewControllerTest.java): Tests the SQL preview endpoint with mocked generator output.
   - [AuthControllerTest](../src/test/java/com/reporting/controller/AuthControllerTest.java): Tests Basic Auth response with valid and invalid credentials.
-  - [ReportControllerTest](../src/test/java/com/reporting/controller/ReportControllerTest.java): Tests report CRUD endpoints (list, get, save, run, validate).
+  - [ReportControllerTest](../src/test/java/com/reporting/controller/ReportControllerTest.java): Tests report CRUD endpoints (list, get, save, run, validate) and SchemaDiscoveryController endpoints (autocomplete, schema meta).
 - **Frontend**: Verify authentication guards block page access, and components emit events when layout coordinates change.
 
 ### 2. Integration Tests

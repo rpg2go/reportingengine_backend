@@ -75,6 +75,38 @@ _Warning: The `-v` flag removes the Postgres database volumes, resetting all dat
 
 ---
 
+## Google Cloud Run Deployment (Production)
+
+For deploying to production Google Cloud Run, we use the custom helper deployment script [scripts/deploy.sh](../scripts/deploy.sh).
+
+### 1. Prerequisites
+
+- **Google Cloud SDK (gcloud)** installed and authenticated.
+- Local `.env` file populated with GCP configuration and database connection variables.
+
+### 2. Configuration Settings (.env)
+
+The deployment script loads variables directly from the repository's `.env` file:
+- `GCP_PROJECT_ID`: Target Google Cloud Project.
+- `GCP_REGION`: Target region (defaults to `europe-west3`).
+- `BACKEND_SERVICE_NAME`: Cloud Run service descriptor name (e.g. `report-backend`).
+- `SPRING_DATASOURCE_URL`, `SPRING_DATASOURCE_USERNAME`, `SPRING_DATASOURCE_PASSWORD`: Production database credentials (e.g. Neon Serverless Postgres pooler).
+
+### 3. Run Deployment
+
+To compile and deploy the latest build from the project root:
+```bash
+./scripts/deploy.sh
+```
+
+### 4. Health Probes Configuration
+
+The deployment command configures HTTP-based health probes pointing to Spring Boot Actuator:
+- **Liveness Probe**: Maps `/actuator/health/liveness` to monitor JVM container health.
+- **Startup Probe**: Maps `/actuator/health/readiness` to check database availability and warm caches before routing traffic.
+
+---
+
 ## CI/CD Pipelines
 
 A standard deployment pipeline should implement the following stages:

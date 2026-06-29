@@ -33,7 +33,7 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@WebMvcTest(controllers = ReportController.class)
+@WebMvcTest(controllers = {ReportController.class, SchemaDiscoveryController.class})
 @Import(SecurityConfig.class)
 @DisplayName("ReportController Unit Tests")
 @WithMockUser(username = "admin", roles = {"USER"})
@@ -55,7 +55,7 @@ public class ReportControllerTest {
     @DisplayName("GET /api/reports: lists reports successfully")
     public void listReports_shouldReturnReportsList() throws Exception {
         Report report = Report.builder().reportId("RPT_1").name("Sales").status("draft").build();
-        when(reportRepository.findLatestVersionPerReport()).thenReturn(List.of(report));
+        when(reportRepository.findLatestPublishedPerReport()).thenReturn(List.of(report));
 
         mockMvc.perform(get("/api/reports"))
                 .andExpect(status().isOk())

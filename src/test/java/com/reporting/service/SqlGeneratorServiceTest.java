@@ -59,7 +59,7 @@ public class SqlGeneratorServiceTest {
         when(schemaGraphRouter.computeJoinClauses(anyString(), anySet()))
             .thenReturn(List.of("LEFT JOIN dim_rm ON dim_rm.id = analytics.fact_sales.rm_id"));
 
-        service = new SqlGeneratorService(jdbcTemplate, schemaGraphRouter);
+        service = new SqlGeneratorService(jdbcTemplate, schemaGraphRouter, null);
     }
 
     @Test

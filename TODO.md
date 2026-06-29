@@ -23,7 +23,8 @@
 - [x] Excel layout rendering (`LayoutRendererService.java`) — POI styling with borders, alignment, fonts, and colors.
 - [x] Full run orchestration (`ReportRunnerService.java`) — chain SQL → PostProcess → Render into a single execution.
 
-## 🔄 Phase 3: Validation, Verification & Polish (In Progress)
+## 🔄 Phase 3: Validation, Verification & Polish (Completed & Polished)
+
 - [x] Integration testing of the full execution pipeline.
 - [x] Unit tests for `SqlGeneratorService` and `PostProcessorService`.
 - [x] Unit tests for `ReportValidationService` (cyclic formula detection, schema expression checks).
@@ -35,6 +36,12 @@
 - [x] Report version lifecycle: `ReportVersionController` with `draft → in_review → published → fork` state machine and auto-clone on publish.
 - [x] `GlobalExceptionHandler` (`@ControllerAdvice`) for structured JSON error responses.
 - [x] `rpt_column_def` schema extensions: `rolling_grain` column, composite key adjustments, constraint relaxation (migrations `011`–`015`).
+- [x] In-memory metadata pre-caching (`MetadataCache.java`) to eliminate repeated DWH catalog and `information_schema` round-trips.
+- [x] Modular Monolith Deconstruction (Phase A): separated REST endpoints into `ReportController`, `ReportVersionController`, `ReportExecutionController`, and `SchemaDiscoveryController`.
+- [x] Extracted versioning state logic to `VersioningService`.
+- [x] Request correlation tracing filter (`CorrelationIdFilter`) stamp requests/logs with `X-Correlation-ID`.
+- [x] Robust Cloud Run health checks utilizing Spring Actuator `/actuator/health` probes in `deploy.sh`.
+- [x] Fixed catalog listing bug where auto-forked draft overrode published status.
 - [ ] Frontend report detail view: run execution spinner and live status badges.
 - [ ] Edge case handling: divide-by-zero, cyclic formula references, missing metric expressions.
 - [ ] Column setup: fix "Rolling In" field behavior in Step 2.

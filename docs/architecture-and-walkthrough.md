@@ -16,7 +16,11 @@
 | **Security-Validated Autocomplete** | Implemented `/api/metadata/distinct-values` with direct JDBC queries and regex sanitization (`^[a-zA-Z0-9_]+$`) on dynamic table/column parameters to block SQL injection while supporting dynamic dimension autocomplete lookups. |
 | **Centralized Exception Handling** | `GlobalExceptionHandler` (`@ControllerAdvice`) maps common exceptions (validation errors, illegal arguments, not-found) to structured JSON HTTP responses, preventing raw stack traces from leaking to clients. |
 | **Parallel Frontend Data Fetching** | Angular `ngOnInit` uses RxJS `forkJoin` to fire `/api/reports/tables` and `/api/reports/{id}` concurrently. Total perceived load time equals the slower of the two requests instead of their sum. |
-
+| **Metadata Pre-Caching** | Pre-loads DWH schema catalog structures (columns, time keys, semantic measures, and views) into memory via `MetadataCache` at startup. This eliminates repeated slow queries against `information_schema` and `sem_view` on every report compilation run, dropping template compiler overhead to ~50ms. |
+| **Modular Monolith Deconstruction (Phase A)** | Decoupled bloated REST controllers into granular domains (`ReportController` for CRUD/validation, `ReportVersionController` for version lifecycle REST hooks, `ReportExecutionController` for grid query runs, and `SchemaDiscoveryController` for schema discovery). Extracted versioning rules into `VersioningService`. |
+| **Request Trace Correlation** | Added `CorrelationIdFilter` to intercept all REST requests and inject a standard `X-Correlation-ID` header into HTTP response headers and Thread-local log context (SLF4J MDC) for distributed request tracing. |
+| **Robust Health Check Probes** | Integrated Spring Boot Actuator health checks and configured `deploy.sh` with Cloud Run `--liveness-probe` and `--startup-probe` parameters pointing to `/actuator/health/liveness` and `/actuator/health/readiness`. |
+| **Resilient Catalog Listing (Latest Published View)** | Modified the report listing catalog query to fetch the latest `published` version using `findLatestPublishedPerReport()` rather than raw `MAX(version)` (which flips to draft immediately after publish due to the auto-forking system). |
 
 ---
 

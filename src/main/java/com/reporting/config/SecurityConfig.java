@@ -37,6 +37,7 @@ public class SecurityConfig {
                 .referrerPolicy(referrer -> referrer.policy(ReferrerPolicyHeaderWriter.ReferrerPolicy.NO_REFERRER))
             )
             .authorizeHttpRequests(auth -> auth
+                .requestMatchers("/actuator/health/**").permitAll()
                 .requestMatchers("/api/auth/**").permitAll()
                 .requestMatchers("/api/**").hasRole("USER")
                 .anyRequest().authenticated()
@@ -80,8 +81,8 @@ public class SecurityConfig {
             configuration.setAllowedOriginPatterns(List.of("*"));
         }
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
-        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Requested-With"));
-        configuration.setExposedHeaders(List.of("Content-Disposition"));
+        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Requested-With", "X-Correlation-ID"));
+        configuration.setExposedHeaders(List.of("Content-Disposition", "X-Correlation-ID"));
         configuration.setAllowCredentials(true);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();

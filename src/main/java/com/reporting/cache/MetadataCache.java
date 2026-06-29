@@ -1,0 +1,240 @@
+package com.reporting.cache;
+
+import jakarta.annotation.PostConstruct;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.stereotype.Component;
+
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+
+/**
+ * Application-startup metadata cache that pre-loads slow, per-request DB lookups
+ * into shared, in-memory maps available for the lifetime of the JVM.
+ *
+ * <h2>What is cached</h2>
+ * <ul>
+ *   <li><b>tableColumnsCache</b> — {@code "schema.table" → Set<column_name>} for every
+ *       table in the {@code analytics} schema.  Eliminates per-request
+ *       {@code information_schema.columns} queries in {@link com.reporting.service.SqlGeneratorService}.</li>
+ *   <li><b>timeKeyCache</b> — {@code table_ref → time_key} from {@code reporting.sem_view}.
+ *       Eliminates per-CTE {@code SELECT time_key FROM sem_view} queries.</li>
+ *   <li><b>semMeasures</b> — {@code measure_name → SemMeasureInfo(sql_expr, table_ref)}.
+ *       Eliminates per-request semantic measure JOIN queries in
+ *       {@link com.reporting.service.ReportConfigService}.</li>
+ *   <li><b>semViewTables</b> — ordered set of distinct {@code table_ref} values from
+ *       {@code reporting.sem_view}.  Used for heuristic table-detection during
+ *       metric resolution in {@link com.reporting.service.ReportConfigService}.</li>
+ * </ul>
+ *
+ * <h2>Fault tolerance</h2>
+ * <p>If any section fails to load (e.g. the semantic tables do not yet exist),
+ * a warning is logged and the cache section is left empty.  Callers are expected
+ * to handle empty-cache results gracefully (they will fall back to their existing
+ * live-query paths or defaults).</p>
+ *
+ * <h2>Refresh</h2>
+ * <p>Call {@link #reload()} to force a full cache refresh without restarting the
+ * application (e.g. after a schema migration or seeding operation).</p>
+ */
+@Component
+public class MetadataCache {
+
+    private static final Logger log = LoggerFactory.getLogger(MetadataCache.class);
+
+    private final JdbcTemplate jdbc;
+
+    // ── column metadata: "schema.table" or "table" → lowercase column names ──
+    private final Map<String, Set<String>> tableColumnsCache = new ConcurrentHashMap<>();
+
+    // ── time key per fact/view table: table_ref → time_key column name ────────
+    private final Map<String, String> timeKeyCache = new ConcurrentHashMap<>();
+
+    // ── semantic measures: lowercase measure name → (sql_expr, table_ref) ─────
+    private final Map<String, SemMeasureInfo> semMeasures = new ConcurrentHashMap<>();
+
+    // ── ordered set of distinct sem_view table_ref values ────────────────────
+    private volatile Set<String> semViewTables = Collections.emptySet();
+
+    public MetadataCache(JdbcTemplate jdbc) {
+        this.jdbc = jdbc;
+    }
+
+    // ─── lifecycle ────────────────────────────────────────────────────────────
+
+    @PostConstruct
+    public void load() {
+        log.info("MetadataCache: starting pre-load...");
+        loadTableColumns();
+        loadTimeKeys();
+        loadSemMeasures();
+        log.info("MetadataCache: pre-load complete — {} tables, {} time-keys, {} sem-measures, {} sem-view tables.",
+                tableColumnsCache.size(), timeKeyCache.size(), semMeasures.size(), semViewTables.size());
+    }
+
+    /**
+     * Forces a full cache refresh. Useful after migrations or seed data changes.
+     */
+    public void reload() {
+        log.info("MetadataCache: explicit reload triggered.");
+        tableColumnsCache.clear();
+        timeKeyCache.clear();
+        semMeasures.clear();
+        semViewTables = Collections.emptySet();
+        load();
+    }
+
+    // ─── section 1: analytics schema column sets ──────────────────────────────
+
+    private void loadTableColumns() {
+        try {
+            // Load all columns for all tables in the analytics schema in one query
+            jdbc.query(
+                "SELECT table_name, column_name " +
+                "FROM information_schema.columns " +
+                "WHERE table_schema = 'analytics' " +
+                "ORDER BY table_name, ordinal_position",
+                rs -> {
+                    String table = rs.getString("table_name").toLowerCase();
+                    String col   = rs.getString("column_name").toLowerCase();
+                    // Index by both unqualified and qualified names
+                    tableColumnsCache.computeIfAbsent(table, k -> new HashSet<>()).add(col);
+                    tableColumnsCache.computeIfAbsent("analytics." + table, k -> new HashSet<>()).add(col);
+                }
+            );
+            log.debug("MetadataCache: loaded column metadata for {} table keys.", tableColumnsCache.size());
+        } catch (Exception ex) {
+            log.warn("MetadataCache: failed to load table column metadata. columnExists() will fall back to live queries. Cause: {}", ex.getMessage());
+        }
+    }
+
+    // ─── section 2: sem_view time keys ───────────────────────────────────────
+
+    private void loadTimeKeys() {
+        try {
+            jdbc.query(
+                "SELECT table_ref, time_key FROM reporting.sem_view WHERE table_ref IS NOT NULL AND time_key IS NOT NULL",
+                rs -> {
+                    String tableRef = rs.getString("table_ref");
+                    String timeKey  = rs.getString("time_key");
+                    if (tableRef != null && timeKey != null) {
+                        timeKeyCache.put(tableRef.trim(), timeKey.trim());
+                        // Also index by short (unqualified) name
+                        if (tableRef.contains(".")) {
+                            String shortName = tableRef.substring(tableRef.lastIndexOf('.') + 1).trim();
+                            timeKeyCache.putIfAbsent(shortName, timeKey.trim());
+                        }
+                    }
+                }
+            );
+            log.debug("MetadataCache: loaded {} time-key entries.", timeKeyCache.size());
+        } catch (Exception ex) {
+            log.warn("MetadataCache: failed to load time-key cache from sem_view. getTimeKeyForTable() will fall back to live queries. Cause: {}", ex.getMessage());
+        }
+    }
+
+    // ─── section 3: sem_measure + sem_view join ───────────────────────────────
+
+    private void loadSemMeasures() {
+        try {
+            // Ordered set for sem_view tables
+            Set<String> viewTables = new LinkedHashSet<>();
+
+            jdbc.query(
+                "SELECT sm.name, sm.sql_expr, sv.table_ref " +
+                "FROM reporting.sem_measure sm " +
+                "JOIN reporting.sem_view sv ON sv.view_id = sm.view_id",
+                rs -> {
+                    String name    = rs.getString("name");
+                    String sqlExpr = rs.getString("sql_expr");
+                    String tblRef  = rs.getString("table_ref");
+                    if (name != null) {
+                        semMeasures.put(name.toLowerCase(), new SemMeasureInfo(sqlExpr, tblRef));
+                    }
+                    if (tblRef != null && !tblRef.isBlank()) {
+                        viewTables.add(tblRef.trim());
+                    }
+                }
+            );
+
+            // Load any additional table_ref values not covered by the sem_measure join
+            jdbc.query(
+                "SELECT DISTINCT table_ref FROM reporting.sem_view WHERE table_ref IS NOT NULL",
+                rs -> {
+                    String tbl = rs.getString("table_ref");
+                    if (tbl != null && !tbl.isBlank()) {
+                        viewTables.add(tbl.trim());
+                    }
+                }
+            );
+
+            semViewTables = Collections.unmodifiableSet(viewTables);
+            log.debug("MetadataCache: loaded {} sem-measure entries, {} sem-view table refs.", semMeasures.size(), semViewTables.size());
+        } catch (Exception ex) {
+            log.warn("MetadataCache: failed to load semantic measure cache. ReportConfigService will fall back to live queries. Cause: {}", ex.getMessage());
+        }
+    }
+
+    // ─── public read API ──────────────────────────────────────────────────────
+
+    /**
+     * Returns the set of lowercase column names for the given table, or {@code null}
+     * if the table is not in the cache (caller should fall back to a live query).
+     *
+     * @param tableRef fully-qualified ({@code "analytics.fact_sales"}) or
+     *                 unqualified ({@code "fact_sales"}) table name
+     * @return unmodifiable set of lowercase column names, or {@code null} if unknown
+     */
+    public Set<String> getColumns(String tableRef) {
+        if (tableRef == null || tableRef.isBlank()) return null;
+        Set<String> cols = tableColumnsCache.get(tableRef.trim().toLowerCase());
+        return cols != null ? Collections.unmodifiableSet(cols) : null;
+    }
+
+    /**
+     * Returns the shared, mutable {@code tableColumnsCache} map.
+     * Callers may add entries for tables not pre-loaded (e.g. reporting schema tables),
+     * so that {@code computeIfAbsent} in the SQL generator can persist those lookups.
+     */
+    public Map<String, Set<String>> getTableColumnsCache() {
+        return tableColumnsCache;
+    }
+
+    /**
+     * Looks up the {@code time_key} column for a given table reference.
+     *
+     * @param tableRef fully-qualified or unqualified table name
+     * @return the time key column name, or {@code null} if not found in cache
+     */
+    public String getTimeKey(String tableRef) {
+        if (tableRef == null || tableRef.isBlank()) return null;
+        String result = timeKeyCache.get(tableRef.trim());
+        if (result == null && tableRef.contains(".")) {
+            result = timeKeyCache.get(tableRef.substring(tableRef.lastIndexOf('.') + 1).trim());
+        }
+        return result;
+    }
+
+    /**
+     * Returns all cached semantic measures, keyed by lowercase measure name.
+     */
+    public Map<String, SemMeasureInfo> getSemMeasures() {
+        return Collections.unmodifiableMap(semMeasures);
+    }
+
+    /**
+     * Returns the ordered set of distinct {@code table_ref} values from
+     * {@code reporting.sem_view}.
+     */
+    public Set<String> getSemViewTables() {
+        return semViewTables;
+    }
+
+    // ─── value type ───────────────────────────────────────────────────────────
+
+    /**
+     * Immutable value holder for a cached semantic measure entry.
+     */
+    public record SemMeasureInfo(String sqlExpr, String tableRef) {}
+}
