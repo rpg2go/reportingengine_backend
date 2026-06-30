@@ -116,16 +116,10 @@ public class VersioningService {
 
         report.setStatus("published");
         report.setUpdatedAt(LocalDateTime.now());
-        reportRepository.save(report);
+        Report savedReport = reportRepository.save(report);
 
-        int nextVersion = version + 1;
-        Report newDraft = buildDraft(report, nextVersion);
-        reportRepository.saveAndFlush(newDraft);
-
-        cloneChildRecords(id, version, nextVersion);
-
-        log.info("Report {} v{} published. Created new draft v{}.", id, version, nextVersion);
-        return newDraft;
+        log.info("Report {} v{} published successfully.", id, version);
+        return savedReport;
     }
 
     /**

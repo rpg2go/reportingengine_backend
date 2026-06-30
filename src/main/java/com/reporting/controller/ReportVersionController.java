@@ -99,11 +99,10 @@ public class ReportVersionController {
             @PathVariable("id") String id,
             @RequestParam("version") Integer version) {
         try {
-            Report newDraft = versioningService.publish(id, version);
+            versioningService.publish(id, version);
             return ResponseEntity.ok(Map.of(
-                "message", "Report published successfully. New draft v" + newDraft.getVersion() + " created.",
-                "publishedVersion", version,
-                "nextDraftVersion", newDraft.getVersion()
+                "message", "Report published successfully.",
+                "publishedVersion", version
             ));
         } catch (IllegalStateException e) {
             return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
