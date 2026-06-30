@@ -302,7 +302,8 @@ public class SqlGeneratorService {
                     String prefixedTimeKey = factTable + "." + timeKey;
 
                     LocalDate colRefDate = config.getReferenceDate();
-                    if (col.periodType() != null && "PREVIOUS_YEAR".equalsIgnoreCase(col.periodType().trim())) {
+                    String effPeriodType = getEffectivePeriodType(col, config.getColumns());
+                    if (effPeriodType != null && "PREVIOUS_YEAR".equalsIgnoreCase(effPeriodType.trim())) {
                         colRefDate = colRefDate.minusYears(1);
                     }
 
@@ -466,7 +467,8 @@ public class SqlGeneratorService {
         for (ColumnDefDto col : config.getColumns()) {
             if (col.isSqlColumn()) {
                 LocalDate colRefDate = config.getReferenceDate();
-                if (col.periodType() != null && "PREVIOUS_YEAR".equalsIgnoreCase(col.periodType().trim())) {
+                String effPeriodType = getEffectivePeriodType(col, config.getColumns());
+                if (effPeriodType != null && "PREVIOUS_YEAR".equalsIgnoreCase(effPeriodType.trim())) {
                     colRefDate = colRefDate.minusYears(1);
                 }
                 LocalDate[] boundaries = DateUtils.getPeriodBoundaries(
@@ -1897,5 +1899,22 @@ public class SqlGeneratorService {
             }
         }
         return metricClause;
+    }
+
+    private String getEffectivePeriodType(ColumnDefDto col, List<ColumnDefDto> allCols) {
+        if (col.periodType() != null && !col.periodType().isBlank()) {
+            return col.periodType();
+        }
+        if (col.parentId() != null && !col.parentId().isBlank()) {
+            String parentId = col.parentId().trim().toUpperCase();
+            for (ColumnDefDto parent : allCols) {
+                if (parentId.equals(parent.colId().trim().toUpperCase())) {
+                    if (parent.periodType() != null && !parent.periodType().isBlank()) {
+                        return parent.periodType();
+                    }
+                }
+            }
+        }
+        return null;
     }
 }

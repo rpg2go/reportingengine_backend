@@ -31,7 +31,8 @@ public class ReportValidationService {
         "SUM", "AVG", "MIN", "MAX", "COUNT", "CAST", "AS", "DOUBLE", "PRECISION", "COALESCE", "NULLIF", "ROUND",
         "ABS", "DATE", "INTERVAL", "YEAR", "MONTH", "DAY", "TRUE", "FALSE", "LIKE", "IN", "BETWEEN", "IS", "GROUP",
         "BY", "ORDER", "HAVING", "LIMIT", "OVER", "PARTITION", "ROWS", "UNBOUNDED", "PRECEDING", "FOLLOWING",
-        "CURRENT", "ROW", "EXTRACT", "FLOOR", "CEIL", "TRUNCATE", "POWER", "SQRT", "DISTINCT"
+        "CURRENT", "ROW", "EXTRACT", "FLOOR", "CEIL", "TRUNCATE", "POWER", "SQRT", "DISTINCT", "COUNT_DISTINCT",
+        "GREATEST", "LEAST", "DATE_TRUNC", "DATE_PART", "TO_CHAR", "NOW"
     );
 
     public ValidationResult validateConfiguration(ReportConfigDto config) {
