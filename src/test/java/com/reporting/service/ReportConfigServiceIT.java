@@ -55,7 +55,7 @@ public class ReportConfigServiceIT extends BaseIT {
         // Assert
         assertThat(loaded).isNotNull();
         assertThat(loaded.getReportId()).isEqualTo(reportId);
-        assertThat(loaded.getName()).isEqualTo("Integration Test Report");
+        assertThat(loaded.getReportName()).isEqualTo("Integration Test Report");
         
         // Assert Columns
         assertThat(loaded.getColumns()).hasSize(2);

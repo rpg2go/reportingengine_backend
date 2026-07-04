@@ -15,10 +15,16 @@ The platform is designed to run in containerized environments. There are two pri
 
 ## Application Packaging
 
-### 1. Database Image
+### 1. Database Schema & Migration Setup
 
-- Bundles PostgreSQL 16 on Alpine.
-- Copies all migrations located in [db/migrations/](../db/migrations) to `/docker-entrypoint-initdb.d/` so they run automatically when the container starts.
+- **Local / Docker**: The local database container exposes PostgreSQL on port `5433`. Migrations are applied automatically on application startup via Spring Boot's integrated Liquibase auto-configuration or manually via the wrapper script:
+  ```bash
+  ./scripts/deploy-liquibase.sh local
+  ```
+- **Neon Cloud / Production**: Applied during GCP pipeline execution passes via the same deployment script pointing to production targets:
+  ```bash
+  ./scripts/deploy-liquibase.sh neon
+  ```
 
 ### 2. Backend (Spring Boot Jar)
 

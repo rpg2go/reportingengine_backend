@@ -202,7 +202,7 @@ public class VersioningService {
         return Report.builder()
             .reportId(source.getReportId())
             .version(nextVersion)
-            .name(source.getName())
+            .reportName(source.getReportName())
             .description(source.getDescription())
             .exploreId(source.getExploreId())
             .status("draft")
@@ -255,8 +255,8 @@ public class VersioningService {
 
         jdbcTemplate.update(
             "INSERT INTO reporting.rpt_row_metric " +
-            "  (report_id, version, row_id, measure_id, explore_id, sql_expr, measure_definition) " +
-            "SELECT report_id, ? AS version, row_id, measure_id, explore_id, sql_expr, measure_definition " +
+            "  (report_id, version, row_id, sql_expr, measure_definition) " +
+            "SELECT report_id, ? AS version, row_id, sql_expr, measure_definition " +
             "FROM reporting.rpt_row_metric WHERE report_id = ? AND version = ?",
             toVersion, reportId, fromVersion
         );

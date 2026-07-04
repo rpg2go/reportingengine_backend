@@ -43,7 +43,7 @@ public class ReportSeededValidationIT extends BaseIT {
             ValidationResult result = validationService.validateConfiguration(configDto);
 
             System.out.println("==================================================");
-            System.out.println("Validating Report: " + reportId + " (" + report.getName() + ")");
+            System.out.println("Validating Report: " + reportId + " (" + report.getReportName() + ")");
             System.out.println("Valid: " + result.isValid());
 
             for (ValidationError err : result.getErrors()) {

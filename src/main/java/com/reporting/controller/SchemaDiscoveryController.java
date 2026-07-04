@@ -209,12 +209,6 @@ public class SchemaDiscoveryController {
             "JOIN reporting.sem_view v ON v.view_id = d.view_id ORDER BY v.name, d.name",
             Collections.emptyMap()
         ));
-        model.put("measures", jdbcTemplate.queryForList(
-            "SELECT m.measure_id, v.name AS view_name, m.name, m.label, m.sql_expr, m.agg_type, m.data_type, m.description " +
-            "FROM reporting.sem_measure m " +
-            "JOIN reporting.sem_view v ON v.view_id = m.view_id ORDER BY v.name, m.name",
-            Collections.emptyMap()
-        ));
 
         return ResponseEntity.ok(model);
     }
@@ -260,18 +254,21 @@ public class SchemaDiscoveryController {
      * name is prefixed with {@code "analytics."}.</p>
      *
      * @param table logical or physical table name
-     * @return fully-qualified table reference, or {@code null} if unresolvable
+     * @return fully-qualified table reference
      */
     private String resolveTableRef(String table) {
         if (table == null) return null;
         if (table.contains(".")) return table;
         try {
-            return jdbcTemplate.getJdbcOperations().queryForObject(
+            String ref = jdbcTemplate.getJdbcOperations().queryForObject(
                 "SELECT table_ref FROM reporting.sem_view WHERE name = ?",
                 String.class, table
             );
+            if (ref != null) return ref;
         } catch (Exception e) {
-            return null;
+            // sem_view not yet populated or table not found — fall through
         }
+        // Default: assume analytics schema
+        return "analytics." + table;
     }
 }

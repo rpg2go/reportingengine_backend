@@ -44,7 +44,7 @@ public class ReportPreviewControllerTest {
     public void previewSql_shouldReturnCompiledSql() throws Exception {
         ReportConfigDto config = new ReportConfigDto();
         config.setReportId("RPT_1");
-        config.setName("Weekly Preview");
+        config.setReportName("Weekly Preview");
 
         String compiledQuery = "SELECT * FROM analytics.fact_sales WHERE region = 'EMEA'";
         when(sqlGeneratorService.generateMatrixQuery(any(ReportConfigDto.class)))

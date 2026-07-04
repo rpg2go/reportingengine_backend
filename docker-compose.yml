@@ -2,10 +2,7 @@ version: '3.8'
 
 services:
   report_db:
-    build:
-      context: ./db
-      dockerfile: Dockerfile
-    image: report_template_db_image:latest
+    image: postgres:16-alpine
     container_name: report_template_db
     environment:
       POSTGRES_USER: user

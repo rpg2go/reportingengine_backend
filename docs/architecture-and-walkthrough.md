@@ -21,6 +21,7 @@
 | **Request Trace Correlation** | Added `CorrelationIdFilter` to intercept all REST requests and inject a standard `X-Correlation-ID` header into HTTP response headers and Thread-local log context (SLF4J MDC) for distributed request tracing. |
 | **Robust Health Check Probes** | Integrated Spring Boot Actuator health checks and configured `deploy.sh` with Cloud Run `--liveness-probe` and `--startup-probe` parameters pointing to `/actuator/health/liveness` and `/actuator/health/readiness`. |
 | **Resilient Catalog Listing (Latest Published View)** | Modified the report listing catalog query to fetch the latest `published` version using `findLatestPublishedPerReport()` rather than raw `MAX(version)` (which flips to draft immediately after publish due to the auto-forking system). |
+| **Pure SQL Liquibase Migrations** | Replaced custom Java migration scripts with pure SQL changeset files routed by a master XML changelog (`db/liquibase/db.changelog-master.xml`). Connection configurations are loaded from `.env` (supporting local vs. Neon GCP production databases) and executed via `./scripts/deploy-liquibase.sh`. Enabled trigger suppression and `runOnChange` parameters in seeds to safely bypass checksum checks and self-referencing foreign key violations. |
 
 ---
 

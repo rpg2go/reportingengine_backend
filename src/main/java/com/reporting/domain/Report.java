@@ -24,8 +24,8 @@ public class Report {
     @Column(name = "version", nullable = false)
     private Integer version = 1;
 
-    @Column(name = "name", nullable = false, length = 200)
-    private String name;
+    @Column(name = "report_name", nullable = false, length = 200)
+    private String reportName;
 
     @Column(name = "description")
     private String description;

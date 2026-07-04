@@ -34,11 +34,18 @@ This document serves as the architecture reference, implementation state, and co
 3. **Direct JDBC for Hot-Path Reads**:
    The `loadFromDb()` method in `ReportConfigService.java` was rewritten to use direct JDBC queries with `RowCallbackHandler` instead of 6 sequential JPA repository calls. This eliminated Hibernate entity-hydration overhead and unnecessary JOINs (e.g., `rpt_column_def` joining back to `rpt_report`), reducing the report config endpoint latency from ~163ms to ~59ms.
 4. **Database Migrations and Tracking**:
-   Database migration execution is managed by a custom utility `MigrationRunner.java`. It tracks applied SQL files (`000_*.sql` to `015_*.sql`) in the `reporting.schema_migrations` table.
-   - **Pre-Population Logic**: If database tables already exist (e.g. from local runs or Hibernate initialization), the runner automatically registers migrations `000` to `007` to skip execution, avoiding schema duplication errors.
-   - **Report Seeds**: The migration `008_seed_report_templates.sql` seeds the system with 14 production report configurations.
-   - **Schema Catalog**: Migration `010_create_schema_catalog.sql` introduces the `meta_table`, `meta_column`, and `meta_relationship` tables that power the graph-based join router.
-   - **Column Def Extensions**: Migrations `011`–`015` extend `rpt_column_def` with `rolling_grain`, adjust composite keys, and relax constraints.
+   We transitioned from custom Java-based migration scripts to a pure-SQL Liquibase migration architecture.
+   - **Changelog ledger**: Changesets are declared in native SQL files under `db/liquibase/sql/` and loaded dynamically via `db/liquibase/db.changelog-master.xml`.
+   - **Automatic execution**: Applied automatically at application startup via Spring Boot's integrated Liquibase auto-configuration (which executes before Hibernate validation runs).
+   - **Manual execution**: Managed via `./scripts/deploy-liquibase.sh [local|neon|url]` sourcing connection parameters from `.env`.
+   - **Clean rebuild step**: If developers encounter checksum mismatches (from updating seeding files) or want to reset their local schemas, they can clean the database with:
+     ```sql
+     DROP SCHEMA IF EXISTS reporting CASCADE;
+     DROP SCHEMA IF EXISTS analytics CASCADE;
+     DROP TABLE IF EXISTS public.databasechangelog;
+     DROP TABLE IF EXISTS public.databasechangeloglock;
+     ```
+     and re-run `./scripts/deploy-liquibase.sh local`.
 5. **Catalog-Driven Join Graph (SchemaGraphRouter)**:
    The `catalog` package (`SchemaCatalogLoader`, `SchemaGraphRouter`, `MetaTable`, `MetaColumn`, `MetaRelationship`) loads the `meta_*` schema catalog at startup into an in-memory graph and resolves multi-hop LEFT JOIN chains using a weighted Dijkstra BFS. Edge cost 1 = conformed dimension key, cost 2 = non-conformed FK. This replaces hardcoded join strings from the `sem_*` era.
 6. **Report Version Lifecycle**:

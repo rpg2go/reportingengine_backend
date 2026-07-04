@@ -13,9 +13,9 @@ public class ReportConfigDto {
     @Size(max = 50, message = "Report ID must be at most 50 characters")
     private String reportId;
 
-    @NotBlank(message = "Name is required")
-    @Size(max = 200, message = "Name must be at most 200 characters")
-    private String name;
+    @NotBlank(message = "Report Name is required")
+    @Size(max = 200, message = "Report Name must be at most 200 characters")
+    private String reportName;
 
     @NotNull(message = "Columns list cannot be null")
     @Valid
@@ -55,12 +55,12 @@ public class ReportConfigDto {
         this.timeframeToday = false;
     }
 
-    public ReportConfigDto(String reportId, String name, List<ColumnDefDto> columns, List<ReportRowDto> rows, 
+    public ReportConfigDto(String reportId, String reportName, List<ColumnDefDto> columns, List<ReportRowDto> rows, 
                            LocalDate referenceDate, Integer exploreId, Enums.ReportStatus status,
                            String granularity, String timeframeStart, String timeframeEnd,
                            Boolean timeframeToday, String quickFilters, String generalFilters) {
         this.reportId = reportId;
-        this.name = name;
+        this.reportName = reportName;
         this.columns = columns;
         this.rows = rows;
         this.referenceDate = referenceDate != null ? referenceDate : LocalDate.now();
@@ -75,11 +75,11 @@ public class ReportConfigDto {
     }
 
     @Deprecated
-    public ReportConfigDto(String reportId, String name, List<ColumnDefDto> columns, List<ReportRowDto> rows, 
+    public ReportConfigDto(String reportId, String reportName, List<ColumnDefDto> columns, List<ReportRowDto> rows, 
                            LocalDate referenceDate, Integer exploreId, Enums.ReportStatus status,
                            String sourceTable, String granularity, String timeframeStart, String timeframeEnd,
                            Boolean timeframeToday, String quickFilters, String generalFilters) {
-        this(reportId, name, columns, rows, referenceDate, exploreId, status, granularity, timeframeStart, timeframeEnd, timeframeToday, quickFilters, generalFilters);
+        this(reportId, reportName, columns, rows, referenceDate, exploreId, status, granularity, timeframeStart, timeframeEnd, timeframeToday, quickFilters, generalFilters);
         if (rows != null && sourceTable != null && !sourceTable.isBlank()) {
             for (ReportRowDto r : rows) {
                 if (r.source() != null && (r.source().getSourceTable() == null || r.source().getSourceTable().isBlank())) {
@@ -92,8 +92,8 @@ public class ReportConfigDto {
     public String getReportId() { return reportId; }
     public void setReportId(String reportId) { this.reportId = reportId; }
 
-    public String getName() { return name; }
-    public void setName(String name) { this.name = name; }
+    public String getReportName() { return reportName; }
+    public void setReportName(String reportName) { this.reportName = reportName; }
 
     public List<ColumnDefDto> getColumns() { return columns; }
     public void setColumns(List<ColumnDefDto> columns) { this.columns = columns; }

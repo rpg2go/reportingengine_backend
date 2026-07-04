@@ -20,9 +20,6 @@ import java.util.concurrent.ConcurrentHashMap;
  *       {@code information_schema.columns} queries in {@link com.reporting.service.SqlGeneratorService}.</li>
  *   <li><b>timeKeyCache</b> — {@code table_ref → time_key} from {@code reporting.sem_view}.
  *       Eliminates per-CTE {@code SELECT time_key FROM sem_view} queries.</li>
- *   <li><b>semMeasures</b> — {@code measure_name → SemMeasureInfo(sql_expr, table_ref)}.
- *       Eliminates per-request semantic measure JOIN queries in
- *       {@link com.reporting.service.ReportConfigService}.</li>
  *   <li><b>semViewTables</b> — ordered set of distinct {@code table_ref} values from
  *       {@code reporting.sem_view}.  Used for heuristic table-detection during
  *       metric resolution in {@link com.reporting.service.ReportConfigService}.</li>
@@ -51,9 +48,6 @@ public class MetadataCache {
     // ── time key per fact/view table: table_ref → time_key column name ────────
     private final Map<String, String> timeKeyCache = new ConcurrentHashMap<>();
 
-    // ── semantic measures: lowercase measure name → (sql_expr, table_ref) ─────
-    private final Map<String, SemMeasureInfo> semMeasures = new ConcurrentHashMap<>();
-
     // ── ordered set of distinct sem_view table_ref values ────────────────────
     private volatile Set<String> semViewTables = Collections.emptySet();
 
@@ -68,9 +62,9 @@ public class MetadataCache {
         log.info("MetadataCache: starting pre-load...");
         loadTableColumns();
         loadTimeKeys();
-        loadSemMeasures();
-        log.info("MetadataCache: pre-load complete — {} tables, {} time-keys, {} sem-measures, {} sem-view tables.",
-                tableColumnsCache.size(), timeKeyCache.size(), semMeasures.size(), semViewTables.size());
+        loadSemViewTables();
+        log.info("MetadataCache: pre-load complete — {} tables, {} time-keys, {} sem-view tables.",
+                tableColumnsCache.size(), timeKeyCache.size(), semViewTables.size());
     }
 
     /**
@@ -80,7 +74,6 @@ public class MetadataCache {
         log.info("MetadataCache: explicit reload triggered.");
         tableColumnsCache.clear();
         timeKeyCache.clear();
-        semMeasures.clear();
         semViewTables = Collections.emptySet();
         load();
     }
@@ -134,31 +127,11 @@ public class MetadataCache {
         }
     }
 
-    // ─── section 3: sem_measure + sem_view join ───────────────────────────────
+    // ─── section 3: sem_view table refs ──────────────────────────────────────
 
-    private void loadSemMeasures() {
+    private void loadSemViewTables() {
         try {
-            // Ordered set for sem_view tables
             Set<String> viewTables = new LinkedHashSet<>();
-
-            jdbc.query(
-                "SELECT sm.name, sm.sql_expr, sv.table_ref " +
-                "FROM reporting.sem_measure sm " +
-                "JOIN reporting.sem_view sv ON sv.view_id = sm.view_id",
-                rs -> {
-                    String name    = rs.getString("name");
-                    String sqlExpr = rs.getString("sql_expr");
-                    String tblRef  = rs.getString("table_ref");
-                    if (name != null) {
-                        semMeasures.put(name.toLowerCase(), new SemMeasureInfo(sqlExpr, tblRef));
-                    }
-                    if (tblRef != null && !tblRef.isBlank()) {
-                        viewTables.add(tblRef.trim());
-                    }
-                }
-            );
-
-            // Load any additional table_ref values not covered by the sem_measure join
             jdbc.query(
                 "SELECT DISTINCT table_ref FROM reporting.sem_view WHERE table_ref IS NOT NULL",
                 rs -> {
@@ -168,11 +141,10 @@ public class MetadataCache {
                     }
                 }
             );
-
             semViewTables = Collections.unmodifiableSet(viewTables);
-            log.debug("MetadataCache: loaded {} sem-measure entries, {} sem-view table refs.", semMeasures.size(), semViewTables.size());
+            log.debug("MetadataCache: loaded {} sem-view table refs.", semViewTables.size());
         } catch (Exception ex) {
-            log.warn("MetadataCache: failed to load semantic measure cache. ReportConfigService will fall back to live queries. Cause: {}", ex.getMessage());
+            log.warn("MetadataCache: failed to load sem_view table refs. Cause: {}", ex.getMessage());
         }
     }
 
@@ -217,24 +189,10 @@ public class MetadataCache {
     }
 
     /**
-     * Returns all cached semantic measures, keyed by lowercase measure name.
-     */
-    public Map<String, SemMeasureInfo> getSemMeasures() {
-        return Collections.unmodifiableMap(semMeasures);
-    }
-
-    /**
      * Returns the ordered set of distinct {@code table_ref} values from
      * {@code reporting.sem_view}.
      */
     public Set<String> getSemViewTables() {
         return semViewTables;
     }
-
-    // ─── value type ───────────────────────────────────────────────────────────
-
-    /**
-     * Immutable value holder for a cached semantic measure entry.
-     */
-    public record SemMeasureInfo(String sqlExpr, String tableRef) {}
 }

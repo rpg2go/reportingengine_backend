@@ -64,6 +64,12 @@
             <scope>runtime</scope>
         </dependency>
 
+        <!-- Liquibase Core for automatic startup migrations -->
+        <dependency>
+            <groupId>org.liquibase</groupId>
+            <artifactId>liquibase-core</artifactId>
+        </dependency>
+
         <!-- Apache POI for Excel Processing -->
         <dependency>
             <groupId>org.apache.poi</groupId>
@@ -147,6 +153,20 @@
                             <artifactId>lombok</artifactId>
                         </exclude>
                     </excludes>
+                </configuration>
+            </plugin>
+
+            <!-- Liquibase Maven Plugin -->
+            <plugin>
+                <groupId>org.liquibase</groupId>
+                <artifactId>liquibase-maven-plugin</artifactId>
+                <version>4.25.0</version>
+                <configuration>
+                    <changeLogFile>db/liquibase/db.changelog-master.xml</changeLogFile>
+                    <url>jdbc:postgresql://127.0.0.1:5433/agentic_ai</url>
+                    <username>user</username>
+                    <password>password</password>
+                    <driver>org.postgresql.Driver</driver>
                 </configuration>
             </plugin>
 

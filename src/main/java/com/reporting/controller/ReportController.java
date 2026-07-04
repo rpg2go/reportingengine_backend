@@ -180,7 +180,7 @@ public class ReportController {
      * @return a {@link ValidationResult} containing any errors or warnings found
      */
     @PostMapping("/validate")
-    public ResponseEntity<ValidationResult> validateReport(@Valid @RequestBody ReportConfigDto configDto) {
+    public ResponseEntity<ValidationResult> validateReport(@RequestBody ReportConfigDto configDto) {
         log.info("Validating report config for ID: {}", configDto.getReportId());
         return ResponseEntity.ok(validationService.validateConfiguration(configDto));
     }

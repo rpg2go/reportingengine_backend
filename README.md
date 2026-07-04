@@ -323,14 +323,40 @@ pip3 --version || pip --version
 ### One-Time Setup
 
 1. **Spin up the Database Container**:
-   Build the custom database image containing the pre-seeded SQL migrations and start it:
+   Build the database image and start the PostgreSQL container:
    ```bash
    docker-compose down -v
    docker-compose up --build -d
    ```
-   _Note: This will expose PostgreSQL on host port `5433` (container port `5432`) with database `agentic_ai`._
+   *Note: This will expose PostgreSQL on host port `5433` (container port `5432`) with database `agentic_ai`.*
 
-2. **Initialize ADK Validation Environment**:
+2. **Deploy Database Migrations and Seed Data**:
+   Deploy the database schemas and seed transaction/configuration records using the Liquibase runner.
+   * **Local Database** (Uses `LOCAL_DATABASE_URL` from `.env` or defaults to port `5433` local container):
+     ```bash
+     ./scripts/deploy-liquibase.sh local
+     ```
+   * **Neon Cloud Database** (Uses `NEON_DATABASE_URL` from `.env`):
+     ```bash
+     ./scripts/deploy-liquibase.sh neon
+     ```
+   * **Custom Database URL**:
+     ```bash
+     ./scripts/deploy-liquibase.sh postgresql://user:pass@host:port/db
+     ```
+
+   > [!IMPORTANT]
+   > **How to Force a Clean Database Rebuild / Reset Checklist**:
+   > If you encounter checksum validation issues (due to regenerating seed files) or want to reset your local database environment from scratch, execute the following SQL commands in your database client editor to drop the existing schemas and changelog tracking tables:
+   > ```sql
+   > DROP SCHEMA IF EXISTS reporting CASCADE;
+   > DROP SCHEMA IF EXISTS analytics CASCADE;
+   > DROP TABLE IF EXISTS public.databasechangelog;
+   > DROP TABLE IF EXISTS public.databasechangeloglock;
+   > ```
+   > After dropping them, run `./scripts/deploy-liquibase.sh local` to recreate the schemas and re-seed the tables.
+
+3. **Initialize ADK Validation Environment**:
    Ensure `google-adk` is installed:
    ```bash
    pip install google-adk
@@ -367,6 +393,7 @@ Below is a summary of the most useful commands for building and running the back
 | :--- | :--- | :--- | :--- |
 | **Database** | `docker-compose up --build -d` | Project Root | Builds and starts database container in detached mode (exposes port `5433`) |
 | **Database** | `docker-compose down -v` | Project Root | Stops the database container and deletes the persistent volume |
+| **Database** | `./scripts/deploy-liquibase.sh [local\|neon]` | Project Root | Runs the Liquibase database migrations and seeds DWH/configs (defaults to local) |
 | **Backend** | `maven\apache-maven-3.9.6\bin\mvn.cmd clean compile` | Project Root | Clean compile Spring Boot application (Windows) |
 | **Backend** | `./maven/apache-maven-3.9.6/bin/mvn clean compile` | Project Root | Clean compile Spring Boot application (macOS/Linux) |
 | **Backend** | `maven\apache-maven-3.9.6\bin\mvn.cmd spring-boot:run` | Project Root | Runs the backend server on port 8101 (Windows) |

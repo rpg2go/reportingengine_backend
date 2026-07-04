@@ -77,31 +77,7 @@ public class ReportConfigService {
                 rs.getInt("display_order")
             ), reportId, version);
 
-        // 2.5 Load semantic measures for translation lookup
-        // Fast path: use startup cache; fall back to a live query if cache is empty.
-        Map<String, SemanticMeasureInfo> semMeasures = new HashMap<>();
-        Map<String, MetadataCache.SemMeasureInfo> cachedMeasures = metadataCache.getSemMeasures();
-        if (!cachedMeasures.isEmpty()) {
-            for (Map.Entry<String, MetadataCache.SemMeasureInfo> e : cachedMeasures.entrySet()) {
-                semMeasures.put(e.getKey(), new SemanticMeasureInfo(e.getValue().sqlExpr(), e.getValue().tableRef()));
-            }
-        } else {
-            jdbcTemplate.query(
-                "SELECT sm.name, sm.sql_expr, sv.table_ref " +
-                "FROM reporting.sem_measure sm " +
-                "JOIN reporting.sem_view sv ON sv.view_id = sm.view_id",
-                (RowCallbackHandler) rs -> {
-                    String name = rs.getString("name").toLowerCase();
-                    semMeasures.put(name, new SemanticMeasureInfo(
-                        rs.getString("sql_expr"),
-                        rs.getString("table_ref")
-                    ));
-                }
-            );
-        }
-
-        // 2.6 Load semantic view table references for resilient table detection
-        // Fast path: use startup cache.
+        // 2.5 Load semantic view table references for heuristic table detection
         Set<String> semViewTables = new LinkedHashSet<>(metadataCache.getSemViewTables());
         if (semViewTables.isEmpty()) {
             jdbcTemplate.query(
@@ -119,10 +95,8 @@ public class ReportConfigService {
         Map<String, MeasureDefinitionDTO> measuresByRow = new HashMap<>();
         com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
         jdbcTemplate.query(
-            "SELECT rm.row_id, rm.measure_definition, rm.sql_expr, sm.name AS sem_name, sm.sql_expr AS sem_sql_expr, sv.table_ref AS sem_table " +
+            "SELECT rm.row_id, rm.measure_definition, rm.sql_expr " +
             "FROM reporting.rpt_row_metric rm " +
-            "LEFT JOIN reporting.sem_measure sm ON sm.measure_id = rm.measure_id " +
-            "LEFT JOIN reporting.sem_view sv ON sv.view_id = sm.view_id " +
             "WHERE rm.report_id = ? AND rm.version = ?",
             (RowCallbackHandler) rs -> {
                 String rid = rs.getString("row_id").toUpperCase();
@@ -132,47 +106,23 @@ public class ReportConfigService {
                     try {
                         mdef = mapper.readValue(measureDefStr, MeasureDefinitionDTO.class);
                     } catch (Exception e) {
-                        // ignore
+                        // ignore malformed JSON
                     }
                 }
                 if (mdef == null) {
                     String expr = rs.getString("sql_expr");
-                    if (expr == null || expr.isBlank()) {
-                        expr = rs.getString("sem_sql_expr");
-                    }
-                    if (expr == null || expr.isBlank()) {
-                        expr = rs.getString("sem_name");
-                    }
-                    if (expr == null) {
-                        expr = "";
-                    }
-                    String table = rs.getString("sem_table");
                     mdef = MeasureDefinitionDTO.builder()
-                        .rawExpression(expr)
-                        .sourceTable(table)
+                        .rawExpression(expr != null ? expr : "")
                         .build();
                 }
 
-                if (mdef.getRawSql() != null) {
-                    String cleanSql = mdef.getRawSql().trim().toLowerCase();
-                    if (semMeasures.containsKey(cleanSql)) {
-                        SemanticMeasureInfo info = semMeasures.get(cleanSql);
-                        mdef = MeasureDefinitionDTO.builder()
-                            .rawExpression(info.sqlExpr)
-                            .sourceTable(info.tableRef)
-                            .build();
-                    }
-                }
-
+                // Heuristic: if no source table was set, detect it from the sql_expr
                 if (mdef.getTable() == null || mdef.getTable().isBlank()) {
-                    if (mdef.getRawSql() != null && !mdef.getRawSql().isBlank()) {
-                        String raw = mdef.getRawSql();
+                    String raw = mdef.getRawSql();
+                    if (raw != null && !raw.isBlank()) {
                         for (String tbl : semViewTables) {
-                            String shortTbl = tbl;
-                            if (tbl.contains(".")) {
-                                shortTbl = tbl.substring(tbl.lastIndexOf(".") + 1);
-                            }
-                            String escapedFull = java.util.regex.Pattern.quote(tbl);
+                            String shortTbl = tbl.contains(".") ? tbl.substring(tbl.lastIndexOf(".") + 1) : tbl;
+                            String escapedFull  = java.util.regex.Pattern.quote(tbl);
                             String escapedShort = java.util.regex.Pattern.quote(shortTbl);
                             java.util.regex.Pattern pattern = java.util.regex.Pattern.compile(
                                 "\\b(" + escapedFull + "|" + escapedShort + ")\\b",
@@ -249,7 +199,7 @@ public class ReportConfigService {
 
         ReportConfigDto dto = new ReportConfigDto(
             report.getReportId(),
-            report.getName(),
+            report.getReportName(),
             columns,
             rows,
             referenceDate,
@@ -310,11 +260,11 @@ public class ReportConfigService {
             }
 
             jdbcTemplate.update(
-                "UPDATE reporting.rpt_report SET name = ?, explore_id = ?, status = ?, granularity = ?, " +
+                "UPDATE reporting.rpt_report SET report_name = ?, explore_id = ?, status = ?, granularity = ?, " +
                 "timeframe_start = ?, timeframe_end = ?, timeframe_today = ?, quick_filters = ?, general_filters = ?, " +
                 "source_table = ?, source_field = ?, " +
                 "updated_at = NOW() WHERE report_id = ? AND version = ?",
-                dto.getName(),
+                dto.getReportName(),
                 dto.getExploreId(),
                 incomingStatus.toLowerCase(),
                 dto.getGranularity(),
@@ -330,11 +280,11 @@ public class ReportConfigService {
             );
         } else {
             jdbcTemplate.update(
-                "INSERT INTO reporting.rpt_report (report_id, name, description, explore_id, version, status, granularity, " +
+                "INSERT INTO reporting.rpt_report (report_id, report_name, description, explore_id, version, status, granularity, " +
                 "timeframe_start, timeframe_end, timeframe_today, quick_filters, general_filters, source_table, source_field, created_at, updated_at) " +
                 "VALUES (?, ?, 'Report defined via UI builder', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())",
                 reportId,
-                dto.getName(),
+                dto.getReportName(),
                 dto.getExploreId(),
                 version,
                 incomingStatus.toLowerCase(),
@@ -378,8 +328,8 @@ public class ReportConfigService {
         if (dto.getRows() != null) {
             String insertRowSql = "INSERT INTO reporting.rpt_row (row_id, report_id, version, parent_row_id, label, row_type, display_order, indent_level, style_id, filter_expr) " +
                                   "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-            String insertMetricSql = "INSERT INTO reporting.rpt_row_metric (report_id, version, row_id, sql_expr, measure_definition, explore_id) " +
-                                     "VALUES (?, ?, ?, ?, ?, ?)";
+            String insertMetricSql = "INSERT INTO reporting.rpt_row_metric (report_id, version, row_id, sql_expr, measure_definition) " +
+                                     "VALUES (?, ?, ?, ?, ?)";
             String insertFormulaSql = "INSERT INTO reporting.rpt_row_formula (report_id, version, row_id, formula_expr) " +
                                       "VALUES (?, ?, ?, ?)";
             String insertColMapSql = "INSERT INTO reporting.rpt_row_column_map (report_id, version, row_id, col_id, is_enabled) " +
@@ -431,8 +381,7 @@ public class ReportConfigService {
                         version,
                         rrDto.rowId(),
                         sqlExpr,
-                        defJson,
-                        dto.getExploreId()
+                        defJson
                     );
                 }
 
@@ -463,15 +412,6 @@ public class ReportConfigService {
                     }
                 }
             }
-        }
-    }
-
-    private static class SemanticMeasureInfo {
-        final String sqlExpr;
-        final String tableRef;
-        SemanticMeasureInfo(String sqlExpr, String tableRef) {
-            this.sqlExpr = sqlExpr;
-            this.tableRef = tableRef;
         }
     }
 }

@@ -54,13 +54,13 @@ public class ReportControllerTest {
     @Test
     @DisplayName("GET /api/reports: lists reports successfully")
     public void listReports_shouldReturnReportsList() throws Exception {
-        Report report = Report.builder().reportId("RPT_1").name("Sales").status("draft").build();
+        Report report = Report.builder().reportId("RPT_1").reportName("Sales").status("draft").build();
         when(reportRepository.findLatestPublishedPerReport()).thenReturn(List.of(report));
 
         mockMvc.perform(get("/api/reports"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].reportId").value("RPT_1"))
-                .andExpect(jsonPath("$[0].name").value("Sales"));
+                .andExpect(jsonPath("$[0].reportName").value("Sales"));
     }
 
     @Test
@@ -68,13 +68,13 @@ public class ReportControllerTest {
     public void getReportConfig_shouldReturnConfigDto() throws Exception {
         ReportConfigDto dto = new ReportConfigDto();
         dto.setReportId("RPT_1");
-        dto.setName("Weekly Sales");
+        dto.setReportName("Weekly Sales");
         when(configService.loadFromDb(eq("RPT_1"), any())).thenReturn(dto);
 
         mockMvc.perform(get("/api/reports/RPT_1").param("date", "2026-05-26"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.reportId").value("RPT_1"))
-                .andExpect(jsonPath("$.name").value("Weekly Sales"));
+                .andExpect(jsonPath("$.reportName").value("Weekly Sales"));
     }
 
 
@@ -82,7 +82,7 @@ public class ReportControllerTest {
     private ReportConfigDto createValidReportConfigDto() {
         ReportConfigDto dto = new ReportConfigDto();
         dto.setReportId("RPT_NEW");
-        dto.setName("New Report");
+        dto.setReportName("New Report");
         dto.setColumns(Collections.emptyList());
         dto.setRows(Collections.emptyList());
         dto.setStatus(Enums.ReportStatus.draft);
@@ -134,10 +134,10 @@ public class ReportControllerTest {
     }
 
     @Test
-    @DisplayName("PUT /api/reports/{id}: returns Bad Request when name is blank")
-    public void saveReport_blankName_shouldReturnBadRequest() throws Exception {
+    @DisplayName("PUT /api/reports/{id}: returns Bad Request when reportName is blank")
+    public void saveReport_blankReportName_shouldReturnBadRequest() throws Exception {
         ReportConfigDto dto = createValidReportConfigDto();
-        dto.setName("   "); // Blank name
+        dto.setReportName("   "); // Blank name
         
         mockMvc.perform(put("/api/reports/RPT_NEW")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -145,7 +145,7 @@ public class ReportControllerTest {
                         .with(csrf()))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value("Validation failed"))
-                .andExpect(jsonPath("$.errors.name").value("Name is required"));
+                .andExpect(jsonPath("$.errors.reportName").value("Report Name is required"));
     }
 
     @Test
