@@ -11,9 +11,9 @@ import java.util.*;
  * REST controller exposing schema and dimension metadata for the Analytics DWH.
  *
  * <p>These endpoints power the report builder UI — table/column pickers,
- * filter autocomplete, join metadata, and the full semantic model explorer.
+ * filter autocomplete, join metadata, and the full database schema catalog explorer.
  * All queries are read-only and target either {@code information_schema},
- * {@code pg_catalog}, or the {@code reporting.sem_*} semantic layer tables.</p>
+ * {@code pg_catalog}, or the {@code reporting.meta_*} database catalog tables.</p>
  *
  * <h2>Security</h2>
  * All table and column parameters are validated against an alphanumeric-plus-

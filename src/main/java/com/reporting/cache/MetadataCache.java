@@ -26,7 +26,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * </ul>
  *
  * <h2>Fault tolerance</h2>
- * <p>If any section fails to load (e.g. the semantic tables do not yet exist),
+ * <p>If any section fails to load (e.g. the catalog tables do not yet exist),
  * a warning is logged and the cache section is left empty.  Callers are expected
  * to handle empty-cache results gracefully (they will fall back to their existing
  * live-query paths or defaults).</p>

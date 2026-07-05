@@ -31,7 +31,6 @@ src/test/java
 │       ├── DateUtilsTest.java                <-- Utility Unit Test
 │       ├── LayoutRendererServiceTest.java    <-- Service Excel Generation Unit Test
 │       ├── PostProcessorServiceTest.java     <-- Service Formula Processor Unit Test
-│       ├── SemanticResolverServiceTest.java  <-- Service Metadata Resolver Unit Test
 │       ├── SqlGeneratorServiceTest.java      <-- Service SQL Generator Unit Test
 │       ├── ReportConfigServiceTest.java      <-- Service Config Unit Test
 │       ├── ReportConfigServiceIT.java        <-- Service Config Integration Test
