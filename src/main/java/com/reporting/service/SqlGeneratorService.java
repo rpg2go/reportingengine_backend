@@ -32,16 +32,22 @@ public class SqlGeneratorService {
      * during query generation.
      */
     private final MetadataCache metadataCache;
+    private final FilterCompilerService filterCompilerService;
 
     @Autowired
-    public SqlGeneratorService(JdbcTemplate jdbcTemplate, SchemaGraphRouter schemaGraphRouter, MetadataCache metadataCache) {
+    public SqlGeneratorService(JdbcTemplate jdbcTemplate, SchemaGraphRouter schemaGraphRouter, MetadataCache metadataCache, FilterCompilerService filterCompilerService) {
         this.jdbcTemplate    = jdbcTemplate;
         this.schemaGraphRouter = schemaGraphRouter;
         this.metadataCache   = metadataCache;
+        this.filterCompilerService = filterCompilerService;
+    }
+
+    public SqlGeneratorService(JdbcTemplate jdbcTemplate, SchemaGraphRouter schemaGraphRouter, MetadataCache metadataCache) {
+        this(jdbcTemplate, schemaGraphRouter, metadataCache, new FilterCompilerService());
     }
 
     public SqlGeneratorService(JdbcTemplate jdbcTemplate) {
-        this(jdbcTemplate, null, null);
+        this(jdbcTemplate, null, null, new FilterCompilerService());
     }
 
     public String generateMatrixQuery(ReportConfigDto config) {
@@ -1069,7 +1075,8 @@ public class SqlGeneratorService {
                 ObjectMapper mapper = new ObjectMapper();
                 mapper.configure(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
                 RowFilterGroup rootGroup = mapper.readValue(trimmed, RowFilterGroup.class);
-                return compileRowGroup(rootGroup);
+                FilterNode ast = filterCompilerService.buildAst(rootGroup);
+                return filterCompilerService.compile(ast);
             } catch (Exception e) {
                 throw new IllegalArgumentException("Failed to parse recursive row filter group JSON: " + trimmed, e);
             }
@@ -1370,201 +1377,6 @@ public class SqlGeneratorService {
         public void setChildGroups(List<RowFilterGroup> childGroups) { this.childGroups = childGroups; }
     }
 
-    public String compileRowFilterRule(RowFilterRule rule) {
-        if (rule == null || rule.getColumnName() == null || rule.getColumnName().isBlank()) {
-            return "";
-        }
-        
-        String col = (rule.getTableName() != null && !rule.getTableName().isBlank()) 
-            ? (rule.getTableName().trim() + "." + rule.getColumnName().trim()) 
-            : rule.getColumnName().trim();
-            
-        String op = rule.getOperator() != null ? rule.getOperator().trim().toLowerCase() : "is";
-        List<String> values = rule.getValue() != null ? rule.getValue() : Collections.emptyList();
-        
-        if (rule.getTableName() != null && !rule.getTableName().isBlank() && !rule.getTableName().matches("^[a-zA-Z0-9_\\.]+$")) {
-            throw new IllegalArgumentException("Invalid table name in filter: " + rule.getTableName());
-        }
-        if (!rule.getColumnName().matches("^[a-zA-Z0-9_]+$")) {
-            throw new IllegalArgumentException("Invalid column name in filter: " + rule.getColumnName());
-        }
-
-        String result;
-        switch (op) {
-            case "=":
-            case "is": {
-                String val = values.isEmpty() ? "" : values.get(0);
-                String escapedVal = val.replace("'", "''");
-                result = String.format("%s = '%s'", col, escapedVal);
-                break;
-            }
-            case "!=":
-            case "<>":
-            case "is not":
-            case "is different from": {
-                String val = values.isEmpty() ? "" : values.get(0);
-                String escapedVal = val.replace("'", "''");
-                result = String.format("(%s <> '%s' OR %s IS NULL)", col, escapedVal, col);
-                break;
-            }
-            case "contains":
-            case "like": {
-                String val = values.isEmpty() ? "" : values.get(0);
-                String escapedVal = val.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_").replace("'", "''");
-                if ("contains".equals(op)) {
-                    result = String.format("%s ILIKE '%%%s%%' ESCAPE '\\'", col, escapedVal);
-                } else {
-                    result = String.format("%s LIKE '%%%s%%' ESCAPE '\\'", col, escapedVal);
-                }
-                break;
-            }
-            case "does not contains":
-            case "not like": {
-                String val = values.isEmpty() ? "" : values.get(0);
-                String escapedVal = val.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_").replace("'", "''");
-                if ("does not contains".equals(op)) {
-                    result = String.format("(%s NOT ILIKE '%%%s%%' ESCAPE '\\' OR %s IS NULL)", col, escapedVal, col);
-                } else {
-                    result = String.format("(%s NOT LIKE '%%%s%%' ESCAPE '\\' OR %s IS NULL)", col, escapedVal, col);
-                }
-                break;
-            }
-            case "start with":
-            case "starts with": {
-                String val = values.isEmpty() ? "" : values.get(0);
-                String escapedVal = val.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_").replace("'", "''");
-                if ("start with".equals(op)) {
-                    result = String.format("%s ILIKE '%s%%' ESCAPE '\\'", col, escapedVal);
-                } else {
-                    result = String.format("%s LIKE '%s%%' ESCAPE '\\'", col, escapedVal);
-                }
-                break;
-            }
-            case "end with":
-            case "ends with": {
-                String val = values.isEmpty() ? "" : values.get(0);
-                String escapedVal = val.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_").replace("'", "''");
-                if ("end with".equals(op)) {
-                    result = String.format("%s ILIKE '%%%s' ESCAPE '\\'", col, escapedVal);
-                } else {
-                    result = String.format("%s LIKE '%%%s' ESCAPE '\\'", col, escapedVal);
-                }
-                break;
-            }
-            case "is blank": {
-                result = String.format("(%s IS NULL OR TRIM(CAST(%s AS TEXT)) = '')", col, col);
-                break;
-            }
-            case "is not blank": {
-                result = String.format("(%s IS NOT NULL AND TRIM(CAST(%s AS TEXT)) <> '')", col, col);
-                break;
-            }
-            case "is null": {
-                result = String.format("%s IS NULL", col);
-                break;
-            }
-            case "is not null": {
-                result = String.format("%s IS NOT NULL", col);
-                break;
-            }
-            case "in":
-            case "in list": {
-                List<String> quoted = new ArrayList<>();
-                for (String v : values) {
-                    quoted.add("'" + v.replace("'", "''") + "'");
-                }
-                if (quoted.isEmpty()) {
-                    result = String.format("%s IN (NULL)", col);
-                } else {
-                    result = String.format("%s IN (%s)", col, String.join(", ", quoted));
-                }
-                break;
-            }
-            case "not in":
-            case "not in list": {
-                List<String> quoted = new ArrayList<>();
-                for (String v : values) {
-                    quoted.add("'" + v.replace("'", "''") + "'");
-                }
-                if (quoted.isEmpty()) {
-                    result = String.format("%s NOT IN (NULL)", col);
-                } else {
-                    result = String.format("%s NOT IN (%s)", col, String.join(", ", quoted));
-                }
-                break;
-            }
-            case ">":
-            case "greater_than":
-            case "is greater then": {
-                String val = values.isEmpty() ? "" : values.get(0);
-                String escapedVal = val.replace("'", "''");
-                result = String.format("%s > '%s'", col, escapedVal);
-                break;
-            }
-            case ">=":
-            case "greater_equal":
-            case "is greater or equal": {
-                String val = values.isEmpty() ? "" : values.get(0);
-                String escapedVal = val.replace("'", "''");
-                result = String.format("%s >= '%s'", col, escapedVal);
-                break;
-            }
-            case "<":
-            case "less_than":
-            case "is less then": {
-                String val = values.isEmpty() ? "" : values.get(0);
-                String escapedVal = val.replace("'", "''");
-                result = String.format("%s < '%s'", col, escapedVal);
-                break;
-            }
-            case "<=":
-            case "less_equal":
-            case "is less or equal": {
-                String val = values.isEmpty() ? "" : values.get(0);
-                String escapedVal = val.replace("'", "''");
-                result = String.format("%s <= '%s'", col, escapedVal);
-                break;
-            }
-            default:
-                throw new IllegalArgumentException("Unsupported filter operator in recursive rules: " + op);
-        }
-        
-        validateFilterExpr(result);
-        return result;
-    }
-
-    public String compileRowGroup(RowFilterGroup group) {
-        if (group == null) {
-            return "";
-        }
-        List<String> parts = new ArrayList<>();
-        
-        if (group.getRules() != null) {
-            for (RowFilterRule rule : group.getRules()) {
-                String compiledRule = compileRowFilterRule(rule);
-                if (compiledRule != null && !compiledRule.isBlank()) {
-                    parts.add(compiledRule);
-                }
-            }
-        }
-        
-        if (group.getChildGroups() != null) {
-            for (RowFilterGroup child : group.getChildGroups()) {
-                String compiledChild = compileRowGroup(child);
-                if (compiledChild != null && !compiledChild.isBlank()) {
-                    parts.add(compiledChild);
-                }
-            }
-        }
-        
-        if (parts.isEmpty()) {
-            return "";
-        }
-        
-        String conj = " " + (group.getLogicalOperator() != null ? group.getLogicalOperator().trim().toUpperCase() : "AND") + " ";
-        return "(" + String.join(conj, parts) + ")";
-    }
-
 
     private boolean isRuleApplicable(String factTable, RowFilterRule rule, Map<String, Set<String>> cache) {
         if (rule == null) return false;
@@ -1660,7 +1472,8 @@ public class SqlGeneratorService {
                 RowFilterGroup rootGroup = mapper.readValue(trimmed, RowFilterGroup.class);
                 collectReferencedTables(rootGroup, factTable, dimensionTargets, cache);
                 RowFilterGroup pruned = pruneGroupForTable(rootGroup, factTable, cache);
-                return compileRowGroup(pruned);
+                FilterNode ast = filterCompilerService.buildAst(pruned);
+                return filterCompilerService.compile(ast);
             } catch (Exception e) {
                 throw new IllegalArgumentException("Failed to parse recursive general filter group JSON: " + trimmed, e);
             }
@@ -1689,7 +1502,8 @@ public class SqlGeneratorService {
                             mapScopeTable(group, scopeTable);
                             collectReferencedTables(group, factTable, dimensionTargets, cache);
                             RowFilterGroup pruned = pruneGroupForTable(group, factTable, cache);
-                            String compiledGroup = compileRowGroup(pruned);
+                            FilterNode ast = filterCompilerService.buildAst(pruned);
+                            String compiledGroup = filterCompilerService.compile(ast);
                             if (compiledGroup != null && !compiledGroup.isBlank()) {
                                 compiledScopes.add(compiledGroup);
                             }
