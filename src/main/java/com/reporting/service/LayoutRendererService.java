@@ -20,33 +20,18 @@ public class LayoutRendererService {
     private static class ExpandedColumn {
         private final String colId;
         private final String label;
-        private final Enums.ColType colType;
-        private final int periodOffset;
-        private final Integer rollingN;
-        private final String rollingGrain;
-        private final String formulaExpr;
-        private final int displayOrder;
         private final boolean isExpandedSubCol;
         private final String parentColId;
 
-        public ExpandedColumn(String colId, String label, Enums.ColType colType, int periodOffset, 
-                              Integer rollingN, String rollingGrain, String formulaExpr, 
-                              int displayOrder, boolean isExpandedSubCol, String parentColId) {
+        public ExpandedColumn(String colId, String label, boolean isExpandedSubCol, String parentColId) {
             this.colId = colId;
             this.label = label;
-            this.colType = colType;
-            this.periodOffset = periodOffset;
-            this.rollingN = rollingN;
-            this.rollingGrain = rollingGrain;
-            this.formulaExpr = formulaExpr;
-            this.displayOrder = displayOrder;
             this.isExpandedSubCol = isExpandedSubCol;
             this.parentColId = parentColId;
         }
 
         public String getColId() { return colId; }
         public String getLabel() { return label; }
-        public Enums.ColType getColType() { return colType; }
         public boolean isExpandedSubCol() { return isExpandedSubCol; }
         public String getParentColId() { return parentColId; }
     }
@@ -111,12 +96,6 @@ public class LayoutRendererService {
                     expanded.add(new ExpandedColumn(
                         subColId,
                         label,
-                        col.colType(),
-                        -i,
-                        null,
-                        null,
-                        "",
-                        col.displayOrder(),
                         true,
                         col.colId()
                     ));
@@ -125,12 +104,6 @@ public class LayoutRendererService {
                 expanded.add(new ExpandedColumn(
                     col.colId(),
                     col.label(),
-                    col.colType(),
-                    col.periodOffset(),
-                    col.rollingN(),
-                    col.rollingGrain(),
-                    col.formulaExpr(),
-                    col.displayOrder(),
                     false,
                     null
                 ));
@@ -241,7 +214,7 @@ public class LayoutRendererService {
                 // Render Column Data (C1, C2...)
                 if (reportRow.rowType() != Enums.RowType.blank) {
                     int dataColIdx = 1;
-                    for (String gHeader : granularityHeaders) {
+                    for (int g = 0; g < granularityHeaders.size(); g++) {
                         Cell cell = row.createCell(dataColIdx++);
                         cell.setCellValue("-");
                         cell.setCellStyle(textStyle);

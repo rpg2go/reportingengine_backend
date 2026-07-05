@@ -15,18 +15,13 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.*;
-import static org.mockito.ArgumentMatchers.*;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("ReportConfigService Unit Tests")
+@SuppressWarnings({"null", "unchecked", "rawtypes"})
 public class ReportConfigServiceTest {
 
     @Mock private ReportRepository reportRepository;
-    @Mock private ColumnDefRepository columnDefRepository;
-    @Mock private ReportRowRepository reportRowRepository;
-    @Mock private RowMetricRepository rowMetricRepository;
-    @Mock private RowFormulaRepository rowFormulaRepository;
-    @Mock private RowColumnMapRepository rowColumnMapRepository;
     @Mock private StyleRepository styleRepository;
     @Mock private JdbcTemplate jdbcTemplate;
 

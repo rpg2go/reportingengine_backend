@@ -160,7 +160,7 @@ public class ReportConfigDto {
     // Convenience Getters
     @JsonIgnore
     public List<ColumnDefDto> getSqlColumns() {
-        return columns.stream().filter(ColumnDefDto::isSqlColumn).toList();
+        return columns.stream().filter(c -> c.isSqlColumn()).toList();
     }
 
     @JsonIgnore
@@ -170,17 +170,17 @@ public class ReportConfigDto {
 
     @JsonIgnore
     public List<ReportRowDto> getDataRows() {
-        return rows.stream().filter(ReportRowDto::isDataRow).toList();
+        return rows.stream().filter(r -> r.isDataRow()).toList();
     }
 
     @JsonIgnore
     public List<ReportRowDto> getCalcRows() {
-        return rows.stream().filter(ReportRowDto::isCalcRow).toList();
+        return rows.stream().filter(r -> r.isCalcRow()).toList();
     }
 
     @JsonIgnore
     public List<String> getColIds() {
-        return columns.stream().map(ColumnDefDto::colId).toList();
+        return columns.stream().map(c -> c.colId()).toList();
     }
 
     public ColumnDefDto getColumn(String colId) {

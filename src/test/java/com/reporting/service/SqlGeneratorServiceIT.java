@@ -27,6 +27,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @DisplayName("SqlGeneratorService & Preview IT Tests")
 @WithMockUser(username = "admin", roles = {"USER"})
+@SuppressWarnings({"null", "unchecked", "rawtypes"})
 public class SqlGeneratorServiceIT extends BaseIT {
 
     @Autowired
@@ -46,10 +47,19 @@ public class SqlGeneratorServiceIT extends BaseIT {
             new ReportRowDto("R1", "RPT_IT", "GBS gross", Enums.RowType.data, 
                 new MeasureDefinitionDTO("visual", "SUM", "amount", "analytics.fact_sales", null), null, "normal", 0, 1, Set.of("C1"), null)
         );
-        ReportConfigDto config = new ReportConfigDto(
-            "RPT_IT", "IT Test", columns, rows, null, 1, Enums.ReportStatus.draft,
-            "analytics.fact_sales", "monthly", "2025-01-01", "2025-12-31", false, null, null
-        );
+        ReportConfigDto config = new ReportConfigDto();
+        config.setReportId("RPT_IT");
+        config.setReportName("IT Test");
+        config.setColumns(columns);
+        config.setRows(rows);
+        config.setReferenceDate(null);
+        config.setExploreId(1);
+        config.setStatus(Enums.ReportStatus.draft);
+        config.setSourceTable("analytics.fact_sales");
+        config.setGranularity("monthly");
+        config.setTimeframeStart("2025-01-01");
+        config.setTimeframeEnd("2025-12-31");
+        config.setTimeframeToday(false);
 
         // Act & Assert
         mockMvc.perform(post("/api/reports/preview-sql")
@@ -76,10 +86,19 @@ public class SqlGeneratorServiceIT extends BaseIT {
             new ReportRowDto("R2", "RPT_IT", "Row 2", Enums.RowType.data, 
                 new MeasureDefinitionDTO("visual", "SUM", "reporting_date", "analytics.fact_sales", null), null, "normal", 0, 1, Set.of("C1"), null)
         );
-        ReportConfigDto config = new ReportConfigDto(
-            "RPT_IT", "IT Test", Collections.emptyList(), rows, null, 1, Enums.ReportStatus.draft,
-            "analytics.fact_sales", "monthly", "2025-01-01", "2025-12-31", false, null, null
-        );
+        ReportConfigDto config = new ReportConfigDto();
+        config.setReportId("RPT_IT");
+        config.setReportName("IT Test");
+        config.setColumns(Collections.emptyList());
+        config.setRows(rows);
+        config.setReferenceDate(null);
+        config.setExploreId(1);
+        config.setStatus(Enums.ReportStatus.draft);
+        config.setSourceTable("analytics.fact_sales");
+        config.setGranularity("monthly");
+        config.setTimeframeStart("2025-01-01");
+        config.setTimeframeEnd("2025-12-31");
+        config.setTimeframeToday(false);
 
         // Act & Assert
         mockMvc.perform(post("/api/reports/validate")

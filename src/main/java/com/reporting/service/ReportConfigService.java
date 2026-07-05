@@ -15,30 +15,15 @@ import java.util.*;
 public class ReportConfigService {
 
     private final ReportRepository reportRepository;
-    private final ColumnDefRepository columnDefRepository;
-    private final ReportRowRepository reportRowRepository;
-    private final RowMetricRepository rowMetricRepository;
-    private final RowFormulaRepository rowFormulaRepository;
-    private final RowColumnMapRepository rowColumnMapRepository;
     private final StyleRepository styleRepository;
     private final org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
     private final MetadataCache metadataCache;
 
     public ReportConfigService(ReportRepository reportRepository,
-                              ColumnDefRepository columnDefRepository,
-                              ReportRowRepository reportRowRepository,
-                              RowMetricRepository rowMetricRepository,
-                              RowFormulaRepository rowFormulaRepository,
-                              RowColumnMapRepository rowColumnMapRepository,
                               StyleRepository styleRepository,
                               org.springframework.jdbc.core.JdbcTemplate jdbcTemplate,
                               MetadataCache metadataCache) {
         this.reportRepository = reportRepository;
-        this.columnDefRepository = columnDefRepository;
-        this.reportRowRepository = reportRowRepository;
-        this.rowMetricRepository = rowMetricRepository;
-        this.rowFormulaRepository = rowFormulaRepository;
-        this.rowColumnMapRepository = rowColumnMapRepository;
         this.styleRepository = styleRepository;
         this.jdbcTemplate = jdbcTemplate;
         this.metadataCache = metadataCache;
