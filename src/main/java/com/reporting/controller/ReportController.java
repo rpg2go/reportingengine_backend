@@ -133,6 +133,16 @@ public class ReportController {
         }
     }
 
+    @DeleteMapping("/{id}")
+    public ResponseEntity<?> deleteReport(@PathVariable("id") String id) {
+        try {
+            configService.deleteReport(id);
+            return ResponseEntity.ok(Map.of("message", "Report deleted successfully"));
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body(Map.of("message", "Failed to delete report: " + e.getMessage()));
+        }
+    }
+
     // ─── execution ────────────────────────────────────────────────────────────
 
     /**

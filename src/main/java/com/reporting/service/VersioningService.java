@@ -139,7 +139,7 @@ public class VersioningService {
         Report report = loadOrThrow(id, version);
         requireStatus(report, "published", "forked");
 
-        List<Report> allVersions = reportRepository.findByReportIdOrderByVersionDesc(id);
+        List<Report> allVersions = reportRepository.findByReportIdAndDeletedFalseOrderByVersionDesc(id);
         if (!allVersions.isEmpty() && allVersions.get(0).getVersion() > version) {
             throw new IllegalStateException(
                 "A newer version already exists for report: " + id +
@@ -168,9 +168,13 @@ public class VersioningService {
      * @throws IllegalArgumentException if no matching record exists
      */
     private Report loadOrThrow(String id, int version) {
-        return reportRepository.findById(new ReportPk(id, version))
+        Report report = reportRepository.findById(new ReportPk(id, version))
             .orElseThrow(() -> new IllegalArgumentException(
                 "Report not found: " + id + " v" + version));
+        if (Boolean.TRUE.equals(report.getDeleted())) {
+            throw new IllegalArgumentException("Report not found: " + id + " v" + version);
+        }
+        return report;
     }
 
     /**

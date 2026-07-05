@@ -18,5 +18,6 @@
     <include file="sql/009_seed_global_filters_data.sql" relativeToChangelogFile="true"/>
     <include file="sql/011_reset_sequences.sql" relativeToChangelogFile="true"/>
     <include file="sql/012_fix_seeded_reports.sql" relativeToChangelogFile="true"/>
+    <include file="sql/013_add_deleted_column.sql" relativeToChangelogFile="true"/>
 
 </databaseChangeLog>

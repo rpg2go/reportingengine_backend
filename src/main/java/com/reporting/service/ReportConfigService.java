@@ -47,7 +47,7 @@ public class ReportConfigService {
 
     @Transactional(readOnly = true)
     public ReportConfigDto loadFromDb(String reportId, LocalDate referenceDate) {
-        Report report = reportRepository.findFirstByReportIdOrderByVersionDesc(reportId)
+        Report report = reportRepository.findFirstByReportIdAndDeletedFalseOrderByVersionDesc(reportId)
             .orElseThrow(() -> new IllegalArgumentException("Report not found: " + reportId));
         return loadFromDb(reportId, report.getVersion(), referenceDate);
     }
@@ -57,6 +57,9 @@ public class ReportConfigService {
         // 1. Report header
         Report report = reportRepository.findById(new ReportPk(reportId, version))
             .orElseThrow(() -> new IllegalArgumentException("Report not found: " + reportId + " v" + version));
+        if (Boolean.TRUE.equals(report.getDeleted())) {
+            throw new IllegalArgumentException("Report not found: " + reportId + " v" + version);
+        }
 
         // 2. Columns — direct JDBC query filtered by version
         List<ColumnDefDto> columns = jdbcTemplate.query(
@@ -410,6 +413,21 @@ public class ReportConfigService {
                     }
                 }
             }
+        }
+    }
+
+    @Transactional
+    public void deleteReport(String reportId) {
+        boolean hasPublished = jdbcTemplate.queryForObject(
+            "SELECT EXISTS(SELECT 1 FROM reporting.rpt_report WHERE report_id = ? AND status = 'published')",
+            Boolean.class,
+            reportId
+        );
+
+        if (hasPublished) {
+            jdbcTemplate.update("UPDATE reporting.rpt_report SET deleted = true WHERE report_id = ?", reportId);
+        } else {
+            jdbcTemplate.update("DELETE FROM reporting.rpt_report WHERE report_id = ?", reportId);
         }
     }
 }

@@ -45,7 +45,7 @@ public class ReportVersionController {
      */
     @GetMapping("/list")
     public ResponseEntity<List<Report>> listVersions(@PathVariable("id") String id) {
-        return ResponseEntity.ok(reportRepository.findByReportIdOrderByVersionDesc(id));
+        return ResponseEntity.ok(reportRepository.findByReportIdAndDeletedFalseOrderByVersionDesc(id));
     }
 
     /**

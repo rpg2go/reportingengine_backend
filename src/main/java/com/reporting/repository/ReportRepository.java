@@ -13,18 +13,18 @@ import java.util.Optional;
 @Repository
 public interface ReportRepository extends JpaRepository<Report, ReportPk> {
 
-    Optional<Report> findFirstByReportIdOrderByVersionDesc(String reportId);
+    Optional<Report> findFirstByReportIdAndDeletedFalseOrderByVersionDesc(String reportId);
 
-    List<Report> findByReportIdOrderByVersionDesc(String reportId);
+    List<Report> findByReportIdAndDeletedFalseOrderByVersionDesc(String reportId);
 
-    @Query("SELECT r FROM Report r WHERE r.reportId = :reportId AND r.version = :version")
+    @Query("SELECT r FROM Report r WHERE r.reportId = :reportId AND r.version = :version AND r.deleted = false")
     Optional<Report> findByReportIdAndVersion(@Param("reportId") String reportId, @Param("version") Integer version);
 
     /**
      * Returns the highest-version row per report, regardless of status.
      * Used internally; prefer {@link #findLatestPublishedPerReport()} for catalog views.
      */
-    @Query("SELECT r FROM Report r WHERE r.version = (SELECT MAX(r2.version) FROM Report r2 WHERE r2.reportId = r.reportId) ORDER BY r.reportId ASC")
+    @Query("SELECT r FROM Report r WHERE r.deleted = false AND r.version = (SELECT MAX(r2.version) FROM Report r2 WHERE r2.reportId = r.reportId AND r2.deleted = false) ORDER BY r.reportId ASC")
     List<Report> findLatestVersionPerReport();
 
     /**
@@ -38,12 +38,12 @@ public interface ReportRepository extends JpaRepository<Report, ReportPk> {
      */
     @Query("""
         SELECT r FROM Report r
-        WHERE r.version = (
+        WHERE r.deleted = false AND r.version = (
             SELECT COALESCE(
                 MAX(CASE WHEN r2.status IN ('published', 'in_review') THEN r2.version ELSE NULL END),
                 MAX(r2.version)
             )
-            FROM Report r2 WHERE r2.reportId = r.reportId
+            FROM Report r2 WHERE r2.reportId = r.reportId AND r2.deleted = false
         )
         ORDER BY r.reportId ASC
         """)
@@ -61,11 +61,12 @@ public interface ReportRepository extends JpaRepository<Report, ReportPk> {
     @Query("""
         SELECT r FROM Report r
         WHERE r.reportId IN :reportIds
+          AND r.deleted = false
           AND r.status = 'draft'
           AND r.version > (
               SELECT COALESCE(MAX(r2.version), 0)
               FROM Report r2
-              WHERE r2.reportId = r.reportId AND r2.status = 'published'
+              WHERE r2.reportId = r.reportId AND r2.status = 'published' AND r2.deleted = false
           )
         ORDER BY r.reportId ASC, r.version DESC
         """)

@@ -63,6 +63,9 @@ public class Report {
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt = LocalDateTime.now();
 
+    @Column(name = "deleted", nullable = false)
+    private Boolean deleted = false;
+
     @JsonIgnore
     @OneToMany(mappedBy = "report", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private List<ColumnDef> columns;

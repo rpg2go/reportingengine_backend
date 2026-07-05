@@ -14,7 +14,8 @@ import java.time.LocalDate;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
+import static org.mockito.ArgumentMatchers.*;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("ReportConfigService Unit Tests")
@@ -35,7 +36,7 @@ public class ReportConfigServiceTest {
     @Test
     @DisplayName("loadFromDb throws IllegalArgumentException if report does not exist")
     public void loadFromDb_nonExistentReport_shouldThrowException() {
-        when(reportRepository.findFirstByReportIdOrderByVersionDesc("INVALID_ID")).thenReturn(Optional.empty());
+        when(reportRepository.findFirstByReportIdAndDeletedFalseOrderByVersionDesc("INVALID_ID")).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.loadFromDb("INVALID_ID", LocalDate.now()))
             .isInstanceOf(IllegalArgumentException.class)
@@ -67,5 +68,39 @@ public class ReportConfigServiceTest {
         assertThatThrownBy(() -> service.saveToDb(dto))
             .isInstanceOf(IllegalStateException.class)
             .hasMessageContaining("is PUBLISHED and cannot be modified");
+    }
+
+    @Test
+    @DisplayName("deleteReport performs physical delete when no version is published")
+    public void deleteReport_noPublishedVersion_shouldPerformPhysicalDelete() {
+        when(jdbcTemplate.queryForObject(
+            anyString(),
+            eq(Boolean.class),
+            eq("RPT_1")
+        )).thenReturn(false);
+
+        service.deleteReport("RPT_1");
+
+        verify(jdbcTemplate, times(1)).update(
+            eq("DELETE FROM reporting.rpt_report WHERE report_id = ?"),
+            eq("RPT_1")
+        );
+    }
+
+    @Test
+    @DisplayName("deleteReport performs soft delete when a published version exists")
+    public void deleteReport_hasPublishedVersion_shouldPerformSoftDelete() {
+        when(jdbcTemplate.queryForObject(
+            anyString(),
+            eq(Boolean.class),
+            eq("RPT_1")
+        )).thenReturn(true);
+
+        service.deleteReport("RPT_1");
+
+        verify(jdbcTemplate, times(1)).update(
+            eq("UPDATE reporting.rpt_report SET deleted = true WHERE report_id = ?"),
+            eq("RPT_1")
+        );
     }
 }

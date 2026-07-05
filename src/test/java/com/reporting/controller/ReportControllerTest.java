@@ -304,5 +304,29 @@ public class ReportControllerTest {
                 .andExpect(jsonPath("$[0]").value("2024-01-01"))
                 .andExpect(jsonPath("$[1]").value("2024-01-02"));
     }
+
+    @Test
+    @DisplayName("DELETE /api/reports/{id}: deletes report successfully")
+    public void deleteReport_shouldReturnOk() throws Exception {
+        doNothing().when(configService).deleteReport("RPT_1");
+
+        mockMvc.perform(delete("/api/reports/RPT_1")
+                        .with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("Report deleted successfully"));
+
+        verify(configService, times(1)).deleteReport("RPT_1");
+    }
+
+    @Test
+    @DisplayName("DELETE /api/reports/{id}: returns 500 when service throws exception")
+    public void deleteReport_shouldReturnInternalServerErrorOnFailure() throws Exception {
+        doThrow(new RuntimeException("Database error")).when(configService).deleteReport("RPT_1");
+
+        mockMvc.perform(delete("/api/reports/RPT_1")
+                        .with(csrf()))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.message").value("Failed to delete report: Database error"));
+    }
 }
 
