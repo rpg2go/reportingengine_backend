@@ -98,7 +98,7 @@ public class ReportExecutionController {
             return ResponseEntity.ok(unpivotedData);
         } catch (Exception e) {
             log.error("Failed to execute report ID: {}", reportId, e);
-            return ResponseEntity.status(500).body(Map.of("message", "Execution failed: " + e.getMessage()));
+            return ResponseEntity.status(500).body(Map.of("message", "Report execution failed. Please verify reporting date and query filters."));
         }
     }
 

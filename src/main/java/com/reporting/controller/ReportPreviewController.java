@@ -11,7 +11,6 @@ import java.util.Map;
 @Slf4j
 @RestController
 @RequestMapping("/api/reports")
-@CrossOrigin(origins = {"http://127.0.0.1:4200", "http://localhost:4200"})
 public class ReportPreviewController {
 
     private final SqlGeneratorService sqlGeneratorService;
@@ -30,7 +29,7 @@ public class ReportPreviewController {
         } catch (Exception e) {
             log.error("Failed to generate report preview SQL", e);
             return ResponseEntity.status(500).body(Map.of(
-                "error", "Failed to compile SQL: " + e.getMessage()
+                "error", "Failed to compile preview SQL. Please verify layout configuration."
             ));
         }
     }

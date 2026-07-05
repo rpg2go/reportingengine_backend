@@ -73,6 +73,6 @@ public class ReportPreviewControllerTest {
                         .content(objectMapper.writeValueAsString(config))
                         .with(csrf()))
                 .andExpect(status().isInternalServerError())
-                .andExpect(jsonPath("$.error").value("Failed to compile SQL: Syntax error in custom formula"));
+                .andExpect(jsonPath("$.error").value("Failed to compile preview SQL. Please verify layout configuration."));
     }
 }

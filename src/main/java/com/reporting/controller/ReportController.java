@@ -107,7 +107,8 @@ public class ReportController {
             configService.saveToDb(configDto);
             return ResponseEntity.ok(Map.of("message", "Report created successfully"));
         } catch (Exception e) {
-            return ResponseEntity.status(500).body(Map.of("message", "Failed to create report: " + e.getMessage()));
+            log.error("Failed to create report configuration", e);
+            return ResponseEntity.status(500).body(Map.of("message", "Failed to create report configuration. Please verify configuration parameters."));
         }
     }
 
@@ -130,7 +131,8 @@ public class ReportController {
             configService.saveToDb(configDto);
             return ResponseEntity.ok(Map.of("message", "Report saved successfully"));
         } catch (Exception e) {
-            return ResponseEntity.status(500).body(Map.of("message", "Failed to save report: " + e.getMessage()));
+            log.error("Failed to save report configuration", e);
+            return ResponseEntity.status(500).body(Map.of("message", "Failed to save report configuration. Please try again or contact your administrator."));
         }
     }
 
@@ -140,7 +142,8 @@ public class ReportController {
             configService.deleteReport(id);
             return ResponseEntity.ok(Map.of("message", "Report deleted successfully"));
         } catch (Exception e) {
-            return ResponseEntity.status(500).body(Map.of("message", "Failed to delete report: " + e.getMessage()));
+            log.error("Failed to delete report ID: {}", id, e);
+            return ResponseEntity.status(500).body(Map.of("message", "Failed to delete report. Please verify report status and try again."));
         }
     }
 
@@ -174,10 +177,10 @@ public class ReportController {
                 .contentType(MediaType.APPLICATION_OCTET_STREAM)
                 .body(xlsxBytes);
         } catch (Exception e) {
-            log.error("Failed to run report ID: {} with refDate: {}: {}", id, refDate, e.getMessage(), e);
+            log.error("Failed to run report ID: {} with refDate: {}", id, refDate, e);
             return ResponseEntity.status(500)
                 .contentType(MediaType.APPLICATION_JSON)
-                .body(("{\"message\": \"Execution failed: " + e.getMessage().replace("\"", "\\\"") + "\"}").getBytes());
+                .body("{\"message\": \"Failed to run and compile report. Please verify configuration parameters.\"}".getBytes());
         }
     }
 

@@ -331,6 +331,6 @@ public class ReportControllerTest {
                 mockMvc.perform(delete("/api/reports/RPT_1")
                                 .with(csrf()))
                                 .andExpect(status().isInternalServerError())
-                                .andExpect(jsonPath("$.message").value("Failed to delete report: Database error"));
+                                .andExpect(jsonPath("$.message").value("Failed to delete report. Please verify report status and try again."));
         }
 }

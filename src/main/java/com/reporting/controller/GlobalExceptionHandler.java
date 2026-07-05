@@ -6,9 +6,12 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
+import lombok.extern.slf4j.Slf4j;
+
 import java.util.HashMap;
 import java.util.Map;
 
+@Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
@@ -36,8 +39,9 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, Object>> handleGenericException(Exception ex) {
+        log.error("An unexpected error occurred", ex);
         Map<String, Object> body = new HashMap<>();
-        body.put("message", "An unexpected error occurred: " + ex.getMessage());
+        body.put("message", "An unexpected error occurred. Please contact the administrator.");
         return ResponseEntity.internalServerError().body(body);
     }
 }
