@@ -78,14 +78,14 @@ public class ReportConfigService {
             ), reportId, version);
 
         // 2.5 Load catalog table references for heuristic table detection
-        Set<String> semViewTables = new LinkedHashSet<>(metadataCache.getSemViewTables());
-        if (semViewTables.isEmpty()) {
+        Set<String> metaTableRefs = new LinkedHashSet<>(metadataCache.getMetaTableRefs());
+        if (metaTableRefs.isEmpty()) {
             jdbcTemplate.query(
                 "SELECT DISTINCT schema_name || '.' || table_name AS table_ref FROM reporting.meta_table",
                 (RowCallbackHandler) rs -> {
                     String tbl = rs.getString("table_ref");
                     if (tbl != null && !tbl.isBlank()) {
-                        semViewTables.add(tbl.trim());
+                        metaTableRefs.add(tbl.trim());
                     }
                 }
             );
@@ -120,7 +120,7 @@ public class ReportConfigService {
                 if (mdef.getTable() == null || mdef.getTable().isBlank()) {
                     String raw = mdef.getRawSql();
                     if (raw != null && !raw.isBlank()) {
-                        for (String tbl : semViewTables) {
+                        for (String tbl : metaTableRefs) {
                             String shortTbl = tbl.contains(".") ? tbl.substring(tbl.lastIndexOf(".") + 1) : tbl;
                             String escapedFull  = java.util.regex.Pattern.quote(tbl);
                             String escapedShort = java.util.regex.Pattern.quote(shortTbl);

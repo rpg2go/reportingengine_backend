@@ -169,17 +169,17 @@ public class SchemaDiscoveryController {
         return ResponseEntity.ok(values);
     }
 
-    // ─── semantic model ───────────────────────────────────────────────────────
-
+    // ─── schema catalog ───────────────────────────────────────────────────────
+    
     /**
-     * Returns the full {@code sem_*} semantic model: views, explores, joins,
-     * dimensions, and measures.
+     * Returns the full database schema catalog: tables, joins, and filterable columns.
+     * Maps fact tables as explores and includes empty measures for frontend UI compatibility.
      *
      * @return map with keys {@code views}, {@code explores}, {@code joins},
      *         {@code dimensions}, {@code measures}
      */
-    @GetMapping("/semantic-model")
-    public ResponseEntity<Map<String, Object>> getSemanticModel() {
+    @GetMapping("/schema-catalog")
+    public ResponseEntity<Map<String, Object>> getSchemaCatalog() {
         Map<String, Object> model = new LinkedHashMap<>();
 
         model.put("views", jdbcTemplate.queryForList(
@@ -188,8 +188,13 @@ public class SchemaDiscoveryController {
             "FROM reporting.meta_table ORDER BY table_name",
             Collections.emptyMap()
         ));
+        model.put("explores", jdbcTemplate.queryForList(
+            "SELECT table_id AS explore_id, table_name AS name, label, table_name AS fact_view_name, description " +
+            "FROM reporting.meta_table WHERE table_type = 'fact' ORDER BY table_name",
+            Collections.emptyMap()
+        ));
         model.put("joins", jdbcTemplate.queryForList(
-            "SELECT r.relationship_id AS join_id, ft.table_name AS from_view, tt.table_name AS to_view, " +
+            "SELECT r.relationship_id AS join_id, ft.table_name AS explore_name, ft.table_name AS from_view, tt.table_name AS to_view, " +
             "       r.join_type, " +
             "       tt.schema_name || '.' || tt.table_name || ' ON ' || " +
             "       tt.schema_name || '.' || tt.table_name || '.' || r.to_column || ' = ' || " +
@@ -210,6 +215,7 @@ public class SchemaDiscoveryController {
             "ORDER BY t.table_name, c.column_name",
             Collections.emptyMap()
         ));
+        model.put("measures", Collections.emptyList());
 
         return ResponseEntity.ok(model);
     }

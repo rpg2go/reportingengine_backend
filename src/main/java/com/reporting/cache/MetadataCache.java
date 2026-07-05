@@ -20,7 +20,7 @@ import java.util.concurrent.ConcurrentHashMap;
  *       {@code information_schema.columns} queries in {@link com.reporting.service.SqlGeneratorService}.</li>
  *   <li><b>timeKeyCache</b> — {@code table_ref → time_key} from {@code reporting.meta_table}.
  *       Eliminates per-CTE {@code SELECT time_key FROM meta_table} queries.</li>
- *   <li><b>semViewTables</b> — ordered set of distinct {@code table_ref} values from
+ *   <li><b>metaTableRefs</b> — ordered set of distinct {@code table_ref} values from
  *       {@code reporting.meta_table}.  Used for heuristic table-detection during
  *       metric resolution in {@link com.reporting.service.ReportConfigService}.</li>
  * </ul>
@@ -49,7 +49,7 @@ public class MetadataCache {
     private final Map<String, String> timeKeyCache = new ConcurrentHashMap<>();
 
     // ── ordered set of distinct meta_table table_ref values ────────────────────
-    private volatile Set<String> semViewTables = Collections.emptySet();
+    private volatile Set<String> metaTableRefs = Collections.emptySet();
 
     public MetadataCache(JdbcTemplate jdbc) {
         this.jdbc = jdbc;
@@ -62,9 +62,9 @@ public class MetadataCache {
         log.info("MetadataCache: starting pre-load...");
         loadTableColumns();
         loadTimeKeys();
-        loadSemViewTables();
-        log.info("MetadataCache: pre-load complete — {} tables, {} time-keys, {} sem-view tables.",
-                tableColumnsCache.size(), timeKeyCache.size(), semViewTables.size());
+        loadMetaTableRefs();
+        log.info("MetadataCache: pre-load complete — {} tables, {} time-keys, {} meta-table refs.",
+                tableColumnsCache.size(), timeKeyCache.size(), metaTableRefs.size());
     }
 
     /**
@@ -74,7 +74,7 @@ public class MetadataCache {
         log.info("MetadataCache: explicit reload triggered.");
         tableColumnsCache.clear();
         timeKeyCache.clear();
-        semViewTables = Collections.emptySet();
+        metaTableRefs = Collections.emptySet();
         load();
     }
 
@@ -129,7 +129,7 @@ public class MetadataCache {
 
     // ─── section 3: meta_table table refs ──────────────────────────────────────
 
-    private void loadSemViewTables() {
+    private void loadMetaTableRefs() {
         try {
             Set<String> viewTables = new LinkedHashSet<>();
             jdbc.query(
@@ -141,8 +141,8 @@ public class MetadataCache {
                     }
                 }
             );
-            semViewTables = Collections.unmodifiableSet(viewTables);
-            log.debug("MetadataCache: loaded {} sem-view table refs.", semViewTables.size());
+            metaTableRefs = Collections.unmodifiableSet(viewTables);
+            log.debug("MetadataCache: loaded {} meta-table refs.", metaTableRefs.size());
         } catch (Exception ex) {
             log.warn("MetadataCache: failed to load meta_table refs. Cause: {}", ex.getMessage());
         }
@@ -190,9 +190,9 @@ public class MetadataCache {
 
     /**
      * Returns the ordered set of distinct {@code table_ref} values from
-     * {@code reporting.sem_view}.
+     * {@code reporting.meta_table}.
      */
-    public Set<String> getSemViewTables() {
-        return semViewTables;
+    public Set<String> getMetaTableRefs() {
+        return metaTableRefs;
     }
 }

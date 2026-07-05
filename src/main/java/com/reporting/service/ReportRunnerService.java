@@ -45,10 +45,11 @@ public class ReportRunnerService {
             : configService.loadFromDb(reportId, refDate);
         log.info("Loaded configuration for reportId: {}, Columns count: {}, Rows count: {}", 
             reportId, config.getColumns().size(), config.getRows().size());
+        log.info("Report filters used - Quick Filters: {}, General Filters: {}", config.getQuickFilters(), config.getGeneralFilters());
 
         // 3. Generate SQL
         String sql = generatorService.generate(config);
-        log.debug("Generated query SQL: \n{}", sql);
+        log.info("Generated query SQL: \n{}", sql);
 
         // 4. Execute SQL
         List<Map<String, Object>> rawData;

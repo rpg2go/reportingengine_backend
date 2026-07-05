@@ -66,10 +66,11 @@ public class ReportExecutionController {
 
             // 2. Inject consumer's runtime quick filter overrides
             overrideQuickFilters(config, request.getRuntimeFilters());
+            log.info("Report execution filters used - Quick Filters: {}, General Filters: {}", config.getQuickFilters(), config.getGeneralFilters());
 
             // 3. Generate query SQL
             String sql = generatorService.generate(config);
-            log.debug("Generated report execution SQL: \n{}", sql);
+            log.info("Generated report execution SQL: \n{}", sql);
 
             // 4. Run database query via direct JDBC
             List<Map<String, Object>> rawData = jdbcTemplate.queryForList(sql);
