@@ -21,18 +21,23 @@ public class Style {
     private String name; // header | section | normal | total | blank
 
     @Column(name = "font_size")
+    @Builder.Default
     private Integer fontSize = 11;
 
     @Column(name = "is_bold")
+    @Builder.Default
     private Boolean isBold = false;
 
     @Column(name = "border_top")
+    @Builder.Default
     private Boolean borderTop = false;
 
     @Column(name = "border_bottom")
+    @Builder.Default
     private Boolean borderBottom = false;
 
     @Column(name = "alignment", length = 10)
+    @Builder.Default
     private String alignment = "left"; // left | center | right
 
     @Column(name = "color_hex", length = 7)

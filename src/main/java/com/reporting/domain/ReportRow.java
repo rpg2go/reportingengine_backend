@@ -23,6 +23,7 @@ public class ReportRow {
 
     @Id
     @Column(name = "version", nullable = false)
+    @Builder.Default
     private Integer version = 1;
 
     @ManyToOne(fetch = FetchType.LAZY)
@@ -45,6 +46,7 @@ public class ReportRow {
     private Integer displayOrder;
 
     @Column(name = "indent_level", nullable = false)
+    @Builder.Default
     private Integer indentLevel = 0;
 
     @Column(name = "style_id")

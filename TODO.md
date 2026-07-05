@@ -40,9 +40,18 @@
 - [x] Modular Monolith Deconstruction (Phase A): separated REST endpoints into `ReportController`, `ReportVersionController`, `ReportExecutionController`, and `SchemaDiscoveryController`.
 - [x] Extracted versioning state logic to `VersioningService`.
 - [x] Request correlation tracing filter (`CorrelationIdFilter`) stamp requests/logs with `X-Correlation-ID`.
+- [x] Spring Boot Actuator health checks and liveness probes.
+- [x] Java 21 LTS & Spring Boot 3.5.0-SNAPSHOT platform migration.
+- [x] Project Loom virtual threads configuration (`spring.threads.virtual.enabled=true`).
+- [x] Package consolidation (moved DTOs/services under `com.reporting` and deleted `com.banking`).
+- [x] Sealed AST compiler implementation (`FilterCompilerService` using records & pattern matching).
 - [x] Robust Cloud Run health checks utilizing Spring Actuator `/actuator/health` probes in `deploy.sh`.
 - [x] Fixed catalog listing bug where auto-forked draft overrode published status.
-- [ ] Frontend report detail view: run execution spinner and live status badges.
-- [ ] Edge case handling: divide-by-zero, cyclic formula references, missing metric expressions.
-- [ ] Column setup: fix "Rolling In" field behavior in Step 2.
-- [ ] General filter: support free-text SQL expressions (e.g., `amount > 1000`).
+- [x] Frontend report detail view: run execution spinner and live status badges.
+- [x] Edge case handling: divide-by-zero, cyclic formula references, missing metric expressions.
+- [x] Column setup: fix "Rolling In" field behavior in Step 2.
+- [x] General filter: support free-text SQL expressions (e.g., `amount > 1000`).
+- [x] Hidden raw report ID from all catalog, sidebar, and detail views (displaying only reportName).
+- [x] Dynamic rows setup viewport height bounds (450px min - 860px max) with custom high-contrast scrollbars.
+- [x] Implemented conditional soft/physical deletion (soft delete via `deleted` flag if published history exists; cascading physical delete otherwise).
+- [x] Lombok version upgrade to 1.18.38 for newer JDK 21 compiler updates.

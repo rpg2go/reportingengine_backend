@@ -49,7 +49,7 @@ The platform is designed to run in containerized environments. There are two pri
 
 To package and deploy this project, your environment must meet the core runtime dependencies:
 
-- **Java JDK 17** (to compile the Spring Boot backend)
+- **Java JDK 21** (to compile the Spring Boot backend)
 - **Node.js (v24+) & npm** (to build the Angular frontend bundle)
 - **Docker & Docker Compose** (to orchestrate and run local containers)
 

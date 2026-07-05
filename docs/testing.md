@@ -13,8 +13,7 @@ We use separate, industry-standard test tooling across the backend and frontend:
   - **Spring Boot Starter Test**: Bundles AssertJ, Mockito, and Spring integration testing.
   - **Spring Security Test**: Provides mock authentication filters for testing secured REST controllers.
 - **Frontend (Angular)**:
-  - **Jasmine**: Behavioral-driven testing framework for writing specs.
-  - **Karma**: Test runner that spawns browser instances to run Angular spec suites.
+  - **Vitest**: Test runner and assertion framework for fast, Node-based class-instance unit tests.
 
 ---
 
@@ -38,7 +37,7 @@ Run the following commands in their respective environments to check quality met
 | :--- | :--- | :--- | :--- |
 | **Backend** | `maven\apache-maven-3.9.6\bin\mvn.cmd test` | Project Root | Runs all JUnit backend tests (Windows) |
 | **Backend** | `./maven/apache-maven-3.9.6/bin/mvn test` | Project Root | Runs all JUnit backend tests (macOS/Linux) |
-| **Frontend** | `npm test` | `frontend/` | Launches Karma browser test runner |
+| **Frontend** | `npm test` | Frontend Root | Runs fast Node-based Vitest unit tests |
 
 ---
 
@@ -46,7 +45,8 @@ Run the following commands in their respective environments to check quality met
 
 ### 1. Unit Tests
 
-- **Backend**:
+- **Backend (Java)**:
+  - [FilterCompilerServiceTest](../src/test/java/com/reporting/service/FilterCompilerServiceTest.java): Tests structured JSON filter compilation, sealed interface type checks, and record AST-to-SQL generation.
   - [PostProcessorServiceTest](../src/test/java/com/reporting/service/PostProcessorServiceTest.java): Tests formula parsing calculations with sample expressions (e.g., `R2 / R3`, `C1 - C2`) and asserts expected outputs.
   - [SqlGeneratorServiceTest](../src/test/java/com/reporting/service/SqlGeneratorServiceTest.java): Tests CTE generation, granularity column mappings, and filter pushdown logic using mocked config DTOs.
   - [ReportValidationServiceTest](../src/test/java/com/reporting/service/ReportValidationServiceTest.java): Tests cyclic formula detection, schema expression validation, and missing metric error paths.
@@ -58,6 +58,8 @@ Run the following commands in their respective environments to check quality met
   - [ReportPreviewControllerTest](../src/test/java/com/reporting/controller/ReportPreviewControllerTest.java): Tests the SQL preview endpoint with mocked generator output.
   - [AuthControllerTest](../src/test/java/com/reporting/controller/AuthControllerTest.java): Tests Basic Auth response with valid and invalid credentials.
   - [ReportControllerTest](../src/test/java/com/reporting/controller/ReportControllerTest.java): Tests report CRUD endpoints (list, get, save, run, validate) and SchemaDiscoveryController endpoints (autocomplete, schema meta).
+  > [!NOTE]
+  > Because backend tests require Java 21, ensure your local environment points to the JDK 21 installation. If the default shell is targeting a lower JDK version, run commands with `export JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home` prefixed.
 - **Frontend**: Verify authentication guards block page access, and components emit events when layout coordinates change.
 
 ### 2. Integration Tests

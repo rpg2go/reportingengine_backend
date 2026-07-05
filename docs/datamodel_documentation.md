@@ -78,7 +78,10 @@ These tables store Excel layout hierarchies, row types, cell activation, and sty
 
 #### 1. `reporting.rpt_report`
 Registers individual reports.
-- `report_id` (VARCHAR(50) PRIMARY KEY) — e.g. `"SALES_OVERVIEW"`
+- `report_id` (VARCHAR(50)) — e.g. `"SALES_OVERVIEW"`
+- `version` (INTEGER) — version number
+- `status` (VARCHAR(50)) — `"draft"` | `"in_review"` | `"published"`
+- `deleted` (BOOLEAN) — soft-delete flag (defaults to FALSE)
 - `name` (VARCHAR(200)) — e.g. `"Sales & Margin Report"`
 - `explore_id` (INTEGER REFERENCES `sem_explore`) — default join routes
 - `source_table` (VARCHAR(150)) — physical fact table scanned (e.g. `"analytics.fact_sales"`)
@@ -88,11 +91,13 @@ Registers individual reports.
 - `timeframe_today` (BOOLEAN) — flags if timeframe respects current day execution
 - `quick_filters` (TEXT) — JSON string for UI dropdown filter limits
 - `general_filters` (TEXT) — JSON string of DWH conditions (e.g. `[{"column":"region", "operator":"=", "value":"North"}]`)
+- **Primary Key**: `(report_id, version)`
 
 #### 2. `reporting.rpt_column_def`
 Defines columns (C1, C2, etc.) and time horizons.
 - `column_def_id` (SERIAL PRIMARY KEY)
-- `report_id` (VARCHAR(50) REFERENCES `rpt_report` ON DELETE CASCADE)
+- `report_id` (VARCHAR(50))
+- `version` (INTEGER)
 - `col_id` (VARCHAR(10)) — column ID (e.g. `"C1"`)
 - `label` (VARCHAR(200)) — header display label
 - `col_type` (VARCHAR(20)) — `"WEEK"` | `"MTD"` | `"YTD"` | `"ROLLING"` | `"CALC"`
@@ -101,37 +106,56 @@ Defines columns (C1, C2, etc.) and time horizons.
 - `rolling_grain` (VARCHAR(10)) — `"DAY"` | `"WEEK"` | `"MONTH"`
 - `formula_expr` (TEXT) — expression for `"CALC"` columns (e.g. `"(C1 - C2) / C2"`)
 - `display_order` (INTEGER) — left-to-right rendering order
+- **Foreign Key**: `(report_id, version) REFERENCES rpt_report (report_id, version) ON DELETE CASCADE`
+- **Unique Constraint**: `(report_id, version, col_id)`
 
 #### 3. `reporting.rpt_row`
 Defines rows (labels, hierarchical levels, styling).
+- `report_id` (VARCHAR(50))
+- `version` (INTEGER)
 - `row_id` (VARCHAR(50)) — e.g. `"R1"`
-- `report_id` (VARCHAR(50) REFERENCES `rpt_report` ON DELETE CASCADE)
-- `parent_row_id` (VARCHAR(50)) — self-referential foreign key for nested rows
+- `parent_row_id` (VARCHAR(50)) — parent row ID
 - `label` (VARCHAR(300)) — display text in the output spreadsheet
 - `row_type` (VARCHAR(20)) — `"section"` | `"data"` | `"calc"` | `"blank"`
 - `display_order` (INTEGER) — top-to-bottom rendering order
 - `indent_level` (INTEGER DEFAULT 0) — UI display indent padding
 - `style_id` (INTEGER REFERENCES `rpt_style`)
 - `filter_expr` (TEXT) — row-level DWH custom filters (e.g., `"category = 'Software'"`)
+- **Primary Key**: `(report_id, version, row_id)`
+- **Foreign Key**: `(report_id, version) REFERENCES rpt_report (report_id, version) ON DELETE CASCADE`
+- **Self-referential FK**: `(report_id, version, parent_row_id) REFERENCES rpt_row (report_id, version, row_id)`
 
 #### 4. `reporting.rpt_row_metric`
 Binds `"data"` rows to physical aggregates.
 - `row_metric_id` (SERIAL PRIMARY KEY)
-- `report_id` / `row_id` (REFERENCES `rpt_row` ON DELETE CASCADE)
+- `report_id` (VARCHAR(50))
+- `version` (INTEGER)
+- `row_id` (VARCHAR(50))
 - `sql_expr` (TEXT) — direct aggregate formula (e.g. `"SUM(analytics.fact_sales.amount)"`)
 - `measure_definition` (TEXT) — JSON schema details
+- **Foreign Key**: `(report_id, version, row_id) REFERENCES rpt_row (report_id, version, row_id) ON DELETE CASCADE`
+- **Unique Constraint**: `(report_id, version, row_id, measure_id)`
 
 #### 5. `reporting.rpt_row_formula`
 Binds `"calc"` rows to algebraic post-process formula expressions.
 - `row_formula_id` (SERIAL PRIMARY KEY)
-- `report_id` / `row_id` (REFERENCES `rpt_row` ON DELETE CASCADE)
+- `report_id` (VARCHAR(50))
+- `version` (INTEGER)
+- `row_id` (VARCHAR(50))
 - `formula_expr` (TEXT) — row formula (e.g. `"R2 - R3"`)
+- **Foreign Key**: `(report_id, version, row_id) REFERENCES rpt_row (report_id, version, row_id) ON DELETE CASCADE`
+- **Unique Constraint**: `(report_id, version, row_id)`
 
 #### 6. `reporting.rpt_row_column_map`
 Specifies which intersections are active. If an intersection is disabled (`is_enabled = FALSE`), the engine skips query compilation and post-processing for that cell, leaving it empty in the rendered Excel template.
-- `report_id` / `row_id` (REFERENCES `rpt_row` ON DELETE CASCADE)
-- `report_id` / `col_id` (REFERENCES `rpt_column_def` ON DELETE CASCADE)
+- `report_id` (VARCHAR(50))
+- `version` (INTEGER)
+- `row_id` (VARCHAR(50))
+- `col_id` (VARCHAR(10))
 - `is_enabled` (BOOLEAN DEFAULT TRUE)
+- **Primary Key**: `(report_id, version, row_id, col_id)`
+- **Foreign Key (Row)**: `(report_id, version, row_id) REFERENCES rpt_row (report_id, version, row_id) ON DELETE CASCADE`
+- **Foreign Key (Col)**: `(report_id, version, col_id) REFERENCES rpt_column_def (report_id, version, col_id) ON DELETE CASCADE`
 
 ---
 

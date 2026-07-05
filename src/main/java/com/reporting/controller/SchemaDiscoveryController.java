@@ -25,6 +25,7 @@ import java.util.*;
 @Slf4j
 @RestController
 @RequestMapping("/api/reports")
+@SuppressWarnings("null")
 public class SchemaDiscoveryController {
 
     private final NamedParameterJdbcTemplate jdbcTemplate;

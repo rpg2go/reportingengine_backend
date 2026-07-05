@@ -15,6 +15,7 @@ import java.util.*;
 @Slf4j
 @RestController
 @RequestMapping("/api/reports")
+@SuppressWarnings("null")
 public class ReportExecutionController {
 
     private final ReportConfigService configService;

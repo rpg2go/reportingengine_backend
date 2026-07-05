@@ -22,6 +22,7 @@ public class RowFormula {
     private String reportId;
 
     @Column(name = "version", nullable = false)
+    @Builder.Default
     private Integer version = 1;
 
     @Column(name = "row_id", nullable = false, length = 50)

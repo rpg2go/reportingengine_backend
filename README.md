@@ -1,6 +1,6 @@
 # Reporting Engine Back-End — Enterprise Developer Guide
 
-A robust, enterprise-grade, metadata-driven report configuration and execution engine. This repository contains the **Java 17 (Spring Boot v3.2.4) backend** and PostgreSQL database migrations. The frontend is split into the [reportingengine_frontend](../reportingengine_frontend) repository.
+A robust, enterprise-grade, metadata-driven report configuration and execution engine. This repository contains the **Java 21 (Spring Boot v3.5.0-SNAPSHOT) backend** and PostgreSQL database migrations. The frontend is split into the [reportingengine_frontend](../reportingengine_frontend) repository.
 
 The backend ingests Excel layout templates, normalizes their configuration into metadata tables, resolves logical metrics against a semantic data model, generates high-performance SQL query structures with conditional aggregation, evaluates math formulas, and renders final styled Excel workbooks.
 
@@ -10,7 +10,7 @@ The backend ingests Excel layout templates, normalizes their configuration into 
 
 - **Author**: Antigravity Developer Team & Google DeepMind Pair Programmer
 - **Repository**: [reportingengine_backend](./)
-- **Backend Stack**: Java 17, Spring Boot 3.2.4, Spring Data JPA, Hibernate, exp4j
+- **Backend Stack**: Java 21, Spring Boot 3.5.0-SNAPSHOT, Spring Data JPA, Hibernate, exp4j, Project Loom Virtual Threads
 - **Database**: PostgreSQL 16 (Local Docker container or Neon Serverless Postgres in production)
 
 ---
@@ -101,6 +101,10 @@ reportingengine_backend/
 │   │   │   │   └── CorrelationIdFilter.java # Injects MDC with request X-Correlation-ID
 │   │   │   ├── repository/               # Spring Data repositories
 │   │   │   ├── service/                  # Core services (Parser, SQL, POI, formulas)
+│   │   │   │   ├── FilterCompilerService.java # Compiles row filters into AST and SQL
+│   │   │   │   ├── FilterNode.java       # AST Sealed interface type
+│   │   │   │   ├── RuleNode.java         # AST Record for terminal rule
+│   │   │   │   ├── GroupNode.java        # AST Record for logical group
 │   │   │   │   └── VersioningService.java # Business rules for version state and auto-forking
 │   │   │   └── util/                     # MigrationRunner, DbDumper utilities
 │   │   └── resources/
@@ -119,15 +123,17 @@ reportingengine_backend/
 The backend is architected as a high-performance Spring Boot application prioritizing low-latency reads, structured data layers, and safe mathematical evaluation.
 
 ### Core Technologies
-*   **Java Runtime:** Java 17 (LTS)
-*   **Framework:** Spring Boot v3.2.4
+*   **Java Runtime:** Java 21 (LTS)
+*   **Framework:** Spring Boot v3.5.0-SNAPSHOT
+*   **Virtual Threads:** Enabled via `spring.threads.virtual.enabled=true` to handle Tomcat HTTP request processing and task execution on Project Loom virtual threads.
 *   **Persistence:** Spring Data JPA (Hibernate v6.x) for configuration CRUD operations.
+*   **Sealed AST Filter Compiler:** Uses a modern pattern matching compiler (`FilterCompilerService`) with sealed hierarchy (`FilterNode`) and Java 21 records (`RuleNode`, `GroupNode`) to compile row-level filter expressions.
 *   **In-Memory Metadata Cache:** Startup-loaded `MetadataCache` pre-fetches column definitions, time keys, semantic measures, and views, reducing report compilation latency to ~50ms by eliminating live `information_schema` query overhead.
 *   **Direct JDBC Optimization:** Direct JDBC Template with `RowCallbackHandler` bypassing Hibernate hydration for the critical read hot-path (`loadFromDb()`). This optimization reduces report configuration latency from ~163ms to ~59ms.
 *   **Direct JDBC Save Path:** Report row/column configurations are persisted using direct `JdbcTemplate` updates in `ReportConfigService`, resolving Hibernate cascade overhead and preventing orphan rows.
 *   **Pushed-Down SQL Filters:** Pushes general and quick filters into the individual fact table CTEs inside `SqlGeneratorService`, allowing PostgreSQL to optimize execution plans by filtering early during the scan.
 *   **Request Trace Correlation:** `CorrelationIdFilter` stamps every incoming request and downstream log entry with a request-scoped `X-Correlation-ID` header, facilitating distributed tracing in Cloud Run.
-*   **Excel Engine:** Apache POI (v5.2.5) for cell-level layout extraction and styled spreadsheet generation.
+*   **Excel Engine:** Apache POI (v5.3.0) for cell-level layout extraction and styled spreadsheet generation.
 *   **Formula Engine:** `exp4j` (v0.4.8) for fast, isolated, sandbox-safe mathematical evaluation of cell and row formulas (preventing SQL or script injection).
 *   **Database:** PostgreSQL 16 (hosted via Docker container locally; Neon Serverless Postgres in production).
 
@@ -165,7 +171,7 @@ Follow these steps to run the Reporting Engine backend locally:
 Your development environment must have the following software runtimes, dependencies, and packages installed:
 
 #### 1. Software Runtimes & Platforms
-* **Java Development Kit (JDK) 17**: Needed to compile and run the Spring Boot backend. OpenJDK 17 or Eclipse Temurin 17 are recommended.
+* **Java Development Kit (JDK) 21**: Needed to compile and run the Spring Boot backend. OpenJDK 21 or Eclipse Temurin 21 are recommended.
 * **Node.js (v24+) & npm**: Needed to build and run the Angular frontend.
 * **Docker & Docker Compose**: Needed to orchestrate and run the PostgreSQL 16 database container.
 * **Python (v3.10+) & pip**: Needed to execute the ADK validation agents for automated code verification.
@@ -182,21 +188,21 @@ Your development environment must have the following software runtimes, dependen
    brew install git
    ```
 
-2. **Install Java 17 (OpenJDK)**:
+2. **Install Java 21 (OpenJDK)**:
    You can install Java using Homebrew or via SDKMAN! (recommended for managing multiple Java versions):
    * *Option A: Via Homebrew*
      ```bash
-     brew install openjdk@17
+     brew install openjdk@21
      # Link the system wrapper so macOS recognizes it
-     sudo ln -sfn /opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk /Library/Java/JavaVirtualMachines/openjdk-17.jdk
-     export JAVA_HOME="/Library/Java/JavaVirtualMachines/openjdk-17.jdk/Contents/Home"
+     sudo ln -sfn /opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk /Library/Java/JavaVirtualMachines/openjdk-21.jdk
+     export JAVA_HOME="/Library/Java/JavaVirtualMachines/openjdk-21.jdk/Contents/Home"
      ```
    * *Option B: Via SDKMAN!*
      ```bash
      curl -s "https://get.sdkman.io" | bash
      source "$HOME/.sdkman/bin/sdkman-init.sh"
-     sdk install java 17.0.10-tem
-     sdk default java 17.0.10-tem
+     sdk install java 21.0.2-tem
+     sdk default java 21.0.2-tem
      ```
 
 3. **Install Node.js & npm (via NVM)**:
@@ -226,10 +232,10 @@ Your development environment must have the following software runtimes, dependen
 
 ##### 🐧 Ubuntu / Debian Linux (using apt, NodeSource, and Docker Repository)
 
-1. **Install Git & Java 17**:
+1. **Install Git & Java 21**:
    ```bash
    sudo apt update
-   sudo apt install -y git openjdk-17-jdk python3 python3-pip python3-venv
+   sudo apt install -y git openjdk-21-jdk python3 python3-pip python3-venv
    # Verify Java installation
    java -version
    ```
@@ -275,9 +281,9 @@ We highly recommend using Windows Package Manager (`winget`) via PowerShell (Run
    winget install --id Git.Git -e --source winget
    ```
 
-2. **Install Java 17 (Eclipse Temurin)**:
+2. **Install Java 21 (Eclipse Temurin)**:
    ```powershell
-   winget install --id EclipseAdoptium.Temurin.17.JDK -e --source winget
+   winget install --id EclipseAdoptium.Temurin.21.JDK -e --source winget
    ```
 
 3. **Install Node.js & npm**:

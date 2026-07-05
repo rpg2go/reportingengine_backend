@@ -35,6 +35,7 @@ public class ColumnDef {
     private String colType; // WEEK | MTD | YTD | ROLLING | CALC
 
     @Column(name = "period_offset")
+    @Builder.Default
     private Integer periodOffset = 0;
 
     @Column(name = "rolling_n")
@@ -47,6 +48,7 @@ public class ColumnDef {
     private String formulaExpr;
 
     @Column(name = "tier_level", nullable = false, length = 10)
+    @Builder.Default
     private String tierLevel = "L1"; // L1 | L2
 
     @Column(name = "parent_id", length = 50)

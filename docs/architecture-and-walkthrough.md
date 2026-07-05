@@ -22,6 +22,12 @@
 | **Robust Health Check Probes** | Integrated Spring Boot Actuator health checks and configured `deploy.sh` with Cloud Run `--liveness-probe` and `--startup-probe` parameters pointing to `/actuator/health/liveness` and `/actuator/health/readiness`. |
 | **Resilient Catalog Listing (Latest Published View)** | Modified the report listing catalog query to fetch the latest `published` version using `findLatestPublishedPerReport()` rather than raw `MAX(version)` (which flips to draft immediately after publish due to the auto-forking system). |
 | **Pure SQL Liquibase Migrations** | Replaced custom Java migration scripts with pure SQL changeset files routed by a master XML changelog (`db/liquibase/db.changelog-master.xml`). Connection configurations are loaded from `.env` (supporting local vs. Neon GCP production databases) and executed via `./scripts/deploy-liquibase.sh`. Enabled trigger suppression and `runOnChange` parameters in seeds to safely bypass checksum checks and self-referencing foreign key violations. |
+| **Unified Package Refactoring** | Completely deleted the legacy `com.banking.reporting` package and consolidated all components (including `HierarchicalColumnDto` and `ExcelExporterService`) under the unified `com.reporting` namespace to prevent split package issues and enforce structural consistency. |
+| **Java 21 & Spring Boot 3.5 Migration** | Modernized runtime and library dependencies to target the Java 21 LTS and Spring Boot 3.5.0-SNAPSHOT parent framework baseline. Enabled Project Loom virtual threads (`spring.threads.virtual.enabled=true`) for Tomcat HTTP request processing and upgraded Apache POI to version `5.3.0`. |
+| **Sealed AST Filter Compiler** | Extracted recursive row-level parenthetical expression compiling logic from `SqlGeneratorService` into a dedicated `FilterCompilerService`. The compiler maps input filter configurations into a Java 21 sealed AST structure (`FilterNode` permitting record types `RuleNode` and `GroupNode`) and parses it using switch pattern matching expressions. |
+| **Conditional Soft/Hard Deletion** | Replaced default cascade delete with a hybrid deletion pattern. Reports with a history containing at least one `PUBLISHED` version are soft-deleted by setting a `deleted` flag to true across all version rows. This preserves audit histories and past reports. Reports with only `DRAFT` or `IN_REVIEW` versions are physically cascade-deleted from the database. |
+| **Report ID Visual Hiding** | Replaced all visual displays of the raw UUID or alphanumeric `reportId` in the frontend (catalogs, sidebars, details) with the user-friendly `reportName`. The `reportId` is preserved strictly in the browser address path (e.g. `/reports/:id`) and in REST request/response payloads to maintain backend alignment. |
+| **Lombok JDK 21 Compatibility** | Upgraded Lombok to `1.18.38` to resolve AST type tag compilation compatibility errors (`TypeTag :: UNKNOWN` or `IllegalAccessError` on JDK 21 javac internal enum changes). |
 
 ---
 
@@ -36,9 +42,11 @@ The system follows a classic decoupled 3-tier architecture:
 
 2. **Backend Services (Spring Boot)**:
    - Run on port `8101`.
+   - Built on Spring Boot `3.5` and Java `21`, with Project Loom virtual threads enabled (`spring.threads.virtual.enabled=true`) for non-blocking HTTP request and execution handling.
    - Spring Security implements Basic Auth validating credentials against stored users.
    - Core Services:
-     - **`SqlGeneratorService`**: Constructs dynamic PostgreSQL queries using Common Table Expressions (CTEs) and conditional date boundaries. Delegates multi-hop JOIN resolution to `SchemaGraphRouter`.
+     - **`SqlGeneratorService`**: Constructs dynamic PostgreSQL queries using Common Table Expressions (CTEs) and conditional date boundaries. Delegates multi-hop JOIN resolution to `SchemaGraphRouter` and filter expression parsing to `FilterCompilerService`.
+     - **`FilterCompilerService`**: Compiles structured row filter configurations into a record-based AST and produces standard SQL clauses via switch pattern matching.
      - **`PostProcessorService`**: Solves math formulas in grid cells using `exp4j`.
      - **`LayoutRendererService`**: Writes styled workbook data sheets back to POI cells.
      - **`ReportRunnerService`**: Orchestrates the full pipeline: Load Config → Resolve Metrics → Generate SQL → Execute → Post-Process → Render.
@@ -56,7 +64,7 @@ The system follows a classic decoupled 3-tier architecture:
 
 The production deployment runs as containerized workloads:
 - PostgreSQL operates inside a dedicated stateful Docker container with a persistent volume mount (`pgdata`).
-- Spring Boot compiles to a jar file executable inside a Java 17 base image container.
+- Spring Boot compiles to a jar file executable inside a Java 21 base image container.
 - Angular compiles to static JS/HTML assets served through an NGINX proxy container or standard static web hosting.
 
 ---

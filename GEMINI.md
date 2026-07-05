@@ -17,7 +17,7 @@ This document serves as the architecture reference, implementation state, and co
 
 | Component | Technology | Version / Port / Details |
 | :--- | :--- | :--- |
-| **Backend** | Spring Boot | v3.2.4 (Java 17), Spring Data JPA, Hibernate, exp4j |
+| **Backend** | Spring Boot | v3.5.0-SNAPSHOT (Java 21), Spring Data JPA, Hibernate, exp4j, virtual threads enabled |
 | **Database** | PostgreSQL / Neon | v16 (Local Docker container on `5432`, production on Neon cloud) |
 
 ---
@@ -50,6 +50,14 @@ This document serves as the architecture reference, implementation state, and co
    The `catalog` package (`SchemaCatalogLoader`, `SchemaGraphRouter`, `MetaTable`, `MetaColumn`, `MetaRelationship`) loads the `meta_*` schema catalog at startup into an in-memory graph and resolves multi-hop LEFT JOIN chains using a weighted Dijkstra BFS. Edge cost 1 = conformed dimension key, cost 2 = non-conformed FK. This replaces hardcoded join strings from the `sem_*` era.
 6. **Report Version Lifecycle**:
    `ReportVersionController` manages a draft → in_review → published → (fork) lifecycle. Publishing a version auto-creates the next draft by cloning all child rows, columns, metrics, formulas, and column maps via direct JDBC `INSERT … SELECT` statements.
+7. **Unified Package Structure**:
+   Consolidated all backend source files under the unified package `com.reporting.*`. The legacy package structure under `com.banking.reporting` (including `HierarchicalColumnDto` and `ExcelExporterService`) was completely removed to avoid split packages and simplify import maps.
+8. **Sealed AST Filter Compiler**:
+   Introduced a dedicated `FilterCompilerService` using modern Java 21 Record structures and a sealed hierarchy (`FilterNode` permitting `RuleNode` and `GroupNode`) to represent row-level dynamic filter configurations, performing AST-to-SQL compilation via switch pattern matching.
+9. **Conditional Soft / Hard Deletion**:
+   Configured a database column `deleted` and custom logic in `ReportConfigService`. If a report has at least one version with status `PUBLISHED`, deletion soft-deletes the record (marking `deleted = true` across all versions and filtering them out of all repository queries). If the report has never been published (only `DRAFT` or `IN_REVIEW`), it performs a physical cascade delete.
+10. **Lombok Dependency Upgrade**:
+    Upgraded `lombok` dependency in `pom.xml` to `1.18.38` to resolve internal javac compatibility issues under JDK 21 compiler updates.
 
 ---
 
@@ -60,12 +68,12 @@ Stores metadata and report configuration templates.
 
 | Table Name | Primary Key | Foreign Keys / Description |
 | :--- | :--- | :--- |
-| `rpt_report` | `report_id` | Stores report header: `name`, `version`, `status`, `source_table`, `granularity`, `timeframe_start`, `timeframe_end`, `timeframe_today`, `quick_filters`, `general_filters` (JSON). |
-| `rpt_column_def` | `col_id` | References `report_id`. Defines time columns with offset, rolling period, and formulas. |
-| `rpt_row` | `row_id` | References `report_id`. Defines rows with labels, indent levels, row types (`section`, `data`, `calc`, `blank`), styles, and row-level `filter_expr` strings. |
-| `rpt_row_metric` | `row_id` | References `rpt_row.row_id`. Links `data` row to `sql_expr` (the SQL aggregation expression). |
-| `rpt_row_formula` | `row_id` | References `rpt_row.row_id`. Links `calc` row to `formula_expr` (e.g. `R2/R3`). |
-| `rpt_row_column_map` | `(row_id, col_id)`| References `rpt_row` and `rpt_column_def`. Grid intersections showing active columns for each row. |
+| `rpt_report` | `(report_id, version)` | Stores report header: `name`, `version`, `status`, `source_table`, `granularity`, `timeframe_start`, `timeframe_end`, `timeframe_today`, `quick_filters`, `general_filters` (JSON), and `deleted` (boolean, soft-delete flag). |
+| `rpt_column_def` | `column_def_id` | References `(report_id, version)`. Defines time columns with offset, rolling period, and formulas. Unique constraint on `(report_id, version, col_id)`. |
+| `rpt_row` | `(report_id, version, row_id)` | References `(report_id, version)`. Defines rows with labels, indent levels, row types (`section`, `data`, `calc`, `blank`), styles, and row-level `filter_expr` strings. |
+| `rpt_row_metric` | `row_metric_id` | References `(report_id, version, row_id)`. Links `data` row to `sql_expr` (the SQL aggregation expression). Unique constraint on `(report_id, version, row_id, measure_id)`. |
+| `rpt_row_formula` | `row_formula_id` | References `(report_id, version, row_id)`. Links `calc` row to `formula_expr` (e.g. `R2/R3`). Unique constraint on `(report_id, version, row_id)`. |
+| `rpt_row_column_map` | `(report_id, version, row_id, col_id)`| References `(report_id, version, row_id)` and `(report_id, version, col_id)`. Grid intersections showing active columns for each row. |
 | `schema_migrations` | `migration_name`| Tracks applied database migration filenames. |
 
 ### 2. `analytics` Schema
@@ -146,7 +154,9 @@ Use the links below to navigate directly to the primary components:
   - [GlobalExceptionHandler.java](src/main/java/com/reporting/controller/GlobalExceptionHandler.java) — `@ControllerAdvice` mapping common exceptions to structured HTTP error responses.
 - **Core Engine Services**:
   - [ReportRunnerService.java](src/main/java/com/reporting/service/ReportRunnerService.java) — Orchestrates the full execution pipeline: Load → Resolve → Generate SQL → Execute → Post-Process → Render.
-  - [SqlGeneratorService.java](src/main/java/com/reporting/service/SqlGeneratorService.java) — Compiles report filters, fact tables, and rolling date boundaries into dynamic CTE queries. Delegates join resolution to `SchemaGraphRouter`.
+  - [SqlGeneratorService.java](src/main/java/com/reporting/service/SqlGeneratorService.java) — Compiles report filters, fact tables, and rolling date boundaries into dynamic CTE queries. Delegates join resolution to `SchemaGraphRouter` and delegating row filter expression compiling to `FilterCompilerService`.
+  - [FilterCompilerService.java](src/main/java/com/reporting/service/FilterCompilerService.java) — Compiles structured row filter configurations into record-based AST and parses using switch pattern matching to output standard SQL string filters.
+  - [FilterNode.java](src/main/java/com/reporting/service/FilterNode.java), [RuleNode.java](src/main/java/com/reporting/service/RuleNode.java), [GroupNode.java](src/main/java/com/reporting/service/GroupNode.java) — Java 21 Sealed interface and Record subclasses for filter AST nodes.
   - [PostProcessorService.java](src/main/java/com/reporting/service/PostProcessorService.java) — Evaluates mathematical formulas at row/column intersections using `exp4j`.
   - [LayoutRendererService.java](src/main/java/com/reporting/service/LayoutRendererService.java) — Renders POI styles, grid alignments, fonts, colors, and formatting into downloading templates.
   - [ReportConfigService.java](src/main/java/com/reporting/service/ReportConfigService.java) — CRUD and config loading (hot-path JDBC read + cascade-delete JDBC write).

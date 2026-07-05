@@ -22,6 +22,7 @@ public class RowColumnMap {
     private String reportId;
 
     @Column(name = "version", nullable = false)
+    @Builder.Default
     private Integer version = 1;
 
     @Column(name = "row_id", nullable = false, length = 50)
@@ -31,5 +32,6 @@ public class RowColumnMap {
     private String colId;
 
     @Column(name = "is_enabled", nullable = false)
+    @Builder.Default
     private Boolean isEnabled = true;
 }

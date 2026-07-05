@@ -12,6 +12,7 @@ import java.util.Collections;
 @RestController
 @RequestMapping("/api/metadata")
 @CrossOrigin(origins = {"http://127.0.0.1:4200", "http://localhost:4200"})
+@SuppressWarnings("null")
 public class MetadataController {
 
     private final JdbcTemplate jdbcTemplate;

@@ -35,6 +35,7 @@ import java.util.Map;
 @Slf4j
 @RestController
 @RequestMapping("/api/reports")
+@SuppressWarnings("null")
 public class ReportController {
 
     private final ReportRepository reportRepository;

@@ -10,7 +10,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.util.*;
-import java.util.stream.Collectors;
 
 @Service
 public class ReportConfigService {
@@ -241,13 +240,13 @@ public class ReportConfigService {
             styleIdMap.put(style.getName().toLowerCase(), style.getStyleId());
         }
 
-        // 3. Save or Update Report Header
-        boolean exists = jdbcTemplate.queryForObject(
+        Boolean existsObj = jdbcTemplate.queryForObject(
             "SELECT EXISTS(SELECT 1 FROM reporting.rpt_report WHERE report_id = ? AND version = ?)",
             Boolean.class,
             reportId,
             version
         );
+        boolean exists = existsObj != null && existsObj;
 
         String incomingStatus = dto.getStatus() != null ? dto.getStatus().name() : "draft";
 
@@ -418,11 +417,12 @@ public class ReportConfigService {
 
     @Transactional
     public void deleteReport(String reportId) {
-        boolean hasPublished = jdbcTemplate.queryForObject(
+        Boolean hasPublishedObj = jdbcTemplate.queryForObject(
             "SELECT EXISTS(SELECT 1 FROM reporting.rpt_report WHERE report_id = ? AND status = 'published')",
             Boolean.class,
             reportId
         );
+        boolean hasPublished = hasPublishedObj != null && hasPublishedObj;
 
         if (hasPublished) {
             jdbcTemplate.update("UPDATE reporting.rpt_report SET deleted = true WHERE report_id = ?", reportId);

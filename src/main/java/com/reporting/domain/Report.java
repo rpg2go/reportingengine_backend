@@ -22,6 +22,7 @@ public class Report {
 
     @Id
     @Column(name = "version", nullable = false)
+    @Builder.Default
     private Integer version = 1;
 
     @Column(name = "report_name", nullable = false, length = 200)
@@ -31,6 +32,7 @@ public class Report {
     private String description;
 
     @Column(name = "status", nullable = false, length = 20)
+    @Builder.Default
     private String status = "draft"; // draft | in_review | published
 
     @Column(name = "granularity", length = 1000)
@@ -43,6 +45,7 @@ public class Report {
     private String timeframeEnd;
 
     @Column(name = "timeframe_today")
+    @Builder.Default
     private Boolean timeframeToday = false;
 
     @Column(name = "quick_filters")
@@ -58,12 +61,15 @@ public class Report {
     private String sourceField;
 
     @Column(name = "created_at", nullable = false, updatable = false)
+    @Builder.Default
     private LocalDateTime createdAt = LocalDateTime.now();
 
     @Column(name = "updated_at", nullable = false)
+    @Builder.Default
     private LocalDateTime updatedAt = LocalDateTime.now();
 
     @Column(name = "deleted", nullable = false)
+    @Builder.Default
     private Boolean deleted = false;
 
     @JsonIgnore
