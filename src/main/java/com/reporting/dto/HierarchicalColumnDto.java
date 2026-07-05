@@ -1,4 +1,4 @@
-package com.banking.reporting.dto;
+package com.reporting.dto;
 
 import java.io.Serializable;
 

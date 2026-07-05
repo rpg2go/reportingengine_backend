@@ -46,8 +46,9 @@ public class ReportValidationServiceTest {
         );
         ReportConfigDto config = new ReportConfigDto(
             "RPT1", "Test", columns, Collections.emptyList(), null, 1, Enums.ReportStatus.draft,
-            "analytics.fact_sales", "reporting_date", null, null, false, null, null
+            "reporting_date", null, null, false, null, null
         );
+        config.setSourceTable("analytics.fact_sales");
 
         // Act
         ValidationResult result = validationService.validateConfiguration(config);
@@ -71,8 +72,9 @@ public class ReportValidationServiceTest {
         );
         ReportConfigDto config = new ReportConfigDto(
             "RPT1", "Test", Collections.emptyList(), rows, null, 1, Enums.ReportStatus.draft,
-            "analytics.fact_sales", "reporting_date", null, null, false, null, null
+            "reporting_date", null, null, false, null, null
         );
+        config.setSourceTable("analytics.fact_sales");
 
         // Act
         ValidationResult result = validationService.validateConfiguration(config);
@@ -95,8 +97,9 @@ public class ReportValidationServiceTest {
         );
         ReportConfigDto config = new ReportConfigDto(
             "RPT1", "Test", columns, Collections.emptyList(), null, 1, Enums.ReportStatus.draft,
-            "analytics.fact_sales", "reporting_date", null, null, false, null, null
+            "reporting_date", null, null, false, null, null
         );
+        config.setSourceTable("analytics.fact_sales");
 
         // Act
         ValidationResult result = validationService.validateConfiguration(config);
@@ -118,8 +121,9 @@ public class ReportValidationServiceTest {
         );
         ReportConfigDto config = new ReportConfigDto(
             "RPT1", "Test", columns, Collections.emptyList(), null, 1, Enums.ReportStatus.draft,
-            "analytics.fact_sales", "reporting_date", null, null, false, null, null
+            "reporting_date", null, null, false, null, null
         );
+        config.setSourceTable("analytics.fact_sales");
 
         // Act
         ValidationResult result = validationService.validateConfiguration(config);
@@ -142,8 +146,9 @@ public class ReportValidationServiceTest {
         );
         ReportConfigDto config = new ReportConfigDto(
             "RPT1", "Test", columns, Collections.emptyList(), null, 1, Enums.ReportStatus.draft,
-            "analytics.fact_sales", "reporting_date", null, null, false, null, null
+            "reporting_date", null, null, false, null, null
         );
+        config.setSourceTable("analytics.fact_sales");
 
         // Act
         ValidationResult result = validationService.validateConfiguration(config);
@@ -169,8 +174,9 @@ public class ReportValidationServiceTest {
         );
         ReportConfigDto config = new ReportConfigDto(
             "RPT1", "Test", Collections.emptyList(), rows, null, 1, Enums.ReportStatus.draft,
-            "analytics.fact_sales", "reporting_date", null, null, false, null, null
+            "reporting_date", null, null, false, null, null
         );
+        config.setSourceTable("analytics.fact_sales");
 
         // Act
         ValidationResult result = validationService.validateConfiguration(config);
@@ -202,8 +208,9 @@ public class ReportValidationServiceTest {
         );
         ReportConfigDto config = new ReportConfigDto(
             "RPT1", "Test", Collections.emptyList(), rows, null, 1, Enums.ReportStatus.draft,
-            "analytics.fact_sales", "reporting_date", null, null, false, null, null
+            "reporting_date", null, null, false, null, null
         );
+        config.setSourceTable("analytics.fact_sales");
 
         // Act
         ValidationResult result = validationService.validateConfiguration(config);
@@ -232,8 +239,9 @@ public class ReportValidationServiceTest {
         );
         ReportConfigDto config = new ReportConfigDto(
             "RPT1", "Test", List.of(new ColumnDefDto("C1", "C1", Enums.ColType.WTD, 0, null, null, 1)), rows, null, 1, Enums.ReportStatus.draft,
-            "analytics.fact_sales", "reporting_date", null, null, false, null, null
+            "reporting_date", null, null, false, null, null
         );
+        config.setSourceTable("analytics.fact_sales");
 
         org.junit.jupiter.api.Assertions.assertThrows(com.reporting.exception.CircularReferenceException.class, () -> {
             postProcessorService.process(config, Collections.emptyList());
@@ -254,8 +262,9 @@ public class ReportValidationServiceTest {
         );
         ReportConfigDto config = new ReportConfigDto(
             "RPT1", "Test", columns, Collections.emptyList(), null, 1, Enums.ReportStatus.draft,
-            "analytics.fact_sales", "reporting_date", null, null, false, null, null
+            "reporting_date", null, null, false, null, null
         );
+        config.setSourceTable("analytics.fact_sales");
 
         ValidationResult result = validationService.validateConfiguration(config);
 
@@ -321,8 +330,9 @@ public class ReportValidationServiceTest {
         String validGenFilters = "[{\"dimTable\":\"dim_customers\",\"attribute\":\"id\",\"operator\":\"=\",\"value\":\"1\"}]";
         ReportConfigDto validConfig = new ReportConfigDto(
             "RPT1", "Test", Collections.emptyList(), rows, null, 1, Enums.ReportStatus.draft,
-            "analytics.fact_sales", "reporting_date", null, null, false, null, validGenFilters
+            "reporting_date", null, null, false, null, validGenFilters
         );
+        validConfig.setSourceTable("analytics.fact_sales");
 
         ValidationResult validResult = validationService.validateConfiguration(validConfig);
         assertThat(validResult.isValid()).isTrue();
@@ -331,8 +341,9 @@ public class ReportValidationServiceTest {
         String invalidGenFilters = "[{\"dimTable\":\"dim_products\",\"attribute\":\"id\",\"operator\":\"=\",\"value\":\"1\"}]";
         ReportConfigDto invalidConfig = new ReportConfigDto(
             "RPT1", "Test", Collections.emptyList(), rows, null, 1, Enums.ReportStatus.draft,
-            "analytics.fact_sales", "reporting_date", null, null, false, null, invalidGenFilters
+            "reporting_date", null, null, false, null, invalidGenFilters
         );
+        invalidConfig.setSourceTable("analytics.fact_sales");
 
         ValidationResult invalidResult = validationService.validateConfiguration(invalidConfig);
         assertThat(invalidResult.isValid()).isFalse();
@@ -366,8 +377,9 @@ public class ReportValidationServiceTest {
         );
         ReportConfigDto config = new ReportConfigDto(
             "RPT1", "Test", columns, Collections.emptyList(), null, 1, Enums.ReportStatus.draft,
-            "analytics.fact_sales", "reporting_date", null, null, false, null, null
+            "reporting_date", null, null, false, null, null
         );
+        config.setSourceTable("analytics.fact_sales");
 
         ValidationResult result = validationService.validateConfiguration(config);
         assertThat(result.isValid()).isTrue();

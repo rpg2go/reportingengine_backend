@@ -99,7 +99,16 @@ public class ReportConfigDto {
     public void setColumns(List<ColumnDefDto> columns) { this.columns = columns; }
 
     public List<ReportRowDto> getRows() { return rows; }
-    public void setRows(List<ReportRowDto> rows) { this.rows = rows; }
+    public void setRows(List<ReportRowDto> rows) {
+        this.rows = rows;
+        if (rows != null && sourceTable != null && !sourceTable.isBlank()) {
+            for (ReportRowDto r : rows) {
+                if (r.source() != null && (r.source().getSourceTable() == null || r.source().getSourceTable().isBlank())) {
+                    r.source().setSourceTable(sourceTable);
+                }
+            }
+        }
+    }
 
     public LocalDate getReferenceDate() { return referenceDate; }
     public void setReferenceDate(LocalDate referenceDate) { this.referenceDate = referenceDate; }
@@ -134,7 +143,16 @@ public class ReportConfigDto {
     public void setVersion(Integer version) { this.version = version; }
 
     public String getSourceTable() { return sourceTable; }
-    public void setSourceTable(String sourceTable) { this.sourceTable = sourceTable; }
+    public void setSourceTable(String sourceTable) {
+        this.sourceTable = sourceTable;
+        if (rows != null && sourceTable != null && !sourceTable.isBlank()) {
+            for (ReportRowDto r : rows) {
+                if (r.source() != null && (r.source().getSourceTable() == null || r.source().getSourceTable().isBlank())) {
+                    r.source().setSourceTable(sourceTable);
+                }
+            }
+        }
+    }
 
     public String getSourceField() { return sourceField; }
     public void setSourceField(String sourceField) { this.sourceField = sourceField; }

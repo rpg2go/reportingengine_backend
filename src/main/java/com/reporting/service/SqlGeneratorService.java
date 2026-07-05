@@ -526,7 +526,7 @@ public class SqlGeneratorService {
         StringBuilder granBreakdownCols = new StringBuilder();
         for (String gAlias : granularityAliases) {
             granTotalCols.append(", CAST(NULL AS VARCHAR) AS ").append(gAlias);
-            granBreakdownCols.append(", ").append(gAlias);
+            granBreakdownCols.append(", CAST(").append(gAlias).append(" AS VARCHAR) AS ").append(gAlias);
         }
 
         for (ReportRowDto row : config.getRows()) {

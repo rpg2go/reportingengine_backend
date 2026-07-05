@@ -686,7 +686,7 @@ public class SqlGeneratorServiceTest {
         // Assert
         verify(schemaGraphRouter).computeJoinClauses(eq("analytics.fact_sales"), argThat(set -> set.contains("dim_location")));
         assertThat(sql).contains("SELECT 'R1' AS row_id, 'C1' AS col_id, CAST(SUM(val_r1_c1) AS DOUBLE PRECISION) AS val, CAST(NULL AS VARCHAR) AS country_name FROM combined_data");
-        assertThat(sql).contains("SELECT 'R1' AS row_id, 'C1' AS col_id, CAST(SUM(val_r1_c1) AS DOUBLE PRECISION) AS val, country_name FROM combined_data GROUP BY country_name");
+        assertThat(sql).contains("SELECT 'R1' AS row_id, 'C1' AS col_id, CAST(SUM(val_r1_c1) AS DOUBLE PRECISION) AS val, CAST(country_name AS VARCHAR) AS country_name FROM combined_data GROUP BY country_name");
     }
 
     @Test

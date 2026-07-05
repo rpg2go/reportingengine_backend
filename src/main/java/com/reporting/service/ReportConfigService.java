@@ -281,7 +281,7 @@ public class ReportConfigService {
             jdbcTemplate.update(
                 "INSERT INTO reporting.rpt_report (report_id, report_name, description, version, status, granularity, " +
                 "timeframe_start, timeframe_end, timeframe_today, quick_filters, general_filters, source_table, source_field, created_at, updated_at) " +
-                "VALUES (?, ?, 'Report defined via UI builder', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())",
+                "VALUES (?, ?, 'Report defined via UI builder', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())",
                 reportId,
                 dto.getReportName(),
                 version,

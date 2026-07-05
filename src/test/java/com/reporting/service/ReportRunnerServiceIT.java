@@ -37,12 +37,6 @@ public class ReportRunnerServiceIT extends BaseIT {
     @Test
     @DisplayName("runReport runs full compilation, database execution, post-processing, and Excel generation")
     public void runReport_validConfig_shouldGeneratePopulatedExcelSheet() throws Exception {
-        // Arrange: Fetch explore ID of sales explorer
-        Integer exploreId = jdbcTemplate.queryForObject(
-            "SELECT explore_id FROM reporting.sem_explore WHERE name = 'explore_sales'", Integer.class
-        );
-        assertThat(exploreId).isNotNull();
-
         String reportId = "RPT_RUNNER_IT";
         List<ColumnDefDto> columns = List.of(
             new ColumnDefDto("C1", "This Week", Enums.ColType.WTD, 0, null, null, 1)
@@ -54,9 +48,10 @@ public class ReportRunnerServiceIT extends BaseIT {
         );
 
         ReportConfigDto config = new ReportConfigDto(
-            reportId, "Runner IT Report", columns, rows, LocalDate.of(2026, 5, 26), exploreId, Enums.ReportStatus.draft,
-            "analytics.fact_sales", "weekly", null, null, false, null, null
+            reportId, "Runner IT Report", columns, rows, LocalDate.of(2026, 5, 26), null, Enums.ReportStatus.draft,
+            null, null, null, false, null, null
         );
+        config.setSourceTable("analytics.fact_sales");
 
         // Save configuration to database
         configService.saveToDb(config);
