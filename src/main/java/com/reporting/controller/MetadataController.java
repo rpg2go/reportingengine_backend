@@ -81,7 +81,7 @@ public class MetadataController {
         if (table.contains(".")) {
             return table;
         }
-        String sql = "SELECT table_ref FROM reporting.sem_view WHERE name = ?";
+        String sql = "SELECT schema_name || '.' || table_name AS table_ref FROM reporting.meta_table WHERE table_name = ?";
         try {
             return jdbcTemplate.queryForObject(sql, String.class, table);
         } catch (Exception e) {

@@ -11,7 +11,6 @@ CREATE TABLE IF NOT EXISTS reporting.rpt_report (
     version         INTEGER NOT NULL DEFAULT 1,
     report_name     VARCHAR(200) NOT NULL,
     description     TEXT,
-    explore_id      INTEGER,                                              -- references reporting.sem_explore(explore_id) but optional
     status          VARCHAR(20) NOT NULL DEFAULT 'draft'
         CHECK (status IN ('draft', 'in_review', 'published')),
     source_table    VARCHAR(150),
@@ -96,8 +95,6 @@ CREATE TABLE IF NOT EXISTS reporting.rpt_row_metric (
     report_id         VARCHAR(50) NOT NULL,
     version           INTEGER NOT NULL DEFAULT 1,
     row_id            VARCHAR(50) NOT NULL,
-    measure_id        INTEGER,                                            -- references reporting.sem_measure(measure_id) but optional
-    explore_id        INTEGER,                                            -- references reporting.sem_explore(explore_id) but optional
     sql_expr          TEXT,
     measure_definition TEXT,
     FOREIGN KEY (report_id, version, row_id) REFERENCES reporting.rpt_row(report_id, version, row_id) ON DELETE CASCADE,

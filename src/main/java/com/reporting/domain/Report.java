@@ -30,9 +30,6 @@ public class Report {
     @Column(name = "description")
     private String description;
 
-    @Column(name = "explore_id")
-    private Integer exploreId;
-
     @Column(name = "status", nullable = false, length = 20)
     private String status = "draft"; // draft | in_review | published
 

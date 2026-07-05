@@ -13,7 +13,3 @@ SELECT setval('reporting.rpt_row_column_map_mapping_id_seq',     COALESCE((SELEC
 SELECT setval('reporting.meta_table_table_id_seq',               COALESCE((SELECT MAX(table_id)          FROM reporting.meta_table), 1));
 SELECT setval('reporting.meta_column_column_id_seq',             COALESCE((SELECT MAX(column_id)         FROM reporting.meta_column), 1));
 SELECT setval('reporting.meta_relationship_relationship_id_seq', COALESCE((SELECT MAX(relationship_id)   FROM reporting.meta_relationship), 1));
-SELECT setval('reporting.sem_view_view_id_seq',                  COALESCE((SELECT MAX(view_id)           FROM reporting.sem_view), 1));
-SELECT setval('reporting.sem_explore_explore_id_seq',            COALESCE((SELECT MAX(explore_id)        FROM reporting.sem_explore), 1));
-SELECT setval('reporting.sem_join_join_id_seq',                  COALESCE((SELECT MAX(join_id)           FROM reporting.sem_join), 1));
-SELECT setval('reporting.sem_dimension_dimension_id_seq',        COALESCE((SELECT MAX(dimension_id)      FROM reporting.sem_dimension), 1));

@@ -45,10 +45,10 @@ public class SqlGeneratorService {
     }
 
     public String generateMatrixQuery(ReportConfigDto config) {
-        return generate(config, Collections.emptyMap());
+        return generate(config);
     }
 
-    public String generate(ReportConfigDto config, Map<String, ResolvedMetricDto> resolved) {
+    public String generate(ReportConfigDto config) {
         List<String> selectedGranularities = new ArrayList<>();
         if (config.getGranularity() != null && !config.getGranularity().isBlank()) {
             for (String s : config.getGranularity().split(",")) {
@@ -58,10 +58,10 @@ public class SqlGeneratorService {
                 }
             }
         }
-        return generate(config, resolved, selectedGranularities);
+        return generate(config, selectedGranularities);
     }
 
-    public String generate(ReportConfigDto config, Map<String, ResolvedMetricDto> resolved, List<String> selectedGranularities) {
+    public String generate(ReportConfigDto config, List<String> selectedGranularities) {
         // Parse Filters
         List<FilterCondition> quickFilters = parseGeneralFilters(config.getQuickFilters());
 
@@ -643,6 +643,9 @@ public class SqlGeneratorService {
     }
 
     public static String getGranularityAlias(String granularity) {
+        if (granularity == null) {
+            return "reporting_date";
+        }
         if (granularity.contains(".")) {
             return granularity.substring(granularity.lastIndexOf(".") + 1);
         }
@@ -806,13 +809,14 @@ public class SqlGeneratorService {
                 return cached;
             }
         }
-        // Fallback: live query (handles tables not in sem_view or cache miss)
+        // Fallback: live query (handles tables not in meta_table or cache miss)
         try {
-            return jdbcTemplate.queryForObject(
-                "SELECT time_key FROM reporting.sem_view WHERE table_ref = ?",
+            String val = jdbcTemplate.queryForObject(
+                "SELECT time_key FROM reporting.meta_table WHERE schema_name || '.' || table_name = ?",
                 String.class,
                 table
             );
+            return val != null ? val : "reporting_date";
         } catch (Exception e) {
             return "reporting_date";
         }

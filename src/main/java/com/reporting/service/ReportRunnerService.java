@@ -1,13 +1,10 @@
 package com.reporting.service;
-
 import com.reporting.dto.ReportConfigDto;
-import com.reporting.dto.ResolvedMetricDto;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import lombok.extern.slf4j.Slf4j;
 
 import java.time.LocalDate;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -16,20 +13,17 @@ import java.util.Map;
 public class ReportRunnerService {
 
     private final ReportConfigService configService;
-    private final SemanticResolverService resolverService;
     private final SqlGeneratorService generatorService;
     private final PostProcessorService postProcessorService;
     private final LayoutRendererService rendererService;
     private final JdbcTemplate jdbcTemplate;
 
     public ReportRunnerService(ReportConfigService configService,
-                               SemanticResolverService resolverService,
                                SqlGeneratorService generatorService,
                                PostProcessorService postProcessorService,
                                LayoutRendererService rendererService,
                                JdbcTemplate jdbcTemplate) {
         this.configService = configService;
-        this.resolverService = resolverService;
         this.generatorService = generatorService;
         this.postProcessorService = postProcessorService;
         this.rendererService = rendererService;
@@ -52,11 +46,8 @@ public class ReportRunnerService {
         log.info("Loaded configuration for reportId: {}, Columns count: {}, Rows count: {}", 
             reportId, config.getColumns().size(), config.getRows().size());
 
-        // 2. Resolve Metrics (Bypassed in the new dynamic metadata architecture)
-        Map<String, ResolvedMetricDto> resolved = Collections.emptyMap();
-
         // 3. Generate SQL
-        String sql = generatorService.generate(config, resolved);
+        String sql = generatorService.generate(config);
         log.debug("Generated query SQL: \n{}", sql);
 
         // 4. Execute SQL

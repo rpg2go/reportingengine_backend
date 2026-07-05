@@ -7,18 +7,15 @@
 
     <!-- Table Schemas Include Routing -->
     <include file="sql/000_create_analytics_tables.sql" relativeToChangelogFile="true"/>
-    <include file="sql/001_create_semantic_tables.sql" relativeToChangelogFile="true"/>
     <include file="sql/002_create_reporting_tables.sql" relativeToChangelogFile="true"/>
     <include file="sql/003_create_catalog_tables.sql" relativeToChangelogFile="true"/>
     <include file="sql/004_create_global_filters.sql" relativeToChangelogFile="true"/>
 
     <!-- Data Seeding Include Routing -->
     <include file="sql/005_seed_analytics_data.sql" relativeToChangelogFile="true"/>
-    <include file="sql/006_seed_semantic_data.sql" relativeToChangelogFile="true"/>
     <include file="sql/007_seed_reporting_data.sql" relativeToChangelogFile="true"/>
     <include file="sql/008_seed_catalog_data.sql" relativeToChangelogFile="true"/>
     <include file="sql/009_seed_global_filters_data.sql" relativeToChangelogFile="true"/>
-    <include file="sql/010_drop_sem_measure.sql" relativeToChangelogFile="true"/>
     <include file="sql/011_reset_sequences.sql" relativeToChangelogFile="true"/>
 
 </databaseChangeLog>

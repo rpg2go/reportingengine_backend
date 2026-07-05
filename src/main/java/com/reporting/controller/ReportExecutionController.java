@@ -68,7 +68,7 @@ public class ReportExecutionController {
             overrideQuickFilters(config, request.getRuntimeFilters());
 
             // 3. Generate query SQL
-            String sql = generatorService.generate(config, Collections.emptyMap());
+            String sql = generatorService.generate(config);
             log.debug("Generated report execution SQL: \n{}", sql);
 
             // 4. Run database query via direct JDBC

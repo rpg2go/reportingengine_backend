@@ -302,13 +302,12 @@ public class ReportValidationServiceTest {
         // Schema cache is loaded from default setUp() mock
 
         // Stub dimensions query for fact_sales
-        String joinSql = "SELECT tv.name AS dimView " +
-                         "FROM reporting.sem_join j " +
-                         "JOIN reporting.sem_explore e ON e.explore_id = j.explore_id " +
-                         "JOIN reporting.sem_view fv ON fv.view_id = e.fact_view_id " +
-                         "JOIN reporting.sem_view tv ON tv.view_id = j.to_view_id " +
-                         "WHERE fv.table_ref IN ('analytics.fact_sales', 'fact_sales') " +
-                         "   OR fv.name IN ('analytics.fact_sales', 'fact_sales')";
+        String joinSql = "SELECT tt.table_name AS dimView " +
+                         "FROM reporting.meta_relationship r " +
+                         "JOIN reporting.meta_table ft ON ft.table_id = r.from_table_id " +
+                         "JOIN reporting.meta_table tt ON tt.table_id = r.to_table_id " +
+                         "WHERE ft.schema_name || '.' || ft.table_name IN ('analytics.fact_sales', 'fact_sales') " +
+                         "   OR ft.table_name IN ('analytics.fact_sales', 'fact_sales')";
         lenient().when(jdbcTemplate.queryForList(joinSql)).thenReturn(List.of(
             Map.of("dimView", "dim_customers"),
             Map.of("dimView", "dim_location")

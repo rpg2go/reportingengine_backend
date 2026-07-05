@@ -31,7 +31,7 @@ public class SqlGeneratorServiceTest {
         
         // Mock getTimeKeyForTable
         when(jdbcTemplate.queryForObject(
-            eq("SELECT time_key FROM reporting.sem_view WHERE table_ref = ?"),
+            eq("SELECT time_key FROM reporting.meta_table WHERE schema_name || '.' || table_name = ?"),
             eq(String.class),
             any(Object.class)
         )).thenReturn("order_date");
@@ -66,7 +66,7 @@ public class SqlGeneratorServiceTest {
     @DisplayName("generate with empty resolved metrics should return simple query message")
     public void generate_emptyResolvedMetrics_shouldReturnDummyMessage() {
         ReportConfigDto config = new ReportConfigDto();
-        String sql = service.generate(config, Collections.emptyMap());
+        String sql = service.generate(config);
         assertThat(sql).contains("SELECT '' AS row_id, '' AS col_id, 0.0::DOUBLE PRECISION AS val WHERE FALSE");
     }
 
@@ -88,7 +88,7 @@ public class SqlGeneratorServiceTest {
         );
 
         // Act
-        String sql = service.generate(config, Collections.emptyMap());
+        String sql = service.generate(config);
 
         // Assert
         assertThat(sql).contains("cte_fact_sales AS (");
@@ -114,7 +114,7 @@ public class SqlGeneratorServiceTest {
         );
 
         // Act
-        String sql = service.generate(config, Collections.emptyMap());
+        String sql = service.generate(config);
 
         // Assert
         assertThat(sql).contains("COUNT(DISTINCT CASE WHEN analytics.fact_sales.order_date >= '2026-05-25' AND analytics.fact_sales.order_date <= '2026-05-26' THEN (user_id) ELSE NULL END)");
@@ -133,7 +133,7 @@ public class SqlGeneratorServiceTest {
         );
         ReportConfigDto configUnion = new ReportConfigDto("REP1", "Test", columns, rowsUnion, LocalDate.now(), 1, null, "a", "w", null, null, false, null, null);
         
-        assertThatThrownBy(() -> service.generate(configUnion, Collections.emptyMap()))
+        assertThatThrownBy(() -> service.generate(configUnion))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("Invalid or dangerous SQL sequences");
 
@@ -144,7 +144,7 @@ public class SqlGeneratorServiceTest {
                 null, "normal", 0, 1, Set.of("C1"), "region = 'North' -- comment")
         );
         ReportConfigDto configComment = new ReportConfigDto("REP1", "Test", columns, rowsComment, LocalDate.now(), 1, null, "a", "w", null, null, false, null, null);
-        assertThatThrownBy(() -> service.generate(configComment, Collections.emptyMap()))
+        assertThatThrownBy(() -> service.generate(configComment))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("Invalid or dangerous SQL sequences");
     }
@@ -161,7 +161,7 @@ public class SqlGeneratorServiceTest {
                 null, "normal", 0, 1, Set.of("C1"), "(region = 'North'")
         );
         ReportConfigDto configOpen = new ReportConfigDto("REP1", "Test", columns, rowsOpen, LocalDate.now(), 1, null, "a", "w", null, null, false, null, null);
-        assertThatThrownBy(() -> service.generate(configOpen, Collections.emptyMap()))
+        assertThatThrownBy(() -> service.generate(configOpen))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("Unmatched parentheses");
 
@@ -172,7 +172,7 @@ public class SqlGeneratorServiceTest {
                 null, "normal", 0, 1, Set.of("C1"), "region = 'North')")
         );
         ReportConfigDto configClose = new ReportConfigDto("REP1", "Test", columns, rowsClose, LocalDate.now(), 1, null, "a", "w", null, null, false, null, null);
-        assertThatThrownBy(() -> service.generate(configClose, Collections.emptyMap()))
+        assertThatThrownBy(() -> service.generate(configClose))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("Unmatched parentheses");
     }
@@ -201,7 +201,7 @@ public class SqlGeneratorServiceTest {
         );
 
         // Act
-        String sql = service.generate(config, Collections.emptyMap());
+        String sql = service.generate(config);
 
         // Assert
         assertThat(sql).contains("WHERE ((analytics.fact_sales.amount = '100') AND (dim_rm.status = 'active'))");
@@ -232,7 +232,7 @@ public class SqlGeneratorServiceTest {
         );
 
         // Act
-        String sql = service.generate(config, Collections.emptyMap());
+        String sql = service.generate(config);
 
         // Assert
         assertThat(sql).contains("WHERE (((analytics.fact_sales.region <> 'West' OR analytics.fact_sales.region IS NULL)) " +
@@ -263,7 +263,7 @@ public class SqlGeneratorServiceTest {
         );
 
         // Act
-        String sql = service.generate(config, Collections.emptyMap());
+        String sql = service.generate(config);
 
         // Assert
         assertThat(sql).contains("WHERE ((analytics.fact_sales.country IN ('US', 'CA', 'FR')))");
@@ -295,7 +295,7 @@ public class SqlGeneratorServiceTest {
         );
 
         // Act
-        String sql = service.generate(config, Collections.emptyMap());
+        String sql = service.generate(config);
 
         // Assert
         assertThat(sql).contains("WHERE (((analytics.fact_sales.region IS NULL OR TRIM(CAST(analytics.fact_sales.region AS TEXT)) = '')) " +
@@ -329,7 +329,7 @@ public class SqlGeneratorServiceTest {
         );
 
         // Act
-        String sql = service.generate(config, Collections.emptyMap());
+        String sql = service.generate(config);
 
         // Assert
         assertThat(sql).contains("WHERE ((analytics.fact_sales.code LIKE '%10\\%\\_\\\\%' ESCAPE '\\') " +
@@ -363,7 +363,7 @@ public class SqlGeneratorServiceTest {
         );
 
         // Act
-        String sql = service.generate(config, Collections.emptyMap());
+        String sql = service.generate(config);
 
         // Assert
         assertThat(sql).contains("WHERE ((analytics.fact_sales.amount > '100') " +
@@ -411,7 +411,7 @@ public class SqlGeneratorServiceTest {
         );
 
         // Act
-        String sql = service.generate(config, Collections.emptyMap());
+        String sql = service.generate(config);
 
         // Assert
         assertThat(sql).contains("analytics.fact_sales.name = 'Alice'");
@@ -456,7 +456,7 @@ public class SqlGeneratorServiceTest {
         );
 
         // Act
-        String sql = service.generate(config, Collections.emptyMap());
+        String sql = service.generate(config);
 
         // Assert
         assertThat(sql).contains("WHERE ((analytics.fact_sales.interest_rate IS NOT NULL))");
@@ -481,7 +481,7 @@ public class SqlGeneratorServiceTest {
         );
 
         // Act
-        String sql = service.generate(config, Collections.emptyMap());
+        String sql = service.generate(config);
 
         // Assert
         assertThat(sql).contains("AND (region_id = 1)");
@@ -510,7 +510,7 @@ public class SqlGeneratorServiceTest {
         );
 
         // Act
-        String sql = service.generate(config, Collections.emptyMap());
+        String sql = service.generate(config);
 
         // Assert
         assertThat(sql).contains("AND ((location_id = '1') AND (interest_rate <= '5'))");
@@ -536,7 +536,7 @@ public class SqlGeneratorServiceTest {
         );
 
         // Act
-        String sql = service.generate(config, Collections.emptyMap());
+        String sql = service.generate(config);
 
         // Assert
         assertThat(sql).contains("WHERE (analytics.fact_sales.region = 'East' AND analytics.fact_sales.status = 'active')");
@@ -566,7 +566,7 @@ public class SqlGeneratorServiceTest {
         );
 
         // Act
-        String sql = service.generate(config, Collections.emptyMap());
+        String sql = service.generate(config);
 
         // Assert
         assertThat(sql).contains("WHERE (analytics.fact_sales.region = 'East' AND analytics.fact_sales.status = 'active') " +
@@ -593,7 +593,7 @@ public class SqlGeneratorServiceTest {
         );
 
         // Act
-        String sql = service.generate(config, Collections.emptyMap());
+        String sql = service.generate(config);
 
         // Assert
         assertThat(sql).contains("WHERE (analytics.fact_sales.region = 'East' AND analytics.fact_sales.status = 'active')");
@@ -619,7 +619,7 @@ public class SqlGeneratorServiceTest {
         );
 
         // Act
-        String sql = service.generate(config, Collections.emptyMap());
+        String sql = service.generate(config);
 
         // Assert
         assertThat(sql).contains("WHERE ((analytics.fact_sales.category = 'Furniture') OR (analytics.fact_sales.category = 'Office'))");
@@ -643,7 +643,7 @@ public class SqlGeneratorServiceTest {
         );
 
         // Act
-        String sql = service.generate(config, Collections.emptyMap());
+        String sql = service.generate(config);
 
         // Assert
         // Parent alias: val_r1_c7
@@ -681,7 +681,7 @@ public class SqlGeneratorServiceTest {
             .thenReturn(List.of("LEFT JOIN dim_location ON dim_location.id = analytics.fact_sales.location_id"));
 
         // Act
-        String sql = service.generate(config, Collections.emptyMap());
+        String sql = service.generate(config);
 
         // Assert
         verify(schemaGraphRouter).computeJoinClauses(eq("analytics.fact_sales"), argThat(set -> set.contains("dim_location")));
@@ -727,7 +727,7 @@ public class SqlGeneratorServiceTest {
         );
 
         // Act
-        String sql = service.generate(config, Collections.emptyMap());
+        String sql = service.generate(config);
 
         // Assert
         assertThat(sql).contains("(fact_investments.a = '1' OR (fact_investments.b IN ('2', '3')))");
@@ -770,7 +770,7 @@ public class SqlGeneratorServiceTest {
         );
 
         // Act
-        String sql = service.generate(config, Collections.emptyMap());
+        String sql = service.generate(config);
 
         // Assert
         assertThat(sql).contains("(analytics.fact_sales.region = 'North' OR (analytics.fact_sales.status IN ('active', 'pending')))");
@@ -794,7 +794,7 @@ public class SqlGeneratorServiceTest {
         );
 
         // Act
-        String sql = service.generate(config, Collections.emptyMap());
+        String sql = service.generate(config);
 
         // Assert
         assertThat(sql).contains("val_r1_c1_1");
@@ -821,7 +821,7 @@ public class SqlGeneratorServiceTest {
         );
 
         // Act
-        String sql = service.generate(config, Collections.emptyMap());
+        String sql = service.generate(config);
 
         // Assert
         assertThat(sql).doesNotContain("val_r1_c1");
@@ -846,7 +846,7 @@ public class SqlGeneratorServiceTest {
         );
 
         // Act
-        String sql = service.generate(config, Collections.emptyMap());
+        String sql = service.generate(config);
 
         // Assert
         assertThat(sql).contains("analytics.fact_sales.order_date >= '2025-05-26' AND analytics.fact_sales.order_date <= '2025-05-26'");

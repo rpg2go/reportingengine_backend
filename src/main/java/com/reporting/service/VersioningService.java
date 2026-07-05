@@ -204,7 +204,6 @@ public class VersioningService {
             .version(nextVersion)
             .reportName(source.getReportName())
             .description(source.getDescription())
-            .exploreId(source.getExploreId())
             .status("draft")
             .granularity(source.getGranularity())
             .timeframeStart(source.getTimeframeStart())

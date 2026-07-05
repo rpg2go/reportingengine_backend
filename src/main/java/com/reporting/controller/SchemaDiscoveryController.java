@@ -54,7 +54,7 @@ public class SchemaDiscoveryController {
     /**
      * Lists all column names for the given table.
      *
-     * @param table table name (qualified or unqualified; resolved via {@code sem_view} if needed)
+     * @param table table name (qualified or unqualified; resolved via {@code meta_table} if needed)
      * @return alphabetically ordered column names, or 400 if the table cannot be resolved
      */
     @GetMapping("/table-columns")
@@ -183,30 +183,31 @@ public class SchemaDiscoveryController {
         Map<String, Object> model = new LinkedHashMap<>();
 
         model.put("views", jdbcTemplate.queryForList(
-            "SELECT view_id, name, label, table_ref, view_type, primary_key, time_key, description " +
-            "FROM reporting.sem_view ORDER BY name",
-            Collections.emptyMap()
-        ));
-        model.put("explores", jdbcTemplate.queryForList(
-            "SELECT e.explore_id, e.name, e.label, v.name AS fact_view_name, e.sql_always_where " +
-            "FROM reporting.sem_explore e " +
-            "JOIN reporting.sem_view v ON v.view_id = e.fact_view_id ORDER BY e.name",
+            "SELECT table_id, table_name AS name, label, schema_name || '.' || table_name AS table_ref, " +
+            "       table_type AS view_type, time_key, description " +
+            "FROM reporting.meta_table ORDER BY table_name",
             Collections.emptyMap()
         ));
         model.put("joins", jdbcTemplate.queryForList(
-            "SELECT j.join_id, e.name AS explore_name, fv.name AS from_view, tv.name AS to_view, " +
-            "       j.join_sql, j.join_type " +
-            "FROM reporting.sem_join j " +
-            "JOIN reporting.sem_explore e  ON e.explore_id  = j.explore_id " +
-            "JOIN reporting.sem_view fv    ON fv.view_id    = j.from_view_id " +
-            "JOIN reporting.sem_view tv    ON tv.view_id    = j.to_view_id " +
-            "ORDER BY j.join_id",
+            "SELECT r.relationship_id AS join_id, ft.table_name AS from_view, tt.table_name AS to_view, " +
+            "       r.join_type, " +
+            "       tt.schema_name || '.' || tt.table_name || ' ON ' || " +
+            "       tt.schema_name || '.' || tt.table_name || '.' || r.to_column || ' = ' || " +
+            "       ft.schema_name || '.' || ft.table_name || '.' || r.from_column AS join_sql " +
+            "FROM reporting.meta_relationship r " +
+            "JOIN reporting.meta_table ft ON ft.table_id = r.from_table_id " +
+            "JOIN reporting.meta_table tt ON tt.table_id = r.to_table_id " +
+            "ORDER BY r.relationship_id",
             Collections.emptyMap()
         ));
         model.put("dimensions", jdbcTemplate.queryForList(
-            "SELECT d.dimension_id, v.name AS view_name, d.name, d.label, d.column_ref, d.data_type, d.description " +
-            "FROM reporting.sem_dimension d " +
-            "JOIN reporting.sem_view v ON v.view_id = d.view_id ORDER BY v.name, d.name",
+            "SELECT c.column_id, t.table_name AS view_name, c.column_name AS name, c.label, " +
+            "       t.schema_name || '.' || t.table_name || '.' || c.column_name AS column_ref, " +
+            "       c.data_type, c.description " +
+            "FROM reporting.meta_column c " +
+            "JOIN reporting.meta_table t ON t.table_id = c.table_id " +
+            "WHERE c.is_filterable = TRUE " +
+            "ORDER BY t.table_name, c.column_name",
             Collections.emptyMap()
         ));
 
@@ -214,7 +215,7 @@ public class SchemaDiscoveryController {
     }
 
     /**
-     * Returns the dimension join metadata for a specific fact table (from {@code sem_join}).
+     * Returns the dimension join metadata for a specific fact table (from {@code meta_relationship}).
      *
      * @param factTable the physical fact table reference (e.g. {@code "analytics.fact_sales"})
      * @return list of join descriptors with {@code dimView}, {@code joinType}, and {@code joinSql}
@@ -224,15 +225,16 @@ public class SchemaDiscoveryController {
         log.info("Fetching dimension joins for fact table: {}", factTable);
         String sql = """
             SELECT
-                tv.name  AS dimView,
-                j.join_type AS joinType,
-                j.join_sql  AS joinSql
-            FROM reporting.sem_join j
-            JOIN reporting.sem_explore e  ON e.explore_id  = j.explore_id
-            JOIN reporting.sem_view fv    ON fv.view_id    = e.fact_view_id
-            JOIN reporting.sem_view tv    ON tv.view_id    = j.to_view_id
-            WHERE fv.table_ref = :factTable
-            ORDER BY j.join_id
+                tt.table_name AS dimView,
+                r.join_type   AS joinType,
+                tt.schema_name || '.' || tt.table_name || ' ON ' ||
+                tt.schema_name || '.' || tt.table_name || '.' || r.to_column || ' = ' ||
+                ft.schema_name || '.' || ft.table_name || '.' || r.from_column AS joinSql
+            FROM reporting.meta_relationship r
+            JOIN reporting.meta_table ft ON ft.table_id = r.from_table_id
+            JOIN reporting.meta_table tt ON tt.table_id = r.to_table_id
+            WHERE ft.schema_name || '.' || ft.table_name = :factTable
+            ORDER BY r.relationship_id
             """;
         List<Map<String, Object>> joins = jdbcTemplate.query(sql, Map.of("factTable", factTable), (rs, rowNum) -> {
             Map<String, Object> join = new LinkedHashMap<>();
@@ -250,7 +252,7 @@ public class SchemaDiscoveryController {
      * Resolves a logical table name to a fully-qualified physical table reference.
      *
      * <p>If the name already contains a dot it is returned as-is. Otherwise a
-     * lookup against {@code reporting.sem_view} is attempted; if that fails the
+     * lookup against {@code reporting.meta_table} is attempted; if that fails the
      * name is prefixed with {@code "analytics."}.</p>
      *
      * @param table logical or physical table name
@@ -260,15 +262,12 @@ public class SchemaDiscoveryController {
         if (table == null) return null;
         if (table.contains(".")) return table;
         try {
-            String ref = jdbcTemplate.getJdbcOperations().queryForObject(
-                "SELECT table_ref FROM reporting.sem_view WHERE name = ?",
+            return jdbcTemplate.getJdbcOperations().queryForObject(
+                "SELECT schema_name || '.' || table_name AS table_ref FROM reporting.meta_table WHERE table_name = ?",
                 String.class, table
             );
-            if (ref != null) return ref;
         } catch (Exception e) {
-            // sem_view not yet populated or table not found — fall through
+            return null;
         }
-        // Default: assume analytics schema
-        return "analytics." + table;
     }
 }

@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS reporting.meta_table (
     table_id      SERIAL       PRIMARY KEY,
     schema_name   VARCHAR(63)  NOT NULL DEFAULT 'analytics',
     table_name    VARCHAR(128) NOT NULL,
+    label         VARCHAR(256),
     table_type    VARCHAR(20)  NOT NULL CHECK (table_type IN ('fact', 'dimension', 'bridge')),
     time_key      VARCHAR(128),
     description   TEXT,
@@ -23,10 +24,12 @@ CREATE TABLE IF NOT EXISTS reporting.meta_column (
     column_id      SERIAL       PRIMARY KEY,
     table_id       INTEGER      NOT NULL REFERENCES reporting.meta_table(table_id) ON DELETE CASCADE,
     column_name    VARCHAR(128) NOT NULL,
+    label          VARCHAR(256),
     data_type      VARCHAR(64),
     is_primary_key BOOLEAN      NOT NULL DEFAULT FALSE,
     is_foreign_key BOOLEAN      NOT NULL DEFAULT FALSE,
     is_conformed   BOOLEAN      NOT NULL DEFAULT FALSE,
+    is_filterable  BOOLEAN      NOT NULL DEFAULT FALSE,
     description    TEXT,
     CONSTRAINT uq_meta_column UNIQUE (table_id, column_name)
 );

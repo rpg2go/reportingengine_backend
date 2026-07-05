@@ -18,10 +18,10 @@ import java.util.concurrent.ConcurrentHashMap;
  *   <li><b>tableColumnsCache</b> — {@code "schema.table" → Set<column_name>} for every
  *       table in the {@code analytics} schema.  Eliminates per-request
  *       {@code information_schema.columns} queries in {@link com.reporting.service.SqlGeneratorService}.</li>
- *   <li><b>timeKeyCache</b> — {@code table_ref → time_key} from {@code reporting.sem_view}.
- *       Eliminates per-CTE {@code SELECT time_key FROM sem_view} queries.</li>
+ *   <li><b>timeKeyCache</b> — {@code table_ref → time_key} from {@code reporting.meta_table}.
+ *       Eliminates per-CTE {@code SELECT time_key FROM meta_table} queries.</li>
  *   <li><b>semViewTables</b> — ordered set of distinct {@code table_ref} values from
- *       {@code reporting.sem_view}.  Used for heuristic table-detection during
+ *       {@code reporting.meta_table}.  Used for heuristic table-detection during
  *       metric resolution in {@link com.reporting.service.ReportConfigService}.</li>
  * </ul>
  *
@@ -48,7 +48,7 @@ public class MetadataCache {
     // ── time key per fact/view table: table_ref → time_key column name ────────
     private final Map<String, String> timeKeyCache = new ConcurrentHashMap<>();
 
-    // ── ordered set of distinct sem_view table_ref values ────────────────────
+    // ── ordered set of distinct meta_table table_ref values ────────────────────
     private volatile Set<String> semViewTables = Collections.emptySet();
 
     public MetadataCache(JdbcTemplate jdbc) {
@@ -102,12 +102,12 @@ public class MetadataCache {
         }
     }
 
-    // ─── section 2: sem_view time keys ───────────────────────────────────────
+    // ─── section 2: meta_table time keys ───────────────────────────────────────
 
     private void loadTimeKeys() {
         try {
             jdbc.query(
-                "SELECT table_ref, time_key FROM reporting.sem_view WHERE table_ref IS NOT NULL AND time_key IS NOT NULL",
+                "SELECT schema_name || '.' || table_name AS table_ref, time_key FROM reporting.meta_table WHERE time_key IS NOT NULL",
                 rs -> {
                     String tableRef = rs.getString("table_ref");
                     String timeKey  = rs.getString("time_key");
@@ -123,17 +123,17 @@ public class MetadataCache {
             );
             log.debug("MetadataCache: loaded {} time-key entries.", timeKeyCache.size());
         } catch (Exception ex) {
-            log.warn("MetadataCache: failed to load time-key cache from sem_view. getTimeKeyForTable() will fall back to live queries. Cause: {}", ex.getMessage());
+            log.warn("MetadataCache: failed to load time-key cache from meta_table. getTimeKeyForTable() will fall back to live queries. Cause: {}", ex.getMessage());
         }
     }
 
-    // ─── section 3: sem_view table refs ──────────────────────────────────────
+    // ─── section 3: meta_table table refs ──────────────────────────────────────
 
     private void loadSemViewTables() {
         try {
             Set<String> viewTables = new LinkedHashSet<>();
             jdbc.query(
-                "SELECT DISTINCT table_ref FROM reporting.sem_view WHERE table_ref IS NOT NULL",
+                "SELECT DISTINCT schema_name || '.' || table_name AS table_ref FROM reporting.meta_table",
                 rs -> {
                     String tbl = rs.getString("table_ref");
                     if (tbl != null && !tbl.isBlank()) {
@@ -144,7 +144,7 @@ public class MetadataCache {
             semViewTables = Collections.unmodifiableSet(viewTables);
             log.debug("MetadataCache: loaded {} sem-view table refs.", semViewTables.size());
         } catch (Exception ex) {
-            log.warn("MetadataCache: failed to load sem_view table refs. Cause: {}", ex.getMessage());
+            log.warn("MetadataCache: failed to load meta_table refs. Cause: {}", ex.getMessage());
         }
     }
 

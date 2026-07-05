@@ -675,13 +675,12 @@ public class ReportValidationService {
             String withSchema = norm.contains(".") ? norm : "analytics." + norm;
             String withoutSchema = norm.contains(".") ? norm.substring(norm.indexOf(".") + 1) : norm;
 
-            String sql = "SELECT tv.name AS dimView " +
-                         "FROM reporting.sem_join j " +
-                         "JOIN reporting.sem_explore e ON e.explore_id = j.explore_id " +
-                         "JOIN reporting.sem_view fv ON fv.view_id = e.fact_view_id " +
-                         "JOIN reporting.sem_view tv ON tv.view_id = j.to_view_id " +
-                         "WHERE fv.table_ref IN ('" + withSchema + "', '" + withoutSchema + "') " +
-                         "   OR fv.name IN ('" + withSchema + "', '" + withoutSchema + "')";
+            String sql = "SELECT tt.table_name AS dimView " +
+                         "FROM reporting.meta_relationship r " +
+                         "JOIN reporting.meta_table ft ON ft.table_id = r.from_table_id " +
+                         "JOIN reporting.meta_table tt ON tt.table_id = r.to_table_id " +
+                         "WHERE ft.schema_name || '.' || ft.table_name IN ('" + withSchema + "', '" + withoutSchema + "') " +
+                         "   OR ft.table_name IN ('" + withSchema + "', '" + withoutSchema + "')";
             List<Map<String, Object>> rows = jdbcTemplate.queryForList(sql);
             if (rows != null) {
                 for (Map<String, Object> r : rows) {

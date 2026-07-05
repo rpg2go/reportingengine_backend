@@ -77,11 +77,11 @@ public class ReportConfigService {
                 rs.getInt("display_order")
             ), reportId, version);
 
-        // 2.5 Load semantic view table references for heuristic table detection
+        // 2.5 Load catalog table references for heuristic table detection
         Set<String> semViewTables = new LinkedHashSet<>(metadataCache.getSemViewTables());
         if (semViewTables.isEmpty()) {
             jdbcTemplate.query(
-                "SELECT DISTINCT table_ref FROM reporting.sem_view WHERE table_ref IS NOT NULL",
+                "SELECT DISTINCT schema_name || '.' || table_name AS table_ref FROM reporting.meta_table",
                 (RowCallbackHandler) rs -> {
                     String tbl = rs.getString("table_ref");
                     if (tbl != null && !tbl.isBlank()) {
@@ -203,7 +203,7 @@ public class ReportConfigService {
             columns,
             rows,
             referenceDate,
-            report.getExploreId(),
+            null, // exploreId (deprecated)
             Enums.ReportStatus.valueOf(report.getStatus().toLowerCase()),
             report.getGranularity(),
             report.getTimeframeStart(),
@@ -260,12 +260,11 @@ public class ReportConfigService {
             }
 
             jdbcTemplate.update(
-                "UPDATE reporting.rpt_report SET report_name = ?, explore_id = ?, status = ?, granularity = ?, " +
+                "UPDATE reporting.rpt_report SET report_name = ?, status = ?, granularity = ?, " +
                 "timeframe_start = ?, timeframe_end = ?, timeframe_today = ?, quick_filters = ?, general_filters = ?, " +
                 "source_table = ?, source_field = ?, " +
                 "updated_at = NOW() WHERE report_id = ? AND version = ?",
                 dto.getReportName(),
-                dto.getExploreId(),
                 incomingStatus.toLowerCase(),
                 dto.getGranularity(),
                 dto.getTimeframeStart(),
@@ -280,12 +279,11 @@ public class ReportConfigService {
             );
         } else {
             jdbcTemplate.update(
-                "INSERT INTO reporting.rpt_report (report_id, report_name, description, explore_id, version, status, granularity, " +
+                "INSERT INTO reporting.rpt_report (report_id, report_name, description, version, status, granularity, " +
                 "timeframe_start, timeframe_end, timeframe_today, quick_filters, general_filters, source_table, source_field, created_at, updated_at) " +
                 "VALUES (?, ?, 'Report defined via UI builder', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())",
                 reportId,
                 dto.getReportName(),
-                dto.getExploreId(),
                 version,
                 incomingStatus.toLowerCase(),
                 dto.getGranularity(),
