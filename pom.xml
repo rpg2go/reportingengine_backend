@@ -24,6 +24,10 @@
         <exp4j.version>0.4.8</exp4j.version>
         <testcontainers.version>1.19.7</testcontainers.version>
         <jacoco.version>0.8.11</jacoco.version>
+        <!-- Liquibase Configuration Defaults -->
+        <liquibase.url>jdbc:postgresql://127.0.0.1:5433/agentic_ai</liquibase.url>
+        <liquibase.username>user</liquibase.username>
+        <liquibase.password>password</liquibase.password>
     </properties>
 
     <dependencies>
@@ -163,9 +167,9 @@
                 <version>4.25.0</version>
                 <configuration>
                     <changeLogFile>db/liquibase/db.changelog-master.xml</changeLogFile>
-                    <url>jdbc:postgresql://127.0.0.1:5433/agentic_ai</url>
-                    <username>user</username>
-                    <password>password</password>
+                    <url>${liquibase.url}</url>
+                    <username>${liquibase.username}</username>
+                    <password>${liquibase.password}</password>
                     <driver>org.postgresql.Driver</driver>
                 </configuration>
             </plugin>
