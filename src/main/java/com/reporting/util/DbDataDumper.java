@@ -9,7 +9,10 @@ public class DbDataDumper {
 
     public static void main(String[] args) {
         Map<String, String> env = loadEnvFile();
-        String dbUrl = env.get("NEON_DATABASE_URL");
+        String dbUrl = System.getProperty("db.url");
+        if (dbUrl == null || dbUrl.isBlank()) {
+            dbUrl = env.get("NEON_DATABASE_URL");
+        }
         if (dbUrl == null || dbUrl.isBlank()) {
             dbUrl = System.getenv("NEON_DATABASE_URL");
         }

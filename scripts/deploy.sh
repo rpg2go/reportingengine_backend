@@ -47,10 +47,11 @@ gcloud run deploy ${BACKEND_SERVICE_NAME} \
   --source "${SCRIPT_DIR}/.." \
   --region ${GCP_REGION} \
   --port 8080 \
-  --set-env-vars="SPRING_DATASOURCE_URL=${SPRING_DATASOURCE_URL},SPRING_DATASOURCE_USERNAME=${SPRING_DATASOURCE_USERNAME},SPRING_DATASOURCE_PASSWORD=${SPRING_DATASOURCE_PASSWORD}" \
+  --memory 1Gi \
+  --set-env-vars="^;^SPRING_DATASOURCE_URL=${SPRING_DATASOURCE_URL};SPRING_DATASOURCE_USERNAME=${SPRING_DATASOURCE_USERNAME};SPRING_DATASOURCE_PASSWORD=${SPRING_DATASOURCE_PASSWORD};SECURITY_ADMIN_USERNAME=${SECURITY_ADMIN_USERNAME};SECURITY_ADMIN_PASSWORD=${SECURITY_ADMIN_PASSWORD};SECURITY_ADMIN_ROLE=${SECURITY_ADMIN_ROLE};CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS}" \
   --allow-unauthenticated \
   --liveness-probe=httpGet.path=/actuator/health/liveness,httpGet.port=8080 \
-  --startup-probe=httpGet.path=/actuator/health/readiness,httpGet.port=8080 \
+  --startup-probe=httpGet.path=/actuator/health/readiness,httpGet.port=8080,periodSeconds=10,failureThreshold=12 \
   --quiet
 
 echo "Retrieving Backend URL..."

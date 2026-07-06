@@ -1,5 +1,4 @@
---liquibase formatted sql
---changeset devops:011_reset_sequences endDelimiter:; runOnChange:true
+--changeset devops:011_reset_sequences endDelimiter:; runAlways:true
 
 -- Reset all reporting schema sequences to the actual MAX id in each table.
 -- This is required after seed data is inserted with explicit IDs, which

@@ -68,11 +68,7 @@
             <scope>runtime</scope>
         </dependency>
 
-        <!-- Liquibase Core for automatic startup migrations -->
-        <dependency>
-            <groupId>org.liquibase</groupId>
-            <artifactId>liquibase-core</artifactId>
-        </dependency>
+
 
         <!-- Apache POI for Excel Processing -->
         <dependency>
@@ -132,6 +128,16 @@
     </dependencies>
 
     <build>
+        <!-- Crucial addition to bundle your root 'db' folder into the application classpath -->
+        <resources>
+            <resource>
+                <directory>src/main/resources</directory>
+            </resource>
+            <!-- <resource>
+                <directory>db</directory>
+                <targetPath>db</targetPath>
+            </resource> -->
+        </resources>
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
@@ -166,6 +172,7 @@
                 <artifactId>liquibase-maven-plugin</artifactId>
                 <version>4.25.0</version>
                 <configuration>
+                    <!-- Notice the added src/main/resources/ prefix for local Maven execution -->
                     <changeLogFile>db/liquibase/db.changelog-master.xml</changeLogFile>
                     <url>${liquibase.url}</url>
                     <username>${liquibase.username}</username>

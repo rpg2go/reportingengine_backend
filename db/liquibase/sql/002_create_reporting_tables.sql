@@ -1,5 +1,6 @@
 --liquibase formatted sql
 --changeset devops:002_create_reporting_tables endDelimiter:;
+--validCheckSum: 9:cef19c07a9adc5e6361fbcc402fb74c6
 
 CREATE SCHEMA IF NOT EXISTS reporting;
 
@@ -84,7 +85,7 @@ CREATE TABLE IF NOT EXISTS reporting.rpt_row (
     filter_expr   TEXT,
     PRIMARY KEY (report_id, version, row_id),
     FOREIGN KEY (report_id, version) REFERENCES reporting.rpt_report(report_id, version) ON DELETE CASCADE,
-    CONSTRAINT rpt_row_parent_row_fk FOREIGN KEY (report_id, version, parent_row_id) REFERENCES reporting.rpt_row(report_id, version, row_id) ON DELETE CASCADE
+    CONSTRAINT rpt_row_parent_row_fk FOREIGN KEY (report_id, version, parent_row_id) REFERENCES reporting.rpt_row(report_id, version, row_id) ON DELETE CASCADE DEFERRABLE INITIALLY DEFERRED
 );
 
 -- -----------------------------------------------------------------------------
