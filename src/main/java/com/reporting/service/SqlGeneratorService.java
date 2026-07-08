@@ -281,6 +281,8 @@ public class SqlGeneratorService {
             List<String> selectList = new ArrayList<>();
             selectList.addAll(selectKeyExprs);
 
+            List<DateInterval> intervals = new ArrayList<>();
+
             for (ReportRowDto row : config.getRows()) {
                 if (!row.isDataRow()) {
                     continue;
@@ -323,6 +325,8 @@ public class SqlGeneratorService {
                     LocalDate start = boundaries[0];
                     LocalDate end = boundaries[1];
 
+                    intervals.add(new DateInterval(start, end));
+
                     String dateConstraint = String.format("%s >= '%s' AND %s <= '%s'", prefixedTimeKey, start.toString(), prefixedTimeKey, end.toString());
 
                     String rowFilter = row.filterExpr();
@@ -360,6 +364,9 @@ public class SqlGeneratorService {
                                 subStart = b[0];
                                 subEnd = b[1];
                             }
+
+                            intervals.add(new DateInterval(subStart, subEnd));
+
                             String subDateConstraint = String.format("%s >= '%s' AND %s <= '%s'", prefixedTimeKey, subStart.toString(), prefixedTimeKey, subEnd.toString());
                             String subMetricClause = compileMetricClause(factTable, mdef, subDateConstraint, filterClause);
                             String subAlias = "val_" + row.rowId().toLowerCase() + "_" + col.colId().toLowerCase() + "_" + i;
@@ -367,6 +374,30 @@ public class SqlGeneratorService {
                         }
                     }
                 }
+            }
+
+            List<DateInterval> merged = mergeIntervals(intervals);
+            if (!merged.isEmpty()) {
+                String timeKey = getTimeKeyForTable(factTable);
+                String prefixedTimeKey = factTable + "." + timeKey;
+                String factDateFilter;
+                if (merged.size() == 1) {
+                    DateInterval interval = merged.get(0);
+                    factDateFilter = String.format("%s >= '%s' AND %s <= '%s'", prefixedTimeKey, interval.start.toString(), prefixedTimeKey, interval.end.toString());
+                } else {
+                    List<String> conditions = new ArrayList<>();
+                    for (DateInterval interval : merged) {
+                        conditions.add(String.format("(%s >= '%s' AND %s <= '%s')", prefixedTimeKey, interval.start.toString(), prefixedTimeKey, interval.end.toString()));
+                    }
+                    factDateFilter = "(" + String.join(" OR ", conditions) + ")";
+                }
+
+                if (combinedFilters.isEmpty()) {
+                    combinedFilters = factDateFilter;
+                } else {
+                    combinedFilters = factDateFilter + " AND (" + combinedFilters + ")";
+                }
+                whereClause = "\n    WHERE " + combinedFilters;
             }
 
             String cteSql = String.format(
@@ -1734,5 +1765,40 @@ public class SqlGeneratorService {
             }
         }
         return null;
+    }
+
+    private static class DateInterval {
+        LocalDate start;
+        LocalDate end;
+
+        DateInterval(LocalDate start, LocalDate end) {
+            this.start = start;
+            this.end = end;
+        }
+    }
+
+    private List<DateInterval> mergeIntervals(List<DateInterval> intervals) {
+        if (intervals.isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<DateInterval> sorted = new ArrayList<>(intervals);
+        sorted.sort(Comparator.comparing((DateInterval di) -> di.start).thenComparing(di -> di.end));
+
+        List<DateInterval> merged = new ArrayList<>();
+        DateInterval current = sorted.get(0);
+
+        for (int i = 1; i < sorted.size(); i++) {
+            DateInterval next = sorted.get(i);
+            if (next.start.isBefore(current.end.plusDays(2))) {
+                if (next.end.isAfter(current.end)) {
+                    current = new DateInterval(current.start, next.end);
+                }
+            } else {
+                merged.add(current);
+                current = next;
+            }
+        }
+        merged.add(current);
+        return merged;
     }
 }

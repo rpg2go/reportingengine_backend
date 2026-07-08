@@ -204,7 +204,7 @@ public class SqlGeneratorServiceTest {
         String sql = service.generate(config);
 
         // Assert
-        assertThat(sql).contains("WHERE ((analytics.fact_sales.amount = '100') AND (dim_rm.status = 'active'))");
+        assertThat(sql).contains("((analytics.fact_sales.amount = '100') AND (dim_rm.status = 'active'))");
     }
 
     @Test
@@ -235,9 +235,9 @@ public class SqlGeneratorServiceTest {
         String sql = service.generate(config);
 
         // Assert
-        assertThat(sql).contains("WHERE (((analytics.fact_sales.region <> 'West' OR analytics.fact_sales.region IS NULL)) " +
-            "AND ((analytics.fact_sales.category <> 'Furniture' OR analytics.fact_sales.category IS NULL)) " +
-            "AND ((analytics.fact_sales.name NOT LIKE '%John%' ESCAPE '\\' OR analytics.fact_sales.name IS NULL)))");
+        assertThat(sql).contains("((analytics.fact_sales.region <> 'West' OR analytics.fact_sales.region IS NULL))");
+        assertThat(sql).contains("((analytics.fact_sales.category <> 'Furniture' OR analytics.fact_sales.category IS NULL))");
+        assertThat(sql).contains("((analytics.fact_sales.name NOT LIKE '%John%' ESCAPE '\\' OR analytics.fact_sales.name IS NULL))");
     }
 
     @Test
@@ -266,7 +266,7 @@ public class SqlGeneratorServiceTest {
         String sql = service.generate(config);
 
         // Assert
-        assertThat(sql).contains("WHERE ((analytics.fact_sales.country IN ('US', 'CA', 'FR')))");
+        assertThat(sql).contains("((analytics.fact_sales.country IN ('US', 'CA', 'FR')))");
     }
 
     @Test
@@ -298,10 +298,10 @@ public class SqlGeneratorServiceTest {
         String sql = service.generate(config);
 
         // Assert
-        assertThat(sql).contains("WHERE (((analytics.fact_sales.region IS NULL OR TRIM(CAST(analytics.fact_sales.region AS TEXT)) = '')) " +
-            "AND ((analytics.fact_sales.category IS NOT NULL AND TRIM(CAST(analytics.fact_sales.category AS TEXT)) <> '')) " +
-            "AND (analytics.fact_sales.name IS NULL) " +
-            "AND (analytics.fact_sales.status IS NOT NULL))");
+        assertThat(sql).contains("((analytics.fact_sales.region IS NULL OR TRIM(CAST(analytics.fact_sales.region AS TEXT)) = ''))");
+        assertThat(sql).contains("((analytics.fact_sales.category IS NOT NULL AND TRIM(CAST(analytics.fact_sales.category AS TEXT)) <> ''))");
+        assertThat(sql).contains("(analytics.fact_sales.name IS NULL)");
+        assertThat(sql).contains("(analytics.fact_sales.status IS NOT NULL)");
     }
 
     @Test
@@ -332,9 +332,9 @@ public class SqlGeneratorServiceTest {
         String sql = service.generate(config);
 
         // Assert
-        assertThat(sql).contains("WHERE ((analytics.fact_sales.code LIKE '%10\\%\\_\\\\%' ESCAPE '\\') " +
-            "AND (analytics.fact_sales.prefix LIKE 'abc\\%%' ESCAPE '\\') " +
-            "AND (analytics.fact_sales.suffix LIKE '%\\_xyz' ESCAPE '\\'))");
+        assertThat(sql).contains("(analytics.fact_sales.code LIKE '%10\\%\\_\\\\%' ESCAPE '\\')");
+        assertThat(sql).contains("(analytics.fact_sales.prefix LIKE 'abc\\%%' ESCAPE '\\')");
+        assertThat(sql).contains("(analytics.fact_sales.suffix LIKE '%\\_xyz' ESCAPE '\\')");
     }
 
     @Test
@@ -366,10 +366,10 @@ public class SqlGeneratorServiceTest {
         String sql = service.generate(config);
 
         // Assert
-        assertThat(sql).contains("WHERE ((analytics.fact_sales.amount > '100') " +
-            "AND (analytics.fact_sales.amount >= '150') " +
-            "AND (analytics.fact_sales.quantity < '10') " +
-            "AND (analytics.fact_sales.quantity <= '20'))");
+        assertThat(sql).contains("(analytics.fact_sales.amount > '100')");
+        assertThat(sql).contains("(analytics.fact_sales.amount >= '150')");
+        assertThat(sql).contains("(analytics.fact_sales.quantity < '10')");
+        assertThat(sql).contains("(analytics.fact_sales.quantity <= '20')");
     }
 
     @Test
@@ -459,7 +459,7 @@ public class SqlGeneratorServiceTest {
         String sql = service.generate(config);
 
         // Assert
-        assertThat(sql).contains("WHERE ((analytics.fact_sales.interest_rate IS NOT NULL))");
+        assertThat(sql).contains("((analytics.fact_sales.interest_rate IS NOT NULL))");
     }
 
     @Test
@@ -539,7 +539,7 @@ public class SqlGeneratorServiceTest {
         String sql = service.generate(config);
 
         // Assert
-        assertThat(sql).contains("WHERE (analytics.fact_sales.region = 'East' AND analytics.fact_sales.status = 'active')");
+        assertThat(sql).contains("(analytics.fact_sales.region = 'East' AND analytics.fact_sales.status = 'active')");
     }
 
     @Test
@@ -569,8 +569,8 @@ public class SqlGeneratorServiceTest {
         String sql = service.generate(config);
 
         // Assert
-        assertThat(sql).contains("WHERE (analytics.fact_sales.region = 'East' AND analytics.fact_sales.status = 'active') " +
-            "AND ((analytics.fact_sales.category = 'Office') OR (analytics.fact_sales.amount > '500'))");
+        assertThat(sql).contains("(analytics.fact_sales.region = 'East' AND analytics.fact_sales.status = 'active')");
+        assertThat(sql).contains("((analytics.fact_sales.category = 'Office') OR (analytics.fact_sales.amount > '500'))");
     }
 
     @Test
@@ -596,7 +596,7 @@ public class SqlGeneratorServiceTest {
         String sql = service.generate(config);
 
         // Assert
-        assertThat(sql).contains("WHERE (analytics.fact_sales.region = 'East' AND analytics.fact_sales.status = 'active')");
+        assertThat(sql).contains("(analytics.fact_sales.region = 'East' AND analytics.fact_sales.status = 'active')");
     }
 
     @Test
@@ -622,7 +622,7 @@ public class SqlGeneratorServiceTest {
         String sql = service.generate(config);
 
         // Assert
-        assertThat(sql).contains("WHERE ((analytics.fact_sales.category = 'Furniture') OR (analytics.fact_sales.category = 'Office'))");
+        assertThat(sql).contains("((analytics.fact_sales.category = 'Furniture') OR (analytics.fact_sales.category = 'Office'))");
     }
 
     @Test
