@@ -1,6 +1,6 @@
-package com.reporting.controller;
+package com.reporting.it.controller;
 
-import com.reporting.BaseIT;
+import com.reporting.it.BaseIT;
 import com.reporting.domain.Report;
 import com.reporting.repository.ReportRepository;
 import org.junit.jupiter.api.DisplayName;

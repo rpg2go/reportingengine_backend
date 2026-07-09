@@ -1,4 +1,4 @@
-package com.reporting;
+package com.reporting.it;
 
 import org.junit.jupiter.api.BeforeAll;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -114,8 +114,8 @@ public abstract class BaseIT {
                 }
             }
 
-            // Run migrations from db/migrations directory
-            File migrationsDir = new File("db/migrations");
+            // Run migrations from db/liquibase/sql directory
+            File migrationsDir = new File("db/liquibase/sql");
             if (!migrationsDir.exists() || !migrationsDir.isDirectory()) {
                 throw new IOException("migrations directory not found.");
             }

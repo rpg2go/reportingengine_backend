@@ -1,4 +1,4 @@
-package com.reporting;
+package com.reporting.it;
 
 import com.reporting.domain.Report;
 import com.reporting.dto.ReportConfigDto;
@@ -31,7 +31,7 @@ public class ReportSeededValidationIT extends BaseIT {
     @Test
     @DisplayName("Validate all seeded reports in the database")
     public void validateAllSeededReports() {
-        List<Report> reports = reportRepository.findAll();
+        List<Report> reports = reportRepository.findLatestVersionPerReport();
         System.out.println("Found " + reports.size() + " reports to validate.");
         assertThat(reports).isNotEmpty();
 
@@ -39,7 +39,7 @@ public class ReportSeededValidationIT extends BaseIT {
 
         for (Report report : reports) {
             String reportId = report.getReportId();
-            ReportConfigDto configDto = configService.loadFromDb(reportId, LocalDate.of(2026, 5, 31));
+            ReportConfigDto configDto = configService.loadFromDb(reportId, report.getVersion(), LocalDate.of(2026, 5, 31));
             ValidationResult result = validationService.validateConfiguration(configDto);
 
             System.out.println("==================================================");

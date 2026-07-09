@@ -309,7 +309,7 @@ public class SqlGeneratorService {
                     String timeKey = getTimeKeyForTable(factTable);
                     String prefixedTimeKey = factTable + "." + timeKey;
 
-                    LocalDate colRefDate = config.getReferenceDate();
+                    LocalDate colRefDate = config.getReferenceDate() != null ? config.getReferenceDate() : LocalDate.now();
                     String effPeriodType = getEffectivePeriodType(col, config.getColumns());
                     if (effPeriodType != null && "PREVIOUS_YEAR".equalsIgnoreCase(effPeriodType.trim())) {
                         colRefDate = colRefDate.minusYears(1);
@@ -503,7 +503,7 @@ public class SqlGeneratorService {
         LocalDate endBound = null;
         for (ColumnDefDto col : config.getColumns()) {
             if (col.isSqlColumn()) {
-                LocalDate colRefDate = config.getReferenceDate();
+                LocalDate colRefDate = config.getReferenceDate() != null ? config.getReferenceDate() : LocalDate.now();
                 String effPeriodType = getEffectivePeriodType(col, config.getColumns());
                 if (effPeriodType != null && "PREVIOUS_YEAR".equalsIgnoreCase(effPeriodType.trim())) {
                     colRefDate = colRefDate.minusYears(1);

@@ -1,7 +1,7 @@
-package com.reporting.service;
+package com.reporting.it.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.reporting.BaseIT;
+import com.reporting.it.BaseIT;
 import com.reporting.dto.ColumnDefDto;
 import com.reporting.dto.Enums;
 import com.reporting.dto.ReportConfigDto;

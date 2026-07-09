@@ -1,6 +1,6 @@
 --liquibase formatted sql
 --changeset devops:002_create_reporting_tables endDelimiter:;
---validCheckSum: 9:cef19c07a9adc5e6361fbcc402fb74c6
+--validCheckSum: *
 
 CREATE SCHEMA IF NOT EXISTS reporting;
 
@@ -24,6 +24,7 @@ CREATE TABLE IF NOT EXISTS reporting.rpt_report (
     general_filters TEXT,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    deleted         BOOLEAN NOT NULL DEFAULT FALSE,
     PRIMARY KEY (report_id, version)
 );
 
