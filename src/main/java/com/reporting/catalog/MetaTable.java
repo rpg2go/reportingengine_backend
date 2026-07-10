@@ -41,6 +41,9 @@ public final class MetaTable {
     /** Human-readable description loaded from {@code reporting.meta_table.description}. */
     private final String description;
 
+    /** Flag to control whether columns/types are pre-loaded/cached in memory. */
+    private final boolean isCached;
+
     // ─── mutable collections populated post-construction by the loader ───────
 
     /** All key columns registered for this table. */
@@ -70,12 +73,26 @@ public final class MetaTable {
                      TableType tableType,
                      String timeKey,
                      String description) {
+        this(tableId, schemaName, tableName, tableType, timeKey, description, true);
+    }
+
+    /**
+     * Constructs a {@code MetaTable} with explicit isCached configuration.
+     */
+    public MetaTable(int tableId,
+                     String schemaName,
+                     String tableName,
+                     TableType tableType,
+                     String timeKey,
+                     String description,
+                     boolean isCached) {
         this.tableId     = tableId;
         this.schemaName  = Objects.requireNonNull(schemaName, "schemaName must not be null");
         this.tableName   = Objects.requireNonNull(tableName,  "tableName must not be null");
         this.tableType   = Objects.requireNonNull(tableType,  "tableType must not be null");
         this.timeKey     = timeKey;
         this.description = description;
+        this.isCached    = isCached;
     }
 
     // ─── package-private mutators (loader only) ───────────────────────────────
@@ -90,13 +107,7 @@ public final class MetaTable {
         columns.add(Objects.requireNonNull(column, "column must not be null"));
     }
 
-    /**
-     * Registers an outgoing FK edge originating from this table.
-     * Called exclusively by {@link SchemaCatalogLoader} during initialization.
-     *
-     * @param edge the relationship edge to attach
-     */
-    void addOutgoingEdge(MetaRelationship edge) {
+    public void addOutgoingEdge(MetaRelationship edge) {
         outgoingEdges.add(Objects.requireNonNull(edge, "edge must not be null"));
     }
 
@@ -143,6 +154,11 @@ public final class MetaTable {
     /** @return human-readable description, or {@code null} */
     public String getDescription() {
         return description;
+    }
+
+    /** @return true if schema column metadata should be cached in-memory */
+    public boolean isCached() {
+        return isCached;
     }
 
     /**

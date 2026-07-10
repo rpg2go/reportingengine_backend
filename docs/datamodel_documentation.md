@@ -58,7 +58,9 @@ Registers physical columns of the tables.
 - `is_primary_key` (BOOLEAN DEFAULT FALSE)
 - `is_foreign_key` (BOOLEAN DEFAULT FALSE)
 - `is_conformed` (BOOLEAN DEFAULT FALSE)
-- `is_filterable` (BOOLEAN DEFAULT FALSE)
+- `is_filterable` (BOOLEAN DEFAULT FALSE) — controls if autocomplete dropdown values are supported
+- `is_cached` (BOOLEAN DEFAULT FALSE) — controls if distinct values are pre-loaded into JVM memory at boot
+- `is_visible` (BOOLEAN DEFAULT TRUE) — controls if the column is shown in the frontend catalog and builders
 - `description` (TEXT)
 
 #### 3. `reporting.meta_relationship`
@@ -73,6 +75,24 @@ Defines physical join routes between tables.
 - `is_conformed` (BOOLEAN DEFAULT FALSE)
 - `weight` (INTEGER DEFAULT 1) — Dijktra edge cost (1 = conformed key, 2 = non-conformed FK)
 - `description` (TEXT)
+
+---
+
+### 🛡️ Column Behavior Flags: `is_filterable` vs `is_cached` vs `is_visible`
+
+To optimize performance and database load on large Data Warehouses (with potentially billions of rows), the reporting catalog uses three distinct flags on each column:
+
+| Attribute Flag | Meaning / Purpose | How the UI Handles It | Performance & Memory Impact |
+| :--- | :--- | :--- | :--- |
+| **`is_visible`** | Defines if the column is exposed to the end-user in the builder UI. | If `TRUE`, it is searchable in the sidebar and row/column setup lists. If `FALSE`, it is completely hidden from the builder (typically used for technical PKs/FKs). | None. Hidden columns are still indexed in memory by the runner/validator. |
+| **`is_filterable`** | Defines if autocomplete dropdown selection lists are supported for filters. | If `TRUE`, a selectable dropdown of distinct values is shown. If `FALSE` (and not cached), the user must type the value manually. | Triggers an on-demand `SELECT DISTINCT` database query when the user opens the dropdown. |
+| **`is_cached`** | Defines if distinct lookup values are preloaded and stored in JVM memory. | If `TRUE`, the autocomplete dropdown loads instantly with no latency. | Zero database hits at runtime. The values are fetched during boot time and consume a small amount of JVM RAM. |
+
+#### Flag Combinations in Action:
+*   **Whitelisted Caching (`is_visible=TRUE`, `is_filterable=TRUE`, `is_cached=TRUE`):** Distinct lookup values are pre-loaded at boot and served instantly (0ms) from JVM cache. Ideal for highly frequent, low-cardinality filters (e.g. `segment`, `account_type`).
+*   **On-Demand Autocomplete (`is_visible=TRUE`, `is_filterable=TRUE`, `is_cached=FALSE`):** Distinct lookup values are queried from the database on-demand using `SELECT DISTINCT` with limits. Ideal for medium-cardinality filters where we want to save JVM memory.
+*   **Manual Filtering (`is_visible=TRUE`, `is_filterable=FALSE`, `is_cached=FALSE`):** User can filter by the column but must manually type the text/numeric value (no dropdown is provided). Autocomplete requests on the database are blocked for security/performance. Ideal for high-cardinality values (e.g., descriptions or numbers).
+*   **Fully Hidden (`is_visible=FALSE`):** Invisible to the user interface, but fully accessible to join pathways, formulas, and metric generation.
 
 ---
 

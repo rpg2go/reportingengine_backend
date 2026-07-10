@@ -9,6 +9,8 @@ import com.reporting.repository.ReportRepository;
 import com.reporting.service.ReportConfigService;
 import com.reporting.service.ReportRunnerService;
 import com.reporting.service.ReportValidationService;
+import com.reporting.cache.MetadataCache;
+import com.reporting.catalog.SchemaCatalogLoader;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -55,6 +57,10 @@ public class ReportControllerTest {
         private ReportValidationService validationService;
         @MockitoBean
         private NamedParameterJdbcTemplate jdbcTemplate;
+        @MockitoBean
+        private MetadataCache metadataCache;
+        @MockitoBean
+        private SchemaCatalogLoader schemaCatalogLoader;
 
         @Test
         @DisplayName("GET /api/reports: lists reports successfully")

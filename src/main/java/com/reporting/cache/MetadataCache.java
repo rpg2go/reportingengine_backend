@@ -45,11 +45,17 @@ public class MetadataCache {
     // ── column metadata: "schema.table" or "table" → lowercase column names ──
     private final Map<String, Set<String>> tableColumnsCache = new ConcurrentHashMap<>();
 
+    // ── column types metadata: "schema.table" or "table" → Map<column_name, data_type> ──
+    private final Map<String, Map<String, String>> tableColumnTypesCache = new ConcurrentHashMap<>();
+
     // ── time key per fact/view table: table_ref → time_key column name ────────
     private final Map<String, String> timeKeyCache = new ConcurrentHashMap<>();
 
     // ── ordered set of distinct meta_table table_ref values ────────────────────
     private volatile Set<String> metaTableRefs = Collections.emptySet();
+
+    // ── column values cache: "schema.table.column" or "table.column" → list of distinct values ──
+    private final Map<String, List<String>> columnValuesCache = new ConcurrentHashMap<>();
 
     public MetadataCache(JdbcTemplate jdbc) {
         this.jdbc = jdbc;
@@ -63,8 +69,9 @@ public class MetadataCache {
         loadTableColumns();
         loadTimeKeys();
         loadMetaTableRefs();
-        log.info("MetadataCache: pre-load complete — {} tables, {} time-keys, {} meta-table refs.",
-                tableColumnsCache.size(), timeKeyCache.size(), metaTableRefs.size());
+        loadColumnValues();
+        log.info("MetadataCache: pre-load complete — {} tables, {} time-keys, {} meta-table refs, {} column value caches.",
+                tableColumnsCache.size(), timeKeyCache.size(), metaTableRefs.size(), columnValuesCache.size());
     }
 
     /**
@@ -73,8 +80,10 @@ public class MetadataCache {
     public void reload() {
         log.info("MetadataCache: explicit reload triggered.");
         tableColumnsCache.clear();
+        tableColumnTypesCache.clear();
         timeKeyCache.clear();
         metaTableRefs = Collections.emptySet();
+        columnValuesCache.clear();
         load();
     }
 
@@ -82,23 +91,35 @@ public class MetadataCache {
 
     private void loadTableColumns() {
         try {
-            // Load all columns for all tables in the analytics schema in one query
+            // Load all columns and types for all tables in the analytics schema in one query using pg_catalog
             jdbc.query(
-                "SELECT table_name, column_name " +
-                "FROM information_schema.columns " +
-                "WHERE table_schema = 'analytics' " +
-                "ORDER BY table_name, ordinal_position",
+                "SELECT n.nspname AS schema_name, c.relname AS table_name, a.attname AS column_name, " +
+                "       pg_catalog.format_type(a.atttypid, a.atttypmod) AS data_type " +
+                "FROM pg_catalog.pg_attribute a " +
+                "JOIN pg_catalog.pg_class c ON c.oid = a.attrelid " +
+                "JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace " +
+                "WHERE n.nspname = 'analytics' AND c.relkind = 'r' " +
+                "  AND a.attnum > 0 AND NOT a.attisdropped " +
+                "ORDER BY c.relname, a.attname",
                 rs -> {
                     String table = rs.getString("table_name").toLowerCase();
                     String col   = rs.getString("column_name").toLowerCase();
-                    // Index by both unqualified and qualified names
+                    String type  = rs.getString("data_type");
+                    
+                    String fullKey = "analytics." + table;
+
+                    // Index by unqualified name
                     tableColumnsCache.computeIfAbsent(table, k -> new HashSet<>()).add(col);
-                    tableColumnsCache.computeIfAbsent("analytics." + table, k -> new HashSet<>()).add(col);
+                    tableColumnTypesCache.computeIfAbsent(table, k -> new LinkedHashMap<>()).put(col, type);
+
+                    // Index by qualified name
+                    tableColumnsCache.computeIfAbsent(fullKey, k -> new HashSet<>()).add(col);
+                    tableColumnTypesCache.computeIfAbsent(fullKey, k -> new LinkedHashMap<>()).put(col, type);
                 }
             );
-            log.debug("MetadataCache: loaded column metadata for {} table keys.", tableColumnsCache.size());
+            log.debug("MetadataCache: loaded column and type metadata for {} table keys.", tableColumnsCache.size());
         } catch (Exception ex) {
-            log.warn("MetadataCache: failed to load table column metadata. columnExists() will fall back to live queries. Cause: {}", ex.getMessage());
+            log.warn("MetadataCache: failed to load table column metadata. Cause: {}", ex.getMessage());
         }
     }
 
@@ -107,7 +128,7 @@ public class MetadataCache {
     private void loadTimeKeys() {
         try {
             jdbc.query(
-                "SELECT schema_name || '.' || table_name AS table_ref, time_key FROM reporting.meta_table WHERE time_key IS NOT NULL",
+                "SELECT schema_name || '.' || table_name AS table_ref, time_key FROM reporting.meta_table WHERE time_key IS NOT NULL AND is_cached = TRUE",
                 rs -> {
                     String tableRef = rs.getString("table_ref");
                     String timeKey  = rs.getString("time_key");
@@ -165,12 +186,32 @@ public class MetadataCache {
     }
 
     /**
+     * Returns the mapping of column names to their formats/types for the given table,
+     * or {@code null} if the table is not in the cache.
+     *
+     * @param tableRef table reference
+     * @return unmodifiable map of column names to types, or {@code null}
+     */
+    public Map<String, String> getColumnTypes(String tableRef) {
+        if (tableRef == null || tableRef.isBlank()) return null;
+        Map<String, String> types = tableColumnTypesCache.get(tableRef.trim().toLowerCase());
+        return types != null ? Collections.unmodifiableMap(types) : null;
+    }
+
+    /**
      * Returns the shared, mutable {@code tableColumnsCache} map.
      * Callers may add entries for tables not pre-loaded (e.g. reporting schema tables),
      * so that {@code computeIfAbsent} in the SQL generator can persist those lookups.
      */
     public Map<String, Set<String>> getTableColumnsCache() {
         return tableColumnsCache;
+    }
+
+    /**
+     * Returns the shared, mutable tableColumnTypesCache map.
+     */
+    public Map<String, Map<String, String>> getTableColumnTypesCache() {
+        return tableColumnTypesCache;
     }
 
     /**
@@ -194,5 +235,56 @@ public class MetadataCache {
      */
     public Set<String> getMetaTableRefs() {
         return metaTableRefs;
+    }
+
+    private void loadColumnValues() {
+        try {
+            // Find all columns marked as value-cacheable
+            String sql = "SELECT t.schema_name, t.table_name, c.column_name " +
+                         "FROM   reporting.meta_column c " +
+                         "JOIN   reporting.meta_table t ON t.table_id = c.table_id " +
+                         "WHERE  c.is_cached = TRUE AND t.is_cached = TRUE";
+
+            jdbc.query(sql, rs -> {
+                String schema = rs.getString("schema_name");
+                String table  = rs.getString("table_name");
+                String column = rs.getString("column_name");
+
+                String qualifiedTable = schema + "." + table;
+                String cacheKey = (qualifiedTable + "." + column).toLowerCase();
+
+                try {
+                    int limit = 100;
+                    if ("dim_date".equalsIgnoreCase(table) && "date_key".equalsIgnoreCase(column)) {
+                        limit = 1500;
+                    }
+                    String querySql = String.format(
+                        "SELECT DISTINCT %s FROM %s WHERE %s IS NOT NULL ORDER BY %s LIMIT %d",
+                        column, qualifiedTable, column, column, limit
+                    );
+                    List<String> values = jdbc.query(querySql, (rsVal, rowNum) -> {
+                        Object val = rsVal.getObject(1);
+                        return val != null ? val.toString() : "";
+                    });
+
+                    columnValuesCache.put(cacheKey, values);
+                    columnValuesCache.put((table + "." + column).toLowerCase(), values);
+                    log.info("MetadataCache: cached values for column {} ({} values)", cacheKey, values.size());
+                } catch (Exception e) {
+                    log.warn("MetadataCache: failed to cache values for column {}. Cause: {}", cacheKey, e.getMessage());
+                }
+            });
+        } catch (Exception ex) {
+            log.warn("MetadataCache: failed to pre-load column values cache. Cause: {}", ex.getMessage());
+        }
+    }
+
+    /**
+     * Returns the cached distinct values for a given column key (e.g. "schema.table.column" or "table.column"),
+     * or null if the column's values are not cached.
+     */
+    public List<String> getCachedColumnValues(String cacheKey) {
+        if (cacheKey == null || cacheKey.isBlank()) return null;
+        return columnValuesCache.get(cacheKey.trim().toLowerCase());
     }
 }

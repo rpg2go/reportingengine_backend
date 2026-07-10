@@ -1,11 +1,17 @@
 package com.reporting.controller;
 
+import com.reporting.cache.MetadataCache;
+import com.reporting.catalog.SchemaCatalogLoader;
+import com.reporting.catalog.MetaTable;
+import com.reporting.catalog.MetaColumn;
+import com.reporting.catalog.MetaRelationship;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.*;
+import java.util.stream.Collectors;
 
 /**
  * REST controller exposing schema and dimension metadata for the Analytics DWH.
@@ -29,9 +35,15 @@ import java.util.*;
 public class SchemaDiscoveryController {
 
     private final NamedParameterJdbcTemplate jdbcTemplate;
+    private final MetadataCache metadataCache;
+    private final SchemaCatalogLoader schemaCatalogLoader;
 
-    public SchemaDiscoveryController(NamedParameterJdbcTemplate jdbcTemplate) {
+    public SchemaDiscoveryController(NamedParameterJdbcTemplate jdbcTemplate,
+                                     MetadataCache metadataCache,
+                                     SchemaCatalogLoader schemaCatalogLoader) {
         this.jdbcTemplate = jdbcTemplate;
+        this.metadataCache = metadataCache;
+        this.schemaCatalogLoader = schemaCatalogLoader;
     }
 
     // ─── table / column discovery ─────────────────────────────────────────────
@@ -43,6 +55,17 @@ public class SchemaDiscoveryController {
      */
     @GetMapping("/tables")
     public ResponseEntity<List<String>> listTables() {
+        Set<String> keys = metadataCache.getTableColumnsCache().keySet();
+        if (!keys.isEmpty()) {
+            List<String> qualifiedTables = keys.stream()
+                .filter(k -> k.startsWith("analytics."))
+                .sorted()
+                .collect(Collectors.toList());
+            if (!qualifiedTables.isEmpty()) {
+                return ResponseEntity.ok(qualifiedTables);
+            }
+        }
+
         String sql = "SELECT n.nspname || '.' || c.relname AS full_name " +
                      "FROM pg_catalog.pg_class c " +
                      "JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace " +
@@ -64,6 +87,25 @@ public class SchemaDiscoveryController {
         if (resolved == null || !resolved.contains(".")) {
             return ResponseEntity.badRequest().build();
         }
+
+        // Check if registered in metadata catalog, and filter by is_visible flag
+        MetaTable metaTable = schemaCatalogLoader.findTable(resolved);
+        if (metaTable != null) {
+            List<String> visibleCols = metaTable.getColumns().stream()
+                .filter(MetaColumn::isVisible)
+                .map(MetaColumn::getColumnName)
+                .sorted()
+                .collect(Collectors.toList());
+            return ResponseEntity.ok(visibleCols);
+        }
+
+        Set<String> cachedCols = metadataCache.getColumns(resolved);
+        if (cachedCols != null && !cachedCols.isEmpty()) {
+            List<String> sortedCols = new ArrayList<>(cachedCols);
+            Collections.sort(sortedCols);
+            return ResponseEntity.ok(sortedCols);
+        }
+
         String[] parts = resolved.split("\\.");
         String schema    = parts[0];
         String tableName = parts[1];
@@ -91,6 +133,12 @@ public class SchemaDiscoveryController {
         if (resolved == null || !resolved.contains(".")) {
             return ResponseEntity.badRequest().build();
         }
+
+        Map<String, String> cachedTypes = metadataCache.getColumnTypes(resolved);
+        if (cachedTypes != null && !cachedTypes.isEmpty()) {
+            return ResponseEntity.ok(cachedTypes);
+        }
+
         String[] parts = resolved.split("\\.");
         String schema    = parts[0];
         String tableName = parts[1];
@@ -136,6 +184,29 @@ public class SchemaDiscoveryController {
         String queryColumn = column;
         if ("reporting_date".equals(column) && ("dim_date".equals(table) || "analytics.dim_date".equals(resolved))) {
             queryColumn = "date_key";
+        }
+
+        // Try the cache first
+        String cacheKey = (resolved + "." + queryColumn).toLowerCase();
+        List<String> cachedValues = metadataCache.getCachedColumnValues(cacheKey);
+        if (cachedValues != null && !cachedValues.isEmpty()) {
+            log.info("MetadataCache: hit for autocomplete values: {}", cacheKey);
+            return ResponseEntity.ok(cachedValues);
+        }
+
+        // Whitelist check: autocomplete queries are only allowed on visible, and either filterable or value-cached columns.
+        MetaColumn metaCol = schemaCatalogLoader.findColumn(resolved, queryColumn);
+        if (metaCol != null) {
+            if (!metaCol.isVisible() || (!metaCol.isCached() && !metaCol.isFilterable())) {
+                log.warn("Performance safety block: Denied autocomplete lookup on invisible/non-filterable/non-cached column: {}.{}", resolved, queryColumn);
+                return ResponseEntity.badRequest().build();
+            }
+        } else {
+            MetaTable metaTable = schemaCatalogLoader.findTable(resolved);
+            if (metaTable != null) {
+                log.warn("Blocked autocomplete lookup because column {}.{} does not exist in schema catalog.", resolved, queryColumn);
+                return ResponseEntity.badRequest().build();
+            }
         }
 
         log.info("Fetching dimension values for table: {} (resolved: {}), column: {} (queried as: {})",
@@ -209,10 +280,10 @@ public class SchemaDiscoveryController {
         model.put("dimensions", jdbcTemplate.queryForList(
             "SELECT c.column_id, t.table_name AS view_name, c.column_name AS name, c.label, " +
             "       t.schema_name || '.' || t.table_name || '.' || c.column_name AS column_ref, " +
-            "       c.data_type, c.description " +
+            "       c.data_type, c.description, c.is_filterable, c.is_cached, c.is_visible " +
             "FROM reporting.meta_column c " +
             "JOIN reporting.meta_table t ON t.table_id = c.table_id " +
-            "WHERE c.is_filterable = TRUE " +
+            "WHERE c.is_primary_key = FALSE AND c.is_visible = TRUE " +
             "ORDER BY t.table_name, c.column_name",
             Collections.emptyMap()
         ));
@@ -230,6 +301,23 @@ public class SchemaDiscoveryController {
     @GetMapping("/dimension-joins")
     public ResponseEntity<List<Map<String, Object>>> getDimensionJoins(@RequestParam("factTable") String factTable) {
         log.info("Fetching dimension joins for fact table: {}", factTable);
+
+        MetaTable table = schemaCatalogLoader.findTable(factTable);
+        if (table != null) {
+            List<Map<String, Object>> joins = table.getOutgoingEdges().stream()
+                .map(edge -> {
+                    Map<String, Object> join = new LinkedHashMap<>();
+                    join.put("dimView",   edge.getToTable().getTableName());
+                    join.put("joinType",  edge.getJoinType());
+                    join.put("joinSql",   edge.getToTable().getQualifiedName() + " ON " +
+                                          edge.getToTable().getQualifiedName() + "." + edge.getToColumn() + " = " +
+                                          edge.getFromTable().getQualifiedName() + "." + edge.getFromColumn());
+                    return join;
+                })
+                .collect(Collectors.toList());
+            return ResponseEntity.ok(joins);
+        }
+
         String sql = """
             SELECT
                 tt.table_name AS dimView,

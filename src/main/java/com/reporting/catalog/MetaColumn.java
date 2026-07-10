@@ -60,19 +60,19 @@ public final class MetaColumn {
     /** Optional human-readable description loaded from the catalog. */
     private final String description;
 
+    /** Flag to control value caching for autocomplete on this column. */
+    private final boolean isCached;
+
+    /** Flag to control if this column is filterable. */
+    private final boolean filterable;
+
+    /** Flag to control if this column is visible in the catalog. */
+    private final boolean visible;
+
     // ─── constructor ─────────────────────────────────────────────────────────
 
     /**
      * Constructs a {@code MetaColumn} from catalog row data.
-     *
-     * @param columnId    surrogate PK from {@code reporting.meta_column}
-     * @param tableId     FK to the owning {@link MetaTable}
-     * @param columnName  physical column name (never blank)
-     * @param dataType    PostgreSQL data type string; may be {@code null}
-     * @param primaryKey  {@code true} if this is the table's primary key
-     * @param foreignKey  {@code true} if this column references another table
-     * @param conformed   {@code true} if this is a conformed dimension key
-     * @param description optional annotation; may be {@code null}
      */
     public MetaColumn(int columnId,
                       int tableId,
@@ -82,6 +82,54 @@ public final class MetaColumn {
                       boolean foreignKey,
                       boolean conformed,
                       String description) {
+        this(columnId, tableId, columnName, dataType, primaryKey, foreignKey, conformed, description, false, false, true);
+    }
+
+    /**
+     * Constructs a {@code MetaColumn} with explicit isCached configuration.
+     */
+    public MetaColumn(int columnId,
+                      int tableId,
+                      String columnName,
+                      String dataType,
+                      boolean primaryKey,
+                      boolean foreignKey,
+                      boolean conformed,
+                      String description,
+                      boolean isCached) {
+        this(columnId, tableId, columnName, dataType, primaryKey, foreignKey, conformed, description, isCached, false, true);
+    }
+
+    /**
+     * Constructs a {@code MetaColumn} with explicit isCached and filterable configurations.
+     */
+    public MetaColumn(int columnId,
+                      int tableId,
+                      String columnName,
+                      String dataType,
+                      boolean primaryKey,
+                      boolean foreignKey,
+                      boolean conformed,
+                      String description,
+                      boolean isCached,
+                      boolean filterable) {
+        this(columnId, tableId, columnName, dataType, primaryKey, foreignKey, conformed, description, isCached, filterable, true);
+    }
+
+    /**
+     * Constructs a {@code MetaColumn} with explicit isCached, filterable, and visible configurations.
+     */
+    public MetaColumn(int columnId,
+                      int tableId,
+                      String columnName,
+                      String dataType,
+                      boolean primaryKey,
+                      boolean foreignKey,
+                      boolean conformed,
+                      String description,
+                      boolean isCached,
+                      boolean filterable,
+                      boolean visible) {
         this.columnId    = columnId;
         this.tableId     = tableId;
         this.columnName  = Objects.requireNonNull(columnName, "columnName must not be null");
@@ -90,6 +138,9 @@ public final class MetaColumn {
         this.foreignKey  = foreignKey;
         this.conformed   = conformed;
         this.description = description;
+        this.isCached    = isCached;
+        this.filterable  = filterable;
+        this.visible     = visible;
     }
 
     // ─── public accessors ─────────────────────────────────────────────────────
@@ -120,6 +171,21 @@ public final class MetaColumn {
     /** @return {@code true} if this column is the primary key of its table */
     public boolean isPrimaryKey() {
         return primaryKey;
+    }
+
+    /** @return true if distinct values of this column are cached in memory */
+    public boolean isCached() {
+        return isCached;
+    }
+
+    /** @return true if this column is marked as filterable in the catalog */
+    public boolean isFilterable() {
+        return filterable;
+    }
+
+    /** @return true if this column is visible in the frontend catalog */
+    public boolean isVisible() {
+        return visible;
     }
 
     /** @return {@code true} if this column is a foreign key to another table */

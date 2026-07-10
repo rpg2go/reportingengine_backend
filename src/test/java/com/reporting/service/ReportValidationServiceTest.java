@@ -1,6 +1,10 @@
 package com.reporting.service;
 
 import com.reporting.dto.*;
+import com.reporting.cache.MetadataCache;
+import com.reporting.catalog.SchemaCatalogLoader;
+import com.reporting.catalog.MetaTable;
+import com.reporting.catalog.MetaRelationship;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -23,17 +27,26 @@ public class ReportValidationServiceTest {
     @Mock
     private JdbcTemplate jdbcTemplate;
 
+    @Mock
+    private MetadataCache metadataCache;
+
+    @Mock
+    private SchemaCatalogLoader schemaCatalogLoader;
+
     @InjectMocks
     private ReportValidationService validationService;
 
     @BeforeEach
     public void setUp() {
-        // Setup mock response for information_schema query
-        List<Map<String, Object>> mockColumns = List.of(
-            Map.of("table_schema", "analytics", "table_name", "fact_sales", "column_name", "amount", "data_type", "numeric"),
-            Map.of("table_schema", "analytics", "table_name", "fact_sales", "column_name", "product_id", "data_type", "varchar")
-        );
-        lenient().when(jdbcTemplate.queryForList(anyString())).thenReturn(mockColumns);
+        // Setup mock response for metadataCache.getTableColumnTypesCache()
+        Map<String, Map<String, String>> mockSchemaCache = new HashMap<>();
+        Map<String, String> salesCols = new HashMap<>();
+        salesCols.put("amount", "numeric");
+        salesCols.put("product_id", "varchar");
+        mockSchemaCache.put("fact_sales", salesCols);
+        mockSchemaCache.put("analytics.fact_sales", salesCols);
+        
+        lenient().when(metadataCache.getTableColumnTypesCache()).thenReturn(mockSchemaCache);
     }
 
     @Test
@@ -310,17 +323,18 @@ public class ReportValidationServiceTest {
     public void validate_generalFiltersDimensions_shouldEnforceConformedDimensionsOnly() {
         // Schema cache is loaded from default setUp() mock
 
-        // Stub dimensions query for fact_sales
-        String joinSql = "SELECT tt.table_name AS dimView " +
-                         "FROM reporting.meta_relationship r " +
-                         "JOIN reporting.meta_table ft ON ft.table_id = r.from_table_id " +
-                         "JOIN reporting.meta_table tt ON tt.table_id = r.to_table_id " +
-                         "WHERE ft.schema_name || '.' || ft.table_name IN ('analytics.fact_sales', 'fact_sales') " +
-                         "   OR ft.table_name IN ('analytics.fact_sales', 'fact_sales')";
-        lenient().when(jdbcTemplate.queryForList(joinSql)).thenReturn(List.of(
-            Map.of("dimView", "dim_customers"),
-            Map.of("dimView", "dim_location")
-        ));
+        MetaTable factSales = new MetaTable(1, "analytics", "fact_sales", MetaTable.TableType.fact, null, null);
+        MetaTable dimCustomers = new MetaTable(2, "analytics", "dim_customers", MetaTable.TableType.dimension, null, null);
+        MetaTable dimLocation = new MetaTable(3, "analytics", "dim_location", MetaTable.TableType.dimension, null, null);
+
+        MetaRelationship rel1 = new MetaRelationship(1, factSales, "customer_id", dimCustomers, "id", "LEFT", true, 1, null);
+        MetaRelationship rel2 = new MetaRelationship(2, factSales, "location_id", dimLocation, "id", "LEFT", true, 1, null);
+
+        factSales.addOutgoingEdge(rel1);
+        factSales.addOutgoingEdge(rel2);
+
+        lenient().when(schemaCatalogLoader.findTable("fact_sales")).thenReturn(factSales);
+        lenient().when(schemaCatalogLoader.findTable("analytics.fact_sales")).thenReturn(factSales);
 
         // Case A: Valid conformed dimension filter (dim_customers)
         List<ReportRowDto> rows = List.of(

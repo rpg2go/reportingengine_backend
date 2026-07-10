@@ -117,7 +117,7 @@ public class SchemaCatalogLoader {
      * </p>
      */
     private void loadTables() {
-        final String sql = "SELECT table_id, schema_name, table_name, table_type, time_key, description " +
+        final String sql = "SELECT table_id, schema_name, table_name, table_type, time_key, description, is_cached " +
                 "FROM   reporting.meta_table " +
                 "ORDER  BY table_id";
 
@@ -128,6 +128,10 @@ public class SchemaCatalogLoader {
             String typeRaw = rs.getString("table_type");
             String timeKey = rs.getString("time_key");
             String desc = rs.getString("description");
+            boolean isCached = rs.getBoolean("is_cached");
+            if (rs.wasNull()) {
+                isCached = true;
+            }
 
             MetaTable.TableType tableType;
             try {
@@ -138,7 +142,7 @@ public class SchemaCatalogLoader {
                 tableType = MetaTable.TableType.dimension;
             }
 
-            MetaTable node = new MetaTable(tableId, schemaName, tableName, tableType, timeKey, desc);
+            MetaTable node = new MetaTable(tableId, schemaName, tableName, tableType, timeKey, desc, isCached);
             tableById.put(tableId, node);
             tableByName.put(node.getQualifiedName().toLowerCase(), node);
             // Also index by unqualified name for case-insensitive lookups from report
@@ -157,7 +161,7 @@ public class SchemaCatalogLoader {
      */
     private void loadColumns() {
         final String sql = "SELECT column_id, table_id, column_name, data_type, " +
-                "       is_primary_key, is_foreign_key, is_conformed, description " +
+                "       is_primary_key, is_foreign_key, is_conformed, description, is_cached, is_filterable, is_visible " +
                 "FROM   reporting.meta_column " +
                 "ORDER  BY table_id, column_id";
 
@@ -173,6 +177,18 @@ public class SchemaCatalogLoader {
             boolean isFk = rs.getBoolean("is_foreign_key");
             boolean isConformed = rs.getBoolean("is_conformed");
             String desc = rs.getString("description");
+            boolean isCached = rs.getBoolean("is_cached");
+            if (rs.wasNull()) {
+                isCached = false;
+            }
+            boolean isFilterable = rs.getBoolean("is_filterable");
+            if (rs.wasNull()) {
+                isFilterable = false;
+            }
+            boolean isVisible = rs.getBoolean("is_visible");
+            if (rs.wasNull()) {
+                isVisible = true;
+            }
 
             MetaTable parent = tableById.get(tableId);
             if (parent == null) {
@@ -181,7 +197,7 @@ public class SchemaCatalogLoader {
                 return;
             }
 
-            MetaColumn col = new MetaColumn(columnId, tableId, colName, dataType, isPk, isFk, isConformed, desc);
+            MetaColumn col = new MetaColumn(columnId, tableId, colName, dataType, isPk, isFk, isConformed, desc, isCached, isFilterable, isVisible);
             parent.addColumn(col);
             count[0]++;
         });
@@ -262,6 +278,26 @@ public class SchemaCatalogLoader {
             return null;
         }
         return tableByName.get(tableRef.trim().toLowerCase());
+    }
+
+    /**
+     * Looks up a column inside a registered table by name in a case-insensitive manner.
+     *
+     * @param tableRef table name (qualified or unqualified)
+     * @param columnName column name
+     * @return the matching MetaColumn, or null if not found
+     */
+    public MetaColumn findColumn(String tableRef, String columnName) {
+        MetaTable table = findTable(tableRef);
+        if (table == null || columnName == null) {
+            return null;
+        }
+        for (MetaColumn col : table.getColumns()) {
+            if (columnName.equalsIgnoreCase(col.getColumnName())) {
+                return col;
+            }
+        }
+        return null;
     }
 
     /**

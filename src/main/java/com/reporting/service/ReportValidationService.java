@@ -1,6 +1,10 @@
 package com.reporting.service;
 
 import com.reporting.dto.*;
+import com.reporting.cache.MetadataCache;
+import com.reporting.catalog.SchemaCatalogLoader;
+import com.reporting.catalog.MetaTable;
+import com.reporting.catalog.MetaRelationship;
 import net.objecthunter.exp4j.ExpressionBuilder;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -15,9 +19,15 @@ import java.util.regex.Pattern;
 public class ReportValidationService {
 
     private final JdbcTemplate jdbcTemplate;
+    private final MetadataCache metadataCache;
+    private final SchemaCatalogLoader schemaCatalogLoader;
 
-    public ReportValidationService(JdbcTemplate jdbcTemplate) {
+    public ReportValidationService(JdbcTemplate jdbcTemplate,
+                                   MetadataCache metadataCache,
+                                   SchemaCatalogLoader schemaCatalogLoader) {
         this.jdbcTemplate = jdbcTemplate;
+        this.metadataCache = metadataCache;
+        this.schemaCatalogLoader = schemaCatalogLoader;
     }
 
     private static final Set<String> BUILT_IN_FUNCTIONS_AND_CONSTANTS = Set.of(
@@ -88,30 +98,7 @@ public class ReportValidationService {
     }
 
     private Map<String, Map<String, String>> loadSchemaCache() {
-        Map<String, Map<String, String>> cache = new HashMap<>();
-        try {
-            String sql = "SELECT table_schema, table_name, column_name, data_type FROM information_schema.columns " +
-                         "WHERE table_schema NOT IN ('pg_catalog', 'information_schema')";
-            List<Map<String, Object>> columns = jdbcTemplate.queryForList(sql);
-            for (Map<String, Object> colRow : columns) {
-                String schema = (String) colRow.get("table_schema");
-                String tblName = (String) colRow.get("table_name");
-                String colName = (String) colRow.get("column_name");
-                String dataType = (String) colRow.get("data_type");
-                if (schema != null && tblName != null && colName != null && dataType != null) {
-                    String normSchema = schema.toLowerCase().trim();
-                    String normTblShort = tblName.toLowerCase().trim();
-                    String normTblFull = normSchema + "." + normTblShort;
-                    String normCol = colName.toLowerCase().trim();
-
-                    cache.computeIfAbsent(normTblShort, k -> new HashMap<>()).put(normCol, dataType);
-                    cache.computeIfAbsent(normTblFull, k -> new HashMap<>()).put(normCol, dataType);
-                }
-            }
-        } catch (Exception e) {
-            log.error("Failed to load schema cache for validation", e);
-        }
-        return cache;
+        return metadataCache.getTableColumnTypesCache();
     }
 
     private void analyzeColumnDependencies(ReportConfigDto config, Set<String> activeColIds, List<ValidationError> errors) {
@@ -670,31 +657,12 @@ public class ReportValidationService {
 
     private Set<String> getDimensionsForFactTable(String factTable) {
         Set<String> dims = new HashSet<>();
-        try {
-            String norm = factTable.trim().toLowerCase();
-            String withSchema = norm.contains(".") ? norm : "analytics." + norm;
-            String withoutSchema = norm.contains(".") ? norm.substring(norm.indexOf(".") + 1) : norm;
-
-            String sql = "SELECT tt.table_name AS dimView " +
-                         "FROM reporting.meta_relationship r " +
-                         "JOIN reporting.meta_table ft ON ft.table_id = r.from_table_id " +
-                         "JOIN reporting.meta_table tt ON tt.table_id = r.to_table_id " +
-                         "WHERE ft.schema_name || '.' || ft.table_name IN ('" + withSchema + "', '" + withoutSchema + "') " +
-                         "   OR ft.table_name IN ('" + withSchema + "', '" + withoutSchema + "')";
-            List<Map<String, Object>> rows = jdbcTemplate.queryForList(sql);
-            if (rows != null) {
-                for (Map<String, Object> r : rows) {
-                    Object val = r.get("dimView");
-                    if (val == null) {
-                        val = r.get("dimview");
-                    }
-                    if (val != null) {
-                        dims.add(val.toString().trim().toLowerCase());
-                    }
-                }
+        if (factTable == null) return dims;
+        MetaTable table = schemaCatalogLoader.findTable(factTable);
+        if (table != null) {
+            for (MetaRelationship edge : table.getOutgoingEdges()) {
+                dims.add(edge.getToTable().getTableName().trim().toLowerCase());
             }
-        } catch (Exception e) {
-            log.error("Failed to query dimensions for fact table: " + factTable, e);
         }
         return dims;
     }

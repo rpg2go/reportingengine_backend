@@ -4,6 +4,10 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.web.bind.annotation.*;
 import lombok.extern.slf4j.Slf4j;
+import com.reporting.cache.MetadataCache;
+import com.reporting.catalog.SchemaCatalogLoader;
+import com.reporting.catalog.MetaTable;
+import com.reporting.catalog.MetaColumn;
 
 import java.util.List;
 import java.util.Collections;
@@ -15,9 +19,13 @@ import java.util.Collections;
 public class MetadataController {
 
     private final JdbcTemplate jdbcTemplate;
+    private final MetadataCache metadataCache;
+    private final SchemaCatalogLoader schemaCatalogLoader;
 
-    public MetadataController(JdbcTemplate jdbcTemplate) {
+    public MetadataController(JdbcTemplate jdbcTemplate, MetadataCache metadataCache, SchemaCatalogLoader schemaCatalogLoader) {
         this.jdbcTemplate = jdbcTemplate;
+        this.metadataCache = metadataCache;
+        this.schemaCatalogLoader = schemaCatalogLoader;
     }
 
     @GetMapping("/distinct-values")
@@ -55,6 +63,29 @@ public class MetadataController {
         for (String part : tableParts) {
             if (!part.matches("^[a-zA-Z0-9_]+$")) {
                 log.warn("Security Alert: Invalid table name block: {}", resolvedTable);
+                return ResponseEntity.badRequest().body(Collections.emptyList());
+            }
+        }
+
+        // Try the cache first
+        String cacheKey = (resolvedTable + "." + column).toLowerCase();
+        List<String> cachedValues = metadataCache.getCachedColumnValues(cacheKey);
+        if (cachedValues != null && !cachedValues.isEmpty()) {
+            log.info("MetadataCache: hit for distinct values: {}", cacheKey);
+            return ResponseEntity.ok(cachedValues);
+        }
+
+        // Whitelist check: autocomplete queries are only allowed on visible, and either filterable or value-cached columns.
+        MetaColumn metaCol = schemaCatalogLoader.findColumn(resolvedTable, column);
+        if (metaCol != null) {
+            if (!metaCol.isVisible() || (!metaCol.isCached() && !metaCol.isFilterable())) {
+                log.warn("Performance safety block: Denied autocomplete lookup on invisible/non-filterable/non-cached column: {}.{}", resolvedTable, column);
+                return ResponseEntity.badRequest().body(Collections.emptyList());
+            }
+        } else {
+            MetaTable metaTable = schemaCatalogLoader.findTable(resolvedTable);
+            if (metaTable != null) {
+                log.warn("Blocked autocomplete lookup because column {}.{} does not exist in schema catalog.", resolvedTable, column);
                 return ResponseEntity.badRequest().body(Collections.emptyList());
             }
         }
