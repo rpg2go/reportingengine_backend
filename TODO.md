@@ -1,6 +1,7 @@
 # Project Plan: Reporting Engine Platform
 
 ## ✅ Phase 1: Foundation, UI Builder & Persistence (Completed 2026-05-25)
+
 - [x] Database migrations 000–007 (Schema setup for `reporting` and `analytics` schemas).
 - [x] Spring Boot backend structure, JPA entity mappings, CORS, and Basic Auth security.
 - [x] Angular 21 standalone frontend components (Login, Dashboard, Report Builder, Detail, Semantic Viewer).
@@ -18,6 +19,7 @@
   - [x] API base URL changed to `127.0.0.1` to bypass Windows DNS resolution lag.
 
 ## ✅ Phase 2: Engine Compilation & Rendering (Completed 2026-05-30)
+
 - [x] Dynamic SQL query compilation (`SqlGeneratorService.java`) — assemble fact table queries with CTE date boundaries and conditional aggregations from row `sql_expr` and `filter_expr`.
 - [x] Row and column math formula evaluation (`PostProcessorService.java`) with `exp4j`.
 - [x] Excel layout rendering (`LayoutRendererService.java`) — POI styling with borders, alignment, fonts, and colors.

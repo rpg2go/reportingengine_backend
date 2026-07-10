@@ -9,7 +9,7 @@ This document serves as the architecture reference, implementation state, and co
 - **Objective**: Build a metadata-driven orchestration reporting engine.
 - **Phase 1 (Completed)**: JPA Database Persistence, migration utilities, and Direct JDBC access optimization.
 - **Phase 2 (Completed)**: SQL Compilation, Dynamic Row Filters Assembly, and Excel Rendering.
-- **Phase 3 (In Progress)**: Validation, Verification, and Polish. See Phase 3 Roadmap below.
+- **Phase 3 (Completed)**: Validation, Verification, and Polish.
 
 ---
 
@@ -64,6 +64,7 @@ This document serves as the architecture reference, implementation state, and co
 ## 🗄️ Database Schemas
 
 ### 1. `reporting` Schema
+
 Stores metadata and report configuration templates.
 
 | Table Name | Primary Key | Foreign Keys / Description |
@@ -74,9 +75,9 @@ Stores metadata and report configuration templates.
 | `rpt_row_metric` | `row_metric_id` | References `(report_id, version, row_id)`. Links `data` row to `sql_expr` (the SQL aggregation expression). Unique constraint on `(report_id, version, row_id, measure_id)`. |
 | `rpt_row_formula` | `row_formula_id` | References `(report_id, version, row_id)`. Links `calc` row to `formula_expr` (e.g. `R2/R3`). Unique constraint on `(report_id, version, row_id)`. |
 | `rpt_row_column_map` | `(report_id, version, row_id, col_id)`| References `(report_id, version, row_id)` and `(report_id, version, col_id)`. Grid intersections showing active columns for each row. |
-| `schema_migrations` | `migration_name`| Tracks applied database migration filenames. |
 
 ### 2. `analytics` Schema
+
 Represents the physical Data Warehouse (DWH) containing dimension and fact tables (seeding transaction, performance, investment, and sales data for 2024–2026).
 
 ---
@@ -99,8 +100,8 @@ All backend APIs are prefixed with `/api` and listen on port `8101`.
 | **GET** | `/api/reports/table-columns` | Returns column list for a table (e.g., `?table=fact_sales`). |
 | **GET** | `/api/reports/column-types` | Returns database column types map for a given table. |
 | **GET** | `/api/reports/dimensions/values` | Autocomplete distinct values for a table column. |
-| **GET** | `/api/reports/dimension-joins` | Fetches join metadata from `sem_join` for a fact table. |
-| **GET** | `/api/reports/semantic-model` | Fetches the complete `sem_*` explore/view/dimension/measure model. |
+| **GET** | `/api/reports/dimension-joins` | Fetches join metadata from `meta_relationship` for a fact table. |
+| **GET** | `/api/reports/schema-catalog` | Fetches the complete explore/view/dimension/measure model from `meta_*` tables. |
 
 ### Report Execution (`ReportExecutionController.java`)
 
@@ -168,7 +169,6 @@ Use the links below to navigate directly to the primary components:
   - [SchemaGraphRouter.java](src/main/java/com/reporting/catalog/SchemaGraphRouter.java) — Dijkstra BFS pathfinder resolving multi-hop LEFT JOIN chains between fact and dimension tables.
   - [MetaTable.java](src/main/java/com/reporting/catalog/MetaTable.java), [MetaColumn.java](src/main/java/com/reporting/catalog/MetaColumn.java), [MetaRelationship.java](src/main/java/com/reporting/catalog/MetaRelationship.java) — In-memory graph node/edge models.
 - **Database Utilities**:
-  - [MigrationRunner.java](src/main/java/com/reporting/util/MigrationRunner.java) — Custom Java runner applying SQL migrations (`000–015`) with tracking in `schema_migrations`.
   - [DbDumper.java](src/main/java/com/reporting/util/DbDumper.java) — Helper utility to dump local reporting templates into migration files.
 
 ---
@@ -176,6 +176,7 @@ Use the links below to navigate directly to the primary components:
 ## 🚀 How to Bootstrap the Dev Environment
 
 ### 1. Database (Docker)
+
 Spin up the local container from the project root:
 ```bash
 docker-compose down -v
@@ -184,6 +185,7 @@ docker-compose up --build -d
 *Port: `5432` | DB: `agentic_ai` | User: `user` | Pass: `password`*
 
 ### 2. Spring Boot Backend
+
 Start the backend on port `8101` using the Maven wrapper:
 - **Windows**:
   ```cmd
@@ -197,6 +199,7 @@ Start the backend on port `8101` using the Maven wrapper:
   ```
 
 ### 3. Run Database Migrations Manually
+
 To apply migrations against a Postgres database using the compiled runner:
 ```cmd
 maven\apache-maven-3.9.6\bin\mvn.cmd compile exec:java "-Dexec.mainClass=com.reporting.util.MigrationRunner" "-Dexec.args=YOUR_DATABASE_URL"
@@ -204,15 +207,15 @@ maven\apache-maven-3.9.6\bin\mvn.cmd compile exec:java "-Dexec.mainClass=com.rep
 
 ---
 
-## 🧭 Phase 3 Validation & Polish Roadmap
+## 🧭 Phase 3 Validation & Polish Roadmap (Completed)
 
-When you are tasked with starting Phase 3, follow this development sequence:
+All roadmap requirements have been successfully completed:
 
 1. **Frontend Integration & UI Enhancements**:
-   - Update report detail view to show a loading spinner and live status badges during execution runs.
-   - Fix "Rolling In" field behavior in the Step 2 column setup wizard.
+   - Updated report detail view to show a loading spinner and live status badges during execution runs.
+   - Fixed "Rolling In" field behavior in the Step 2 column setup wizard.
 2. **Edge Case Validation**:
-   - Test handling of mathematical divide-by-zero, cyclic formula references, and missing metrics.
-   - Refine unit tests to expand coverage metrics.
+   - Tested handling of mathematical divide-by-zero, cyclic formula references, and missing metrics.
+   - Refined unit tests to expand coverage metrics.
 3. **Advanced Filtering**:
-   - Extend general filters builder to support free-text SQL conditions (e.g., `amount > 1000`).
+   - Extended general filters builder to support free-text SQL conditions (e.g., `amount > 1000`).

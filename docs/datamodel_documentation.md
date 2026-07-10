@@ -1,23 +1,20 @@
 # Data Model Specification & Migration Guide
 
-This document defines the database architecture, schema structures, and relationships for the Reporting Engine, and outlines the blueprint for migrating or populating the database for a new analytical data model.
+This document defines the database architecture, schema structures, and relationships for the Reporting Engine. It serves as a blueprint for configuring report templates and registering analytical Data Warehouse (DWH) tables.
 
 ---
 
 ## 📐 Schema Separation
 
-The platform utilizes two PostgreSQL schemas inside the database to decouple reporting configurations from the analytical Data Warehouse (DWH):
+The platform utilizes two PostgreSQL schemas inside the database to decouple reporting configurations and DWH structures:
 
-1. **`reporting` Schema**: Stores the report configuration metadata, style definitions, cell-level mappings, and the semantic model representing DWH relations (explores, views, and joins).
-2. **`analytics` Schema**: Represents the actual Data Warehouse (DWH) containing physical facts (e.g., `fact_sales`) and dimensions (e.g., `dim_date`, `dim_location`).
+1.  **`reporting` Schema**: Stores the metadata catalog of DWH structures ([meta_table](file:///Users/mariusdruga/Workspace/reportingengine_backend/db/liquibase/sql/003_create_catalog_tables.sql#L9-L18), [meta_column](file:///Users/mariusdruga/Workspace/reportingengine_backend/db/liquibase/sql/003_create_catalog_tables.sql#L23-L35), and [meta_relationship](file:///Users/mariusdruga/Workspace/reportingengine_backend/db/liquibase/sql/003_create_catalog_tables.sql#L40-L51)) along with report templates, style layouts, and grid mapping coordinates.
+2.  **`analytics` Schema**: Represents the actual Data Warehouse (DWH) containing physical facts (e.g., `fact_sales`) and dimensions (e.g., `dim_date`, `dim_location`).
 
 ```mermaid
 erDiagram
-    reporting-sem_model ||--o{ reporting-sem_view : contains
-    reporting-sem_model ||--o{ reporting-sem_explore : exposes
-    reporting-sem_view ||--o{ reporting-sem_dimension : defines
-    reporting-sem_view ||--o{ reporting-sem_measure : defines
-    reporting-sem_explore ||--o{ reporting-sem_join : defines
+    reporting-meta_table ||--o{ reporting-meta_column : defines
+    reporting-meta_table ||--o{ reporting-meta_relationship : joins
     
     reporting-rpt_report ||--o{ reporting-rpt_column_def : "defines columns"
     reporting-rpt_report ||--o{ reporting-rpt_row : "defines rows"
@@ -26,154 +23,182 @@ erDiagram
     reporting-rpt_row_column_map }|--|| reporting-rpt_row : references
     reporting-rpt_row_column_map }|--|| reporting-rpt_column_def : references
     
-    reporting-rpt_report }|--|| reporting-sem_explore : "routes joins via default explore"
-    reporting-rpt_report }|--|| analytics-fact_table : "queries data directly (bypasses semantic measures)"
+    reporting-rpt_report }|--|| analytics-fact_table : "queries data directly (resolves join pathways via meta_relationship)"
 ```
 
 ---
 
-## 🗄️ 1. The `reporting` Schema: Semantic & Configuration Tables
+## 🗄️ 1. The `reporting` Schema: Metadata Catalog & Configurations
 
-### A. Semantic Metadata Layer (Decoupled Model Description)
-These tables store structural information about the Data Warehouse (tables, joins, primary/foreign keys). While the query execution engine bypasses lookups to semantic measures, **dimension joins are still resolved using this layer**.
+The `reporting` schema contains two main sub-groups of tables: the **DWH Metadata Catalog** (replacing the deprecated `sem_*` layers) and the **Report Template Layout Configurations**.
 
-#### 1. `reporting.sem_model`
-Registers top-level models (e.g. LookML equivalent).
-- `model_id` (SERIAL PRIMARY KEY)
-- `name` (VARCHAR(100) UNIQUE) — e.g., `"sales_analytics"`
-- `label` (VARCHAR(200)) — display name
-- `is_active` (BOOLEAN DEFAULT TRUE)
+### A. DWH Metadata Catalog (Schema Registry)
 
-#### 2. `reporting.sem_view`
-Registers physical tables inside the `analytics` schema.
-- `view_id` (SERIAL PRIMARY KEY)
-- `model_id` (INTEGER REFERENCES `sem_model`)
-- `name` (VARCHAR(100)) — logical view name (e.g., `"dim_location"`)
-- `table_ref` (VARCHAR(300)) — fully qualified table (e.g., `"analytics.dim_location"`)
-- `view_type` (VARCHAR(20)) — `"fact"` or `"dimension"`
-- `primary_key` (VARCHAR(100)) — column acting as PK (e.g., `"id"`)
-- `time_key` (VARCHAR(100)) — date partition/rolling key (e.g., `"order_date"` for facts)
+These tables register the physical table structures, columns, and foreign key relationships of the Data Warehouse. At startup, [SchemaCatalogLoader.java](file:///Users/mariusdruga/Workspace/reportingengine_backend/src/main/java/com/reporting/catalog/SchemaCatalogLoader.java) caches this graph in-memory, and [SchemaGraphRouter.java](file:///Users/mariusdruga/Workspace/reportingengine_backend/src/main/java/com/reporting/catalog/SchemaGraphRouter.java) executes Dijkstra's BFS to resolve LEFT JOIN chains between facts and dimensions.
 
-#### 3. `reporting.sem_explore`
-Defines query entry-points driving fact aggregations.
-- `explore_id` (SERIAL PRIMARY KEY)
-- `model_id` (INTEGER REFERENCES `sem_model`)
-- `fact_view_id` (INTEGER REFERENCES `sem_view`)
-- `name` (VARCHAR(100)) — logical name (e.g., `"fact_sales"`)
-- `sql_always_where` (TEXT) — optional global filter appended to queries
+#### 1. `reporting.meta_table`
 
-#### 4. `reporting.sem_join`
-Specifies relationships between facts and dimensions.
-- `join_id` (SERIAL PRIMARY KEY)
-- `explore_id` (INTEGER REFERENCES `sem_explore`)
-- `from_view_id` (INTEGER REFERENCES `sem_view`) — fact view
-- `to_view_id` (INTEGER REFERENCES `sem_view`) — dimension view
-- `join_sql` (TEXT) — join condition (e.g., `"analytics.fact_sales.location_id = analytics.dim_location.id"`)
-- `join_type` (VARCHAR(10) DEFAULT `"LEFT"`) — `"LEFT"` or `"INNER"`
+Registers physical tables inside the DWH.
+- `table_id` (SERIAL PRIMARY KEY)
+- `schema_name` (VARCHAR(63) NOT NULL DEFAULT 'analytics')
+- `table_name` (VARCHAR(128) NOT NULL) — physical table name
+- `label` (VARCHAR(256)) — UI display name
+- `table_type` (VARCHAR(20) NOT NULL CHECK (table_type IN ('fact', 'dimension', 'bridge')))
+- `time_key` (VARCHAR(128)) — column name containing the date key (e.g. `'reporting_date'`)
+- `description` (TEXT)
+
+#### 2. `reporting.meta_column`
+
+Registers physical columns of the tables.
+- `column_id` (SERIAL PRIMARY KEY)
+- `table_id` (INTEGER REFERENCES `meta_table(table_id) ON DELETE CASCADE`)
+- `column_name` (VARCHAR(128) NOT NULL)
+- `label` (VARCHAR(256))
+- `data_type` (VARCHAR(64))
+- `is_primary_key` (BOOLEAN DEFAULT FALSE)
+- `is_foreign_key` (BOOLEAN DEFAULT FALSE)
+- `is_conformed` (BOOLEAN DEFAULT FALSE)
+- `is_filterable` (BOOLEAN DEFAULT FALSE)
+- `description` (TEXT)
+
+#### 3. `reporting.meta_relationship`
+
+Defines physical join routes between tables.
+- `relationship_id` (SERIAL PRIMARY KEY)
+- `from_table_id` (INTEGER REFERENCES `meta_table(table_id) ON DELETE CASCADE`) — source table
+- `from_column` (VARCHAR(128) NOT NULL) — source column
+- `to_table_id` (INTEGER REFERENCES `meta_table(table_id) ON DELETE CASCADE`) — target table
+- `to_column` (VARCHAR(128) NOT NULL) — target column
+- `join_type` (VARCHAR(20) DEFAULT 'LEFT' CHECK (join_type IN ('LEFT', 'INNER', 'RIGHT')))
+- `is_conformed` (BOOLEAN DEFAULT FALSE)
+- `weight` (INTEGER DEFAULT 1) — Dijktra edge cost (1 = conformed key, 2 = non-conformed FK)
+- `description` (TEXT)
 
 ---
 
-### B. Report Template Configurations (Normalized Schema)
-These tables store Excel layout hierarchies, row types, cell activation, and styling.
+### B. Report Template Configurations (Normalized Layouts)
+
+These tables define layouts, columns, row styles, metrics, and active coordinates.
 
 #### 1. `reporting.rpt_report`
-Registers individual reports.
-- `report_id` (VARCHAR(50)) — e.g. `"SALES_OVERVIEW"`
-- `version` (INTEGER) — version number
-- `status` (VARCHAR(50)) — `"draft"` | `"in_review"` | `"published"`
-- `deleted` (BOOLEAN) — soft-delete flag (defaults to FALSE)
-- `name` (VARCHAR(200)) — e.g. `"Sales & Margin Report"`
-- `explore_id` (INTEGER REFERENCES `sem_explore`) — default join routes
-- `source_table` (VARCHAR(150)) — physical fact table scanned (e.g. `"analytics.fact_sales"`)
-- `granularity` (VARCHAR(1000)) — DWH sub-row grouping key (e.g. `"dim_location.country_name"`)
-- `timeframe_start` (VARCHAR(50)) — date timeframe offset start boundary
-- `timeframe_end` (VARCHAR(50)) — date timeframe offset end boundary
-- `timeframe_today` (BOOLEAN) — flags if timeframe respects current day execution
-- `quick_filters` (TEXT) — JSON string for UI dropdown filter limits
-- `general_filters` (TEXT) — JSON string of DWH conditions (e.g. `[{"column":"region", "operator":"=", "value":"North"}]`)
+
+Defines report headers.
+- `report_id` (VARCHAR(50)) — alphanumeric identifier (e.g., `'SALES_OVERVIEW'`)
+- `version` (INTEGER DEFAULT 1) — version number
+- `report_name` (VARCHAR(200) NOT NULL)
+- `description` (TEXT)
+- `status` (VARCHAR(20) DEFAULT 'draft' CHECK (status IN ('draft', 'in_review', 'published')))
+- `source_table` (VARCHAR(150)) — physical fact table scanned (e.g. `'analytics.fact_sales'`)
+- `source_field` (VARCHAR(150)) — fallback field mapping
+- `granularity` (VARCHAR(1000)) — physical `GROUP BY` column (e.g. `'dim_location.country_name'`)
+- `timeframe_start` (VARCHAR(50)) — offset parameter start
+- `timeframe_end` (VARCHAR(50)) — offset parameter end
+- `timeframe_today` (BOOLEAN DEFAULT FALSE) — anchors relative to execution date
+- `quick_filters` (TEXT) — JSON configuration for distinct dropdown values
+- `general_filters` (TEXT) — JSON array for push-down fact filter logic
+- `deleted` (BOOLEAN DEFAULT FALSE) — soft-delete flag
 - **Primary Key**: `(report_id, version)`
 
-#### 2. `reporting.rpt_column_def`
-Defines columns (C1, C2, etc.) and time horizons.
+#### 2. `reporting.rpt_style`
+
+Stores cell style attributes.
+- `style_id` (SERIAL PRIMARY KEY)
+- `name` (VARCHAR(50) NOT NULL UNIQUE) — layout categories (e.g. `'section'`, `'total'`, `'normal'`)
+- `font_size` (INTEGER DEFAULT 11)
+- `is_bold` (BOOLEAN DEFAULT FALSE)
+- `border_top` (BOOLEAN DEFAULT FALSE)
+- `border_bottom` (BOOLEAN DEFAULT FALSE)
+- `alignment` (VARCHAR(10) CHECK (alignment IN ('left', 'center', 'right')))
+- `color_hex` (VARCHAR(7))
+- `bg_color_hex` (VARCHAR(7))
+
+#### 3. `reporting.rpt_column_def`
+
+Defines report headers and rolling period configurations.
 - `column_def_id` (SERIAL PRIMARY KEY)
 - `report_id` (VARCHAR(50))
 - `version` (INTEGER)
-- `col_id` (VARCHAR(10)) — column ID (e.g. `"C1"`)
-- `label` (VARCHAR(200)) — header display label
-- `col_type` (VARCHAR(20)) — `"WEEK"` | `"MTD"` | `"YTD"` | `"ROLLING"` | `"CALC"`
-- `period_offset` (INTEGER DEFAULT 0) — 0 = current period, -1 = prior period
-- `rolling_n` (INTEGER) — rolling period count
-- `rolling_grain` (VARCHAR(10)) — `"DAY"` | `"WEEK"` | `"MONTH"`
-- `formula_expr` (TEXT) — expression for `"CALC"` columns (e.g. `"(C1 - C2) / C2"`)
-- `display_order` (INTEGER) — left-to-right rendering order
+- `col_id` (VARCHAR(10) NOT NULL) — column grid ID (e.g. `'C1'`)
+- `label` (VARCHAR(200))
+- `col_type` (VARCHAR(20) CHECK (col_type IN ('WTD', 'MTD', 'YTD', 'ROLLING', 'CALC', 'HEADER')))
+- `period_offset` (INTEGER DEFAULT 0) — relative offset (e.g. `0` = current, `-1` = prior period)
+- `period_type` (VARCHAR(50)) — time scope details
+- `rolling_n` (INTEGER) — rolling boundary count
+- `rolling_grain` (VARCHAR(10) CHECK (rolling_grain IN ('DAY', 'WEEK', 'MONTH', 'YEAR')))
+- `formula_expr` (TEXT) — expression for `'CALC'` columns
+- `display_order` (INTEGER NOT NULL) — ordering index
+- `tier_level` (VARCHAR(10) DEFAULT 'L1' CHECK (tier_level IN ('L1', 'L2', 'L3')))
+- `parent_id` (VARCHAR(50))
 - **Foreign Key**: `(report_id, version) REFERENCES rpt_report (report_id, version) ON DELETE CASCADE`
 - **Unique Constraint**: `(report_id, version, col_id)`
 
-#### 3. `reporting.rpt_row`
-Defines rows (labels, hierarchical levels, styling).
+#### 4. `reporting.rpt_row`
+
+Defines layout rows.
+- `row_id` (VARCHAR(50) NOT NULL) — row grid ID (e.g. `'R1'`)
 - `report_id` (VARCHAR(50))
 - `version` (INTEGER)
-- `row_id` (VARCHAR(50)) — e.g. `"R1"`
-- `parent_row_id` (VARCHAR(50)) — parent row ID
-- `label` (VARCHAR(300)) — display text in the output spreadsheet
-- `row_type` (VARCHAR(20)) — `"section"` | `"data"` | `"calc"` | `"blank"`
-- `display_order` (INTEGER) — top-to-bottom rendering order
-- `indent_level` (INTEGER DEFAULT 0) — UI display indent padding
-- `style_id` (INTEGER REFERENCES `rpt_style`)
-- `filter_expr` (TEXT) — row-level DWH custom filters (e.g., `"category = 'Software'"`)
+- `parent_row_id` (VARCHAR(50)) — hierarchical parent reference
+- `label` (VARCHAR(300) NOT NULL)
+- `row_type` (VARCHAR(20) CHECK (row_type IN ('section', 'data', 'calc', 'blank')))
+- `display_order` (INTEGER NOT NULL)
+- `indent_level` (INTEGER DEFAULT 0)
+- `style_id` (INTEGER REFERENCES `rpt_style(style_id)`)
+- `filter_expr` (TEXT) — row-level DWH custom filters (e.g. `'category = ''Software'''`)
 - **Primary Key**: `(report_id, version, row_id)`
 - **Foreign Key**: `(report_id, version) REFERENCES rpt_report (report_id, version) ON DELETE CASCADE`
-- **Self-referential FK**: `(report_id, version, parent_row_id) REFERENCES rpt_row (report_id, version, row_id)`
+- **Self-referential FK**: `(report_id, version, parent_row_id) REFERENCES rpt_row (report_id, version, row_id) ON DELETE CASCADE`
 
-#### 4. `reporting.rpt_row_metric`
-Binds `"data"` rows to physical aggregates.
+#### 5. `reporting.rpt_row_metric`
+
+Links `'data'` rows to physical SQL aggregate expressions.
 - `row_metric_id` (SERIAL PRIMARY KEY)
 - `report_id` (VARCHAR(50))
 - `version` (INTEGER)
 - `row_id` (VARCHAR(50))
-- `sql_expr` (TEXT) — direct aggregate formula (e.g. `"SUM(analytics.fact_sales.amount)"`)
-- `measure_definition` (TEXT) — JSON schema details
+- `sql_expr` (TEXT) — SQL aggregation (e.g. `'SUM(analytics.fact_sales.amount)'`)
+- `measure_definition` (TEXT) — metadata JSON
 - **Foreign Key**: `(report_id, version, row_id) REFERENCES rpt_row (report_id, version, row_id) ON DELETE CASCADE`
-- **Unique Constraint**: `(report_id, version, row_id, measure_id)`
+- **Unique Constraint**: `(report_id, version, row_id)`
 
-#### 5. `reporting.rpt_row_formula`
-Binds `"calc"` rows to algebraic post-process formula expressions.
+#### 6. `reporting.rpt_row_formula`
+
+Links `'calc'` rows to algebraic formulas evaluated via `exp4j`.
 - `row_formula_id` (SERIAL PRIMARY KEY)
 - `report_id` (VARCHAR(50))
 - `version` (INTEGER)
 - `row_id` (VARCHAR(50))
-- `formula_expr` (TEXT) — row formula (e.g. `"R2 - R3"`)
+- `formula_expr` (TEXT) — algebraic expression (e.g. `'R2 / R3'`)
 - **Foreign Key**: `(report_id, version, row_id) REFERENCES rpt_row (report_id, version, row_id) ON DELETE CASCADE`
 - **Unique Constraint**: `(report_id, version, row_id)`
 
-#### 6. `reporting.rpt_row_column_map`
-Specifies which intersections are active. If an intersection is disabled (`is_enabled = FALSE`), the engine skips query compilation and post-processing for that cell, leaving it empty in the rendered Excel template.
+#### 7. `reporting.rpt_row_column_map`
+
+Indicates active layout coordinates (grid intersections).
+- `mapping_id` (SERIAL PRIMARY KEY)
 - `report_id` (VARCHAR(50))
 - `version` (INTEGER)
 - `row_id` (VARCHAR(50))
 - `col_id` (VARCHAR(10))
 - `is_enabled` (BOOLEAN DEFAULT TRUE)
-- **Primary Key**: `(report_id, version, row_id, col_id)`
 - **Foreign Key (Row)**: `(report_id, version, row_id) REFERENCES rpt_row (report_id, version, row_id) ON DELETE CASCADE`
 - **Foreign Key (Col)**: `(report_id, version, col_id) REFERENCES rpt_column_def (report_id, version, col_id) ON DELETE CASCADE`
-
----
-
-> [!TIP]
-> For a complete, real-world example of a configured report template (including active columns, data rows, custom SQL metrics, and calculated growth formulas), see the **[Regional Distribution Template Reference](regional_distribution_template.md)**.
+- **Unique Constraint**: `(report_id, version, row_id, col_id)`
 
 ---
 
 ## 🚀 Blueprint for Migrating to a New Data Model
 
-If you add a new fact table to the warehouse (e.g. `analytics.fact_inventory`) and wish to spin up a report template against it, follow these steps:
+Follow this three-step blueprint when registering new DWH tables (e.g. `analytics.fact_inventory`) and setting up report template structures to support execution:
 
-### Step 1: Create the DWH Tables (`analytics` schema)
-Ensure your new fact table contains a time column (used for partitions and rolling limits) and any dimension lookup foreign keys:
+### Step 1: Create the Analytics Tables (`analytics` schema)
+
+Define the physical fact table containing a partition-key date column and key dimension links:
+
 ```sql
 CREATE TABLE analytics.fact_inventory (
     id            SERIAL PRIMARY KEY,
-    date_key      DATE NOT NULL,  -- partition key
+    reporting_date DATE NOT NULL,  -- partition key
     warehouse_id  INTEGER NOT NULL,
     supplier_id   INTEGER NOT NULL,
     stock_qty     INTEGER NOT NULL,
@@ -181,68 +206,58 @@ CREATE TABLE analytics.fact_inventory (
 );
 ```
 
-### Step 2: Populate the Semantic Join Model
-Populating these records registers the metadata mapping so the SQL query compiler can dynamically resolve join paths when applying granularity rules:
+### Step 2: Populate the Metadata Catalog (`reporting` schema)
+
+Register the metadata catalog configurations to allow `SchemaGraphRouter` to discover relationships and build dynamic SQL joins:
 
 ```sql
--- 1. Register the Model (if not already existing)
-INSERT INTO reporting.sem_model (name, label)
-VALUES ('inventory_model', 'Inventory Analytics Model')
-ON CONFLICT DO NOTHING;
+-- 1. Register the Table
+INSERT INTO reporting.meta_table (schema_name, table_name, label, table_type, time_key, description)
+VALUES ('analytics', 'fact_inventory', 'Inventory Fact', 'fact', 'reporting_date', 'Inventory level counts');
 
--- 2. Register Views (The Fact and the Dimensions)
-INSERT INTO reporting.sem_view (model_id, name, label, table_ref, view_type, primary_key, time_key)
+-- 2. Register columns
+INSERT INTO reporting.meta_column (table_id, column_name, label, data_type, is_primary_key, is_foreign_key, is_conformed)
 VALUES 
-  (1, 'fact_inventory', 'Fact Inventory', 'analytics.fact_inventory', 'fact', 'id', 'date_key'),
-  (1, 'dim_warehouse', 'Dim Warehouse', 'analytics.dim_warehouse', 'dimension', 'id', NULL);
+  ((SELECT table_id FROM reporting.meta_table WHERE table_name = 'fact_inventory'), 'id', 'ID', 'integer', TRUE, FALSE, FALSE),
+  ((SELECT table_id FROM reporting.meta_table WHERE table_name = 'fact_inventory'), 'reporting_date', 'Date', 'date', FALSE, TRUE, FALSE),
+  ((SELECT table_id FROM reporting.meta_table WHERE table_name = 'fact_inventory'), 'warehouse_id', 'Warehouse ID', 'integer', FALSE, TRUE, TRUE);
 
--- 3. Register the Explore
-INSERT INTO reporting.sem_explore (model_id, fact_view_id, name, label)
-VALUES (1, (SELECT view_id FROM reporting.sem_view WHERE name = 'fact_inventory'), 'explore_inventory', 'Inventory Explore');
-
--- 4. Register the Join Pathway
-INSERT INTO reporting.sem_join (explore_id, from_view_id, to_view_id, join_sql, join_type)
+-- 3. Register relationships (joins)
+INSERT INTO reporting.meta_relationship (from_table_id, from_column, to_table_id, to_column, join_type, weight)
 VALUES (
-    (SELECT explore_id FROM reporting.sem_explore WHERE name = 'explore_inventory'),
-    (SELECT view_id FROM reporting.sem_view WHERE name = 'fact_inventory'),
-    (SELECT view_id FROM reporting.sem_view WHERE name = 'dim_warehouse'),
-    'analytics.fact_inventory.warehouse_id = analytics.dim_warehouse.id',
-    'LEFT'
+    (SELECT table_id FROM reporting.meta_table WHERE table_name = 'fact_inventory'),
+    'warehouse_id',
+    (SELECT table_id FROM reporting.meta_table WHERE table_name = 'dim_location'),
+    'id',
+    'LEFT',
+    1
 );
 ```
 
-### Step 3: Populate the Report Configuration
-Now define the report header binding directly to the physical table, bypassing semantic measures:
+### Step 3: Populate the Report Template Configuration
+
+Now insert the configuration template mapping directly to the physical facts:
 
 ```sql
 -- 1. Insert Report Header
-INSERT INTO reporting.rpt_report (report_id, name, explore_id, version, status, source_table, granularity)
-VALUES (
-    'INV_STATUS', 
-    'Warehouse Inventory Status', 
-    (SELECT explore_id FROM reporting.sem_explore WHERE name = 'explore_inventory'), 
-    1, 
-    'published', 
-    'analytics.fact_inventory', 
-    'dim_warehouse.warehouse_name'
-);
+INSERT INTO reporting.rpt_report (report_id, report_name, version, status, source_table, granularity)
+VALUES ('INV_STATUS', 'Warehouse Inventory Status', 1, 'published', 'analytics.fact_inventory', 'dim_location.country_name');
 
 -- 2. Define Columns (C1 = Current Week, C2 = Prior Week)
 INSERT INTO reporting.rpt_column_def (report_id, col_id, label, col_type, period_offset, display_order)
 VALUES 
-  ('INV_STATUS', 'C1', 'Current Week', 'WEEK', 0, 1),
-  ('INV_STATUS', 'C2', 'Prior Week', 'WEEK', -1, 2);
+  ('INV_STATUS', 'C1', 'Current Week', 'WTD', 0, 1),
+  ('INV_STATUS', 'C2', 'Prior Week', 'WTD', -1, 2);
 
 -- 3. Define Rows
--- R1 = Header Section, R2 = Stock Quantity (data), R3 = Unit Cost (data), R4 = Total Cost (calc)
-INSERT INTO reporting.rpt_row (report_id, row_id, label, row_type, display_order, indent_level, style_id)
+INSERT INTO reporting.rpt_row (report_id, row_id, label, row_type, display_order, indent_level)
 VALUES 
-  ('INV_STATUS', 'R1', 'INVENTORY REPORT', 'section', 1, 0, (SELECT style_id FROM reporting.rpt_style WHERE name = 'section')),
-  ('INV_STATUS', 'R2', 'Stock Quantity On Hand', 'data', 2, 1, (SELECT style_id FROM reporting.rpt_style WHERE name = 'normal')),
-  ('INV_STATUS', 'R3', 'Average Unit Cost', 'data', 3, 1, (SELECT style_id FROM reporting.rpt_style WHERE name = 'normal')),
-  ('INV_STATUS', 'R4', 'Total Value on Hand', 'calc', 4, 1, (SELECT style_id FROM reporting.rpt_style WHERE name = 'total'));
+  ('INV_STATUS', 'R1', 'INVENTORY REPORT', 'section', 1, 0),
+  ('INV_STATUS', 'R2', 'Stock Quantity On Hand', 'data', 2, 1),
+  ('INV_STATUS', 'R3', 'Average Unit Cost', 'data', 3, 1),
+  ('INV_STATUS', 'R4', 'Total Value on Hand', 'calc', 4, 1);
 
--- 4. Map Data Rows directly to SQL aggregates
+-- 4. Map Data Rows to physical aggregates
 INSERT INTO reporting.rpt_row_metric (report_id, row_id, sql_expr)
 VALUES 
   ('INV_STATUS', 'R2', 'SUM(analytics.fact_inventory.stock_qty)'),
@@ -252,7 +267,7 @@ VALUES
 INSERT INTO reporting.rpt_row_formula (report_id, row_id, formula_expr)
 VALUES ('INV_STATUS', 'R4', 'R2 * R3');
 
--- 6. Enable all cells in the grid map
+-- 6. Enable the grid cells mapping
 INSERT INTO reporting.rpt_row_column_map (report_id, row_id, col_id, is_enabled)
 VALUES 
   ('INV_STATUS', 'R2', 'C1', TRUE),
@@ -262,76 +277,4 @@ VALUES
   ('INV_STATUS', 'R4', 'C1', TRUE),
   ('INV_STATUS', 'R4', 'C2', TRUE);
 ```
-Once these records are inserted, the API endpoints `/api/reports/INV_STATUS` and `/api/reports/INV_STATUS/run` will compile, aggregate, and calculate results against the new DWH tables immediately without any changes to the Java source code.
-
----
-
-## 🚫 How to Deprecate & Remove the LookML Semantic Model (`sem_*` tables)
-
-If you decide to retire the LookML-like metadata model completely (decommissioning the `sem_*` tables) and solely rely on direct physical mappings and the new Dijkstra-based `SchemaGraphRouter` pathfinder, you must perform the following updates.
-
-### 1. Identify Existing Code Dependencies
-The `sem_*` tables are currently queried via JDBC in a few hot-spots to resolve table names, time keys, and dimension joins. You must refactor these SQL strings to query the `meta_*` tables instead:
-
-#### A. Table Reference Resolution
-* **Current SQL** (in `ReportController.java` [L191] and `MetadataController.java` [L84]):
-  ```sql
-  SELECT table_ref FROM reporting.sem_view WHERE name = ?
-  ```
-* **Replacement SQL** (using `meta_table`):
-  ```sql
-  SELECT schema_name || '.' || table_name 
-  FROM reporting.meta_table 
-  WHERE table_name = ?
-  ```
-
-#### B. Time Key Resolution
-* **Current SQL** (in `SqlGeneratorService.java` [L770]):
-  ```sql
-  SELECT time_key FROM reporting.sem_view WHERE table_ref = ?
-  ```
-* **Replacement SQL** (using `meta_table`):
-  ```sql
-  SELECT time_key 
-  FROM reporting.meta_table 
-  WHERE schema_name || '.' || table_name = ?
-  ```
-
-#### C. Dimension Joins Resolution
-* **Current SQL** (in `ReportController.java` [L296]):
-  ```sql
-  SELECT tv.name AS dimView, j.join_type AS joinType, j.join_sql AS joinSql 
-  FROM reporting.sem_join j 
-  JOIN reporting.sem_explore e ON e.explore_id = j.explore_id 
-  JOIN reporting.sem_view fv ON fv.view_id = e.fact_view_id 
-  JOIN reporting.sem_view tv ON tv.view_id = j.to_view_id 
-  WHERE fv.table_ref = :factTable 
-  ORDER BY j.join_id
-  ```
-* **Replacement SQL** (using `meta_relationship`):
-  ```sql
-  SELECT 
-      t2.table_name AS dimView, 
-      r.join_type   AS joinType, 
-      r.join_sql    AS joinSql
-  FROM reporting.meta_relationship r
-  JOIN reporting.meta_table t1 ON t1.table_id = r.from_table_id
-  JOIN reporting.meta_table t2 ON t2.table_id = r.to_table_id
-  WHERE t1.schema_name || '.' || t1.table_name = :factTable
-  ```
-
-### 2. Drop the LookML Database Tables
-Once you have modified the query strings in the Java codebase, you can safely drop the database tables. Run the following DDL migration:
-
-```sql
-DROP TABLE IF EXISTS reporting.sem_derived_metric CASCADE;
-DROP TABLE IF EXISTS reporting.sem_join           CASCADE;
-DROP TABLE IF EXISTS reporting.sem_measure        CASCADE;
-DROP TABLE IF EXISTS reporting.sem_dimension      CASCADE;
-DROP TABLE IF EXISTS reporting.sem_explore        CASCADE;
-DROP TABLE IF EXISTS reporting.sem_view           CASCADE;
-DROP TABLE IF EXISTS reporting.sem_model          CASCADE;
-```
-
-*Note: Since the backend does not declare any JPA Entity classes (Hibernate mappings) or repositories for the `sem_*` tables (all interactions use direct `JdbcTemplate` calls), no Java domain layer cleanup is required.*
-
+Once seeded, report generation compiles inventory statistics instantly without needing backend code updates.

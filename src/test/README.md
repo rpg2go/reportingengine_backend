@@ -70,6 +70,7 @@ When creating unit tests, keep dependencies isolated with Mockito and avoid boot
    * Test null handling, empty parameters, boundary checks, and expected exceptions (`assertThatThrownBy(() -> classUnderTest.method()).isInstanceOf(...)`).
 
 #### Example Unit Test Skeleton:
+
 ```java
 @ExtendWith(MockitoExtension.class)
 @DisplayName("MyService Unit Tests")
@@ -115,6 +116,7 @@ Integration tests require a running database schema and application context.
      * Or annotate the test with `@WithMockUser(username = "admin", roles = {"USER"})`.
 
 #### Example Integration Test Skeleton:
+
 ```java
 @DisplayName("MyController Integration Tests")
 public class MyControllerIT extends BaseIT {

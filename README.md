@@ -123,6 +123,7 @@ reportingengine_backend/
 The backend is architected as a high-performance Spring Boot application prioritizing low-latency reads, structured data layers, and safe mathematical evaluation.
 
 ### Core Technologies
+
 *   **Java Runtime:** Java 21 (LTS)
 *   **Framework:** Spring Boot v3.5.0-SNAPSHOT
 *   **Virtual Threads:** Enabled via `spring.threads.virtual.enabled=true` to handle Tomcat HTTP request processing and task execution on Project Loom virtual threads.
@@ -171,6 +172,7 @@ Follow these steps to run the Reporting Engine backend locally:
 Your development environment must have the following software runtimes, dependencies, and packages installed:
 
 #### 1. Software Runtimes & Platforms
+
 * **Java Development Kit (JDK) 21**: Needed to compile and run the Spring Boot backend. OpenJDK 21 or Eclipse Temurin 21 are recommended.
 * **Node.js (v24+) & npm**: Needed to build and run the Angular frontend.
 * **Docker & Docker Compose**: Needed to orchestrate and run the PostgreSQL 16 database container.
@@ -194,6 +196,7 @@ Your development environment must have the following software runtimes, dependen
      ```bash
      brew install openjdk@21
      # Link the system wrapper so macOS recognizes it
+
      sudo ln -sfn /opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk /Library/Java/JavaVirtualMachines/openjdk-21.jdk
      export JAVA_HOME="/Library/Java/JavaVirtualMachines/openjdk-21.jdk/Contents/Home"
      ```
@@ -224,6 +227,7 @@ Your development environment must have the following software runtimes, dependen
    ```bash
    brew install python@3.11
    # Validate version and ensure pip is linked
+
    python3 --version
    pip3 --version
    ```
@@ -237,6 +241,7 @@ Your development environment must have the following software runtimes, dependen
    sudo apt update
    sudo apt install -y git openjdk-21-jdk python3 python3-pip python3-venv
    # Verify Java installation
+
    java -version
    ```
 
@@ -246,6 +251,7 @@ Your development environment must have the following software runtimes, dependen
    curl -fsSL https://deb.nodesource.com/setup_24.x | sudo -E bash -
    sudo apt install -y nodejs
    # Verify versions
+
    node -v
    npm -v
    ```
@@ -266,6 +272,7 @@ Your development environment must have the following software runtimes, dependen
    sudo apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
    
    # Add user to the docker group
+
    sudo usermod -aG docker $USER
    newgrp docker
    ```
@@ -307,21 +314,26 @@ We highly recommend using Windows Package Manager (`winget`) via PowerShell (Run
 
 ```bash
 # Verify Git
+
 git --version
 
 # Verify Java Compiler and Runtime
+
 java -version
 javac -version
 
 # Verify Node.js and npm
+
 node -v
 npm -v
 
 # Verify Docker and Docker Compose
+
 docker --version
 docker compose version
 
 # Verify Python and pip
+
 python3 --version || python --version
 pip3 --version || pip --version
 ```

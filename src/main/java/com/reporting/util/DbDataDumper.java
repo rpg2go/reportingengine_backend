@@ -62,9 +62,6 @@ public class DbDataDumper {
             // 3. Dump reporting.meta_* data
             dumpCatalogData(conn);
 
-            // 4. Dump global filters
-            dumpGlobalFiltersData(conn);
-
             System.out.println("All data dumped successfully!");
         } catch (Exception e) {
             System.err.println("Error during data dump: " + e.getMessage());
@@ -175,17 +172,6 @@ public class DbDataDumper {
         System.out.println("Dumped catalog data to " + path);
     }
 
-    private static void dumpGlobalFiltersData(Connection conn) throws Exception {
-        String path = "db/liquibase/sql/009_seed_global_filters_data.sql";
-        try (PrintWriter writer = new PrintWriter(new FileWriter(path))) {
-            writer.println("--liquibase formatted sql");
-            writer.println("--changeset devops:009_seed_global_filters_data runOnChange:true endDelimiter:;");
-            writer.println();
-
-            dumpTableData(conn, writer, "reporting.rpt_global_filter");
-        }
-        System.out.println("Dumped global filters data to " + path);
-    }
 
     private static void dumpTableData(Connection conn, PrintWriter writer, String tableName) throws Exception {
         System.out.println("Querying table: " + tableName);
