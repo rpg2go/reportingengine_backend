@@ -197,4 +197,45 @@ public class PostProcessorServiceTest {
         assertThat(matrix.get("R1|GERMANY").get("C1")).isEqualTo(40.0);
         assertThat(matrix.get("R1|ROMANIA").get("C1")).isEqualTo(60.0);
     }
+
+    @Test
+    @DisplayName("process with Stream<Object[]> evaluates correctly including granularity")
+    public void process_streamOverloadEvaluatesCorrectly() {
+        // Arrange
+        List<ColumnDefDto> columns = List.of(
+            new ColumnDefDto("C1", "Col 1", Enums.ColType.WTD, 0, null, null, 1)
+        );
+
+        List<ReportRowDto> rows = List.of(
+            new ReportRowDto("R1", "REP1", "Row 1", Enums.RowType.data, new MeasureDefinitionDTO("raw", null, null, null, "m1"), null, "normal", 0, 1, Set.of("C1"), null),
+            new ReportRowDto("R2", "REP1", "Calc 1", Enums.RowType.calc, new MeasureDefinitionDTO("raw", null, null, null, "R1 * 3"), null, "normal", 0, 2, Set.of("C1"), null)
+        );
+
+        ReportConfigDto config = new ReportConfigDto(
+            "REP1", "Test Report", columns, rows, null, 1, Enums.ReportStatus.draft,
+            "analytics.fact_sales", "country_name", null, null, false, null, null
+        );
+
+        // Row array layout: row_id, col_id, val, country_name
+        java.util.stream.Stream<Object[]> dbResults = java.util.stream.Stream.of(
+            new Object[]{"R1", "C1", 10.0, null},
+            new Object[]{"R1", "C1", 6.0, "France"},
+            new Object[]{"R1", "C1", 4.0, "Romania"}
+        );
+
+        // Act
+        Map<String, Map<String, Double>> matrix = service.process(config, dbResults);
+
+        // Assert
+        // Standard parent rows
+        assertThat(matrix.get("R1").get("C1")).isEqualTo(10.0);
+        assertThat(matrix.get("R2").get("C1")).isEqualTo(30.0); // 10.0 * 3
+
+        // Breakdown rows
+        assertThat(matrix.get("R1|FRANCE").get("C1")).isEqualTo(6.0);
+        assertThat(matrix.get("R2|FRANCE").get("C1")).isEqualTo(18.0); // 6.0 * 3
+
+        assertThat(matrix.get("R1|ROMANIA").get("C1")).isEqualTo(4.0);
+        assertThat(matrix.get("R2|ROMANIA").get("C1")).isEqualTo(12.0); // 4.0 * 3
+    }
 }

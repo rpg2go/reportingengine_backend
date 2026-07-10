@@ -8,11 +8,41 @@ import org.springframework.stereotype.Service;
 
 import java.util.*;
 import java.util.regex.*;
+import java.util.stream.Stream;
 
 @Service
 public class PostProcessorService {
 
     public Map<String, Map<String, Double>> process(ReportConfigDto config, List<Map<String, Object>> dbResults) {
+        if (dbResults == null) {
+            return process(config, Stream.empty());
+        }
+
+        List<String> granularityAliases = new ArrayList<>();
+        if (config.getGranularity() != null && !config.getGranularity().isBlank()) {
+            for (String s : config.getGranularity().split(",")) {
+                String trimmed = s.trim();
+                if (!trimmed.isEmpty()) {
+                    granularityAliases.add(SqlGeneratorService.getGranularityAlias(trimmed));
+                }
+            }
+        }
+
+        Stream<Object[]> stream = dbResults.stream().map(map -> {
+            Object[] row = new Object[3 + granularityAliases.size()];
+            row[0] = getMapValueCaseInsensitive(map, "row_id");
+            row[1] = getMapValueCaseInsensitive(map, "col_id");
+            row[2] = getMapValueCaseInsensitive(map, "val");
+            for (int i = 0; i < granularityAliases.size(); i++) {
+                row[3 + i] = getMapValueCaseInsensitive(map, granularityAliases.get(i));
+            }
+            return row;
+        });
+
+        return process(config, stream);
+    }
+
+    public Map<String, Map<String, Double>> process(ReportConfigDto config, Stream<Object[]> dbResults) {
         // 1. Initialize result matrix with 0.0 values
         Map<String, Map<String, Double>> matrix = new HashMap<>();
         for (ReportRowDto row : config.getRows()) {
@@ -29,7 +59,7 @@ public class PostProcessorService {
             matrix.put(row.rowId().toUpperCase(), colVals);
         }
 
-        // 2. Populate DATA rows from SQL database query results (flat matrix format)
+        // 2. Populate DATA rows from SQL database query results
         List<String> granularityAliases = new ArrayList<>();
         if (config.getGranularity() != null && !config.getGranularity().isBlank()) {
             for (String s : config.getGranularity().split(",")) {
@@ -41,33 +71,13 @@ public class PostProcessorService {
         }
 
         if (dbResults != null) {
-            for (Map<String, Object> map : dbResults) {
-                String rid = map.get("row_id") != null ? map.get("row_id").toString().toUpperCase() : "";
-
-                // Dynamically reconstruct row_id for breakdown rows if granularity is defined
-                if (!granularityAliases.isEmpty()) {
-                    boolean isBreakdown = false;
-                    for (String alias : granularityAliases) {
-                        if (getMapValueCaseInsensitive(map, alias) != null) {
-                            isBreakdown = true;
-                            break;
-                        }
-                    }
-                    if (isBreakdown) {
-                        StringBuilder sb = new StringBuilder(rid);
-                        for (String alias : granularityAliases) {
-                            sb.append("|");
-                            Object val = getMapValueCaseInsensitive(map, alias);
-                            if (val != null) {
-                                sb.append(val.toString());
-                            }
-                        }
-                        rid = sb.toString().toUpperCase();
-                    }
+            dbResults.forEach(row -> {
+                if (row.length < 3) {
+                    return;
                 }
-
-                String cid = map.get("col_id") != null ? map.get("col_id").toString().toUpperCase() : "";
-                Object valObj = map.get("val");
+                String rid = row[0] != null ? row[0].toString().toUpperCase() : "";
+                String cid = row[1] != null ? row[1].toString().toUpperCase() : "";
+                Object valObj = row[2];
                 double val = 0.0;
                 if (valObj instanceof Number) {
                     val = ((Number) valObj).doubleValue();
@@ -76,6 +86,29 @@ public class PostProcessorService {
                         val = Double.parseDouble(valObj.toString());
                     } catch (NumberFormatException e) {
                         // ignore
+                    }
+                }
+
+                // Dynamically reconstruct row_id for breakdown rows if granularity is defined
+                if (!granularityAliases.isEmpty()) {
+                    boolean isBreakdown = false;
+                    for (int i = 0; i < granularityAliases.size(); i++) {
+                        int indexInRow = 3 + i;
+                        if (indexInRow < row.length && row[indexInRow] != null) {
+                            isBreakdown = true;
+                            break;
+                        }
+                    }
+                    if (isBreakdown) {
+                        StringBuilder sb = new StringBuilder(rid);
+                        for (int i = 0; i < granularityAliases.size(); i++) {
+                            sb.append("|");
+                            int indexInRow = 3 + i;
+                            if (indexInRow < row.length && row[indexInRow] != null) {
+                                sb.append(row[indexInRow].toString());
+                            }
+                        }
+                        rid = sb.toString().toUpperCase();
                     }
                 }
 
@@ -96,7 +129,7 @@ public class PostProcessorService {
                         matrix.get(rid).put(cid, val);
                     }
                 }
-            }
+            });
         }
 
         // 3. Phase 1 (Column Calculations): Evaluates sqlColumn: false metrics (horizontal column formulas)
