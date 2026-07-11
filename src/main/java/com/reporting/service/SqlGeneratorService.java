@@ -307,7 +307,7 @@ public class SqlGeneratorService {
                     // Reuse outer scope timeKey and prefixedTimeKey
 
                     String timeKey = getTimeKeyForTable(factTable);
-                    String prefixedTimeKey = factTable + "." + timeKey;
+                    boolean hasTimeKey = timeKey != null && !timeKey.isBlank();
 
                     LocalDate colRefDate = config.getReferenceDate() != null ? config.getReferenceDate() : LocalDate.now();
                     String effPeriodType = getEffectivePeriodType(col, config.getColumns());
@@ -325,9 +325,14 @@ public class SqlGeneratorService {
                     LocalDate start = boundaries[0];
                     LocalDate end = boundaries[1];
 
-                    intervals.add(new DateInterval(start, end));
-
-                    String dateConstraint = String.format("%s >= '%s' AND %s <= '%s'", prefixedTimeKey, start.toString(), prefixedTimeKey, end.toString());
+                    String dateConstraint;
+                    if (hasTimeKey) {
+                        intervals.add(new DateInterval(start, end));
+                        String prefixedTimeKey = factTable + "." + timeKey;
+                        dateConstraint = String.format("%s >= '%s' AND %s <= '%s'", prefixedTimeKey, start.toString(), prefixedTimeKey, end.toString());
+                    } else {
+                        dateConstraint = "1=1";
+                    }
 
                     String rowFilter = row.filterExpr();
                     String filterClause = "";
@@ -365,9 +370,14 @@ public class SqlGeneratorService {
                                 subEnd = b[1];
                             }
 
-                            intervals.add(new DateInterval(subStart, subEnd));
-
-                            String subDateConstraint = String.format("%s >= '%s' AND %s <= '%s'", prefixedTimeKey, subStart.toString(), prefixedTimeKey, subEnd.toString());
+                            String subDateConstraint;
+                            if (hasTimeKey) {
+                                intervals.add(new DateInterval(subStart, subEnd));
+                                String prefixedTimeKey = factTable + "." + timeKey;
+                                subDateConstraint = String.format("%s >= '%s' AND %s <= '%s'", prefixedTimeKey, subStart.toString(), prefixedTimeKey, subEnd.toString());
+                            } else {
+                                subDateConstraint = "1=1";
+                            }
                             String subMetricClause = compileMetricClause(factTable, mdef, subDateConstraint, filterClause);
                             String subAlias = "val_" + row.rowId().toLowerCase() + "_" + col.colId().toLowerCase() + "_" + i;
                             selectList.add(String.format("CAST(%s AS DOUBLE PRECISION) AS %s", subMetricClause, subAlias));
@@ -847,16 +857,28 @@ public class SqlGeneratorService {
             }
         }
         // Fallback: live query (handles tables not in meta_table or cache miss)
+        String val = null;
         try {
-            String val = jdbcTemplate.queryForObject(
+            val = jdbcTemplate.queryForObject(
                 "SELECT time_key FROM reporting.meta_table WHERE schema_name || '.' || table_name = ?",
                 String.class,
                 table
             );
-            return val != null ? val : "reporting_date";
         } catch (Exception e) {
-            return "reporting_date";
+            // Ignore, default to val = null
         }
+        if (val != null && !val.isBlank()) {
+            return val;
+        }
+
+        // Fallback check to check if column reporting_date exists on the table
+        if (metadataCache != null) {
+            Set<String> cols = metadataCache.getColumns(table);
+            if (cols != null && cols.contains("reporting_date")) {
+                return "reporting_date";
+            }
+        }
+        return null;
     }
 
     private boolean columnExists(String table, String column, Map<String, Set<String>> cache) {
