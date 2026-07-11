@@ -38,15 +38,7 @@ public class Report {
     @Column(name = "granularity", length = 1000)
     private String granularity;
 
-    @Column(name = "timeframe_start", length = 50)
-    private String timeframeStart;
 
-    @Column(name = "timeframe_end", length = 50)
-    private String timeframeEnd;
-
-    @Column(name = "timeframe_today")
-    @Builder.Default
-    private Boolean timeframeToday = false;
 
     @Column(name = "quick_filters")
     private String quickFilters;
@@ -71,6 +63,39 @@ public class Report {
     @Column(name = "deleted", nullable = false)
     @Builder.Default
     private Boolean deleted = false;
+
+    @Column(name = "reporting_date_type", length = 16)
+    @Builder.Default
+    private String reportingDateType = "DYNAMIC";
+
+    @Column(name = "reporting_date_static")
+    private java.time.LocalDate reportingDateStatic;
+
+    @Column(name = "reporting_date_expression", length = 8)
+    @Builder.Default
+    private String reportingDateExpression = "T-2";
+
+    @Column(name = "timeframe_start_type", length = 16)
+    @Builder.Default
+    private String timeframeStartType = "FIXED";
+
+    @Column(name = "timeframe_start_static")
+    @Builder.Default
+    private java.time.LocalDate timeframeStartStatic = java.time.LocalDate.of(2022, 1, 1);
+
+    @Column(name = "timeframe_start_expression", length = 8)
+    private String timeframeStartExpression;
+
+    @Column(name = "timeframe_end_type", length = 16)
+    @Builder.Default
+    private String timeframeEndType = "DYNAMIC";
+
+    @Column(name = "timeframe_end_static")
+    private java.time.LocalDate timeframeEndStatic;
+
+    @Column(name = "timeframe_end_expression", length = 8)
+    @Builder.Default
+    private String timeframeEndExpression = "T-2";
 
     @JsonIgnore
     @OneToMany(mappedBy = "report", cascade = CascadeType.ALL, fetch = FetchType.LAZY)

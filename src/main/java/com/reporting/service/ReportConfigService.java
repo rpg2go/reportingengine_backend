@@ -193,15 +193,21 @@ public class ReportConfigService {
             null, // exploreId (deprecated)
             Enums.ReportStatus.valueOf(report.getStatus().toLowerCase()),
             report.getGranularity(),
-            report.getTimeframeStart(),
-            report.getTimeframeEnd(),
-            report.getTimeframeToday(),
             report.getQuickFilters(),
             report.getGeneralFilters()
         );
         dto.setSourceTable(report.getSourceTable());
         dto.setSourceField(report.getSourceField());
         dto.setVersion(report.getVersion());
+        dto.setReportingDateType(report.getReportingDateType());
+        dto.setReportingDateStatic(report.getReportingDateStatic());
+        dto.setReportingDateExpression(report.getReportingDateExpression());
+        dto.setTimeframeStartType(report.getTimeframeStartType());
+        dto.setTimeframeStartStatic(report.getTimeframeStartStatic());
+        dto.setTimeframeStartExpression(report.getTimeframeStartExpression());
+        dto.setTimeframeEndType(report.getTimeframeEndType());
+        dto.setTimeframeEndStatic(report.getTimeframeEndStatic());
+        dto.setTimeframeEndExpression(report.getTimeframeEndExpression());
         return dto;
     }
 
@@ -235,6 +241,35 @@ public class ReportConfigService {
 
         String incomingStatus = dto.getStatus() != null ? dto.getStatus().name() : "draft";
 
+        // Enforce mutual exclusivity of polymorphic date fields:
+        // Clear static date if dynamic mode is active, and vice versa.
+        String reportingDateType = dto.getReportingDateType();
+        LocalDate reportingDateStatic = null;
+        String reportingDateExpression = null;
+        if ("FIXED".equalsIgnoreCase(reportingDateType)) {
+            reportingDateStatic = dto.getReportingDateStatic();
+        } else { // DYNAMIC
+            reportingDateExpression = dto.getReportingDateExpression();
+        }
+
+        String timeframeStartType = dto.getTimeframeStartType();
+        LocalDate timeframeStartStatic = null;
+        String timeframeStartExpression = null;
+        if ("FIXED".equalsIgnoreCase(timeframeStartType)) {
+            timeframeStartStatic = dto.getTimeframeStartStatic();
+        } else { // DYNAMIC
+            timeframeStartExpression = dto.getTimeframeStartExpression();
+        }
+
+        String timeframeEndType = dto.getTimeframeEndType();
+        LocalDate timeframeEndStatic = null;
+        String timeframeEndExpression = null;
+        if ("FIXED".equalsIgnoreCase(timeframeEndType)) {
+            timeframeEndStatic = dto.getTimeframeEndStatic();
+        } else { // DYNAMIC
+            timeframeEndExpression = dto.getTimeframeEndExpression();
+        }
+
         if (exists) {
             Map<String, Object> currentRecord = jdbcTemplate.queryForMap(
                 "SELECT status FROM reporting.rpt_report WHERE report_id = ? AND version = ?",
@@ -248,39 +283,58 @@ public class ReportConfigService {
 
             jdbcTemplate.update(
                 "UPDATE reporting.rpt_report SET report_name = ?, status = ?, granularity = ?, " +
-                "timeframe_start = ?, timeframe_end = ?, timeframe_today = ?, quick_filters = ?, general_filters = ?, " +
+                "quick_filters = ?, general_filters = ?, " +
                 "source_table = ?, source_field = ?, " +
+                "reporting_date_type = ?, reporting_date_static = ?, reporting_date_expression = ?, " +
+                "timeframe_start_type = ?, timeframe_start_static = ?, timeframe_start_expression = ?, " +
+                "timeframe_end_type = ?, timeframe_end_static = ?, timeframe_end_expression = ?, " +
                 "updated_at = NOW() WHERE report_id = ? AND version = ?",
                 dto.getReportName(),
                 incomingStatus.toLowerCase(),
                 dto.getGranularity(),
-                dto.getTimeframeStart(),
-                dto.getTimeframeEnd(),
-                dto.getTimeframeToday() != null ? dto.getTimeframeToday() : false,
                 dto.getQuickFilters(),
                 dto.getGeneralFilters(),
                 dto.getSourceTable(),
                 dto.getSourceField(),
+                reportingDateType,
+                reportingDateStatic,
+                reportingDateExpression,
+                timeframeStartType,
+                timeframeStartStatic,
+                timeframeStartExpression,
+                timeframeEndType,
+                timeframeEndStatic,
+                timeframeEndExpression,
                 reportId,
                 version
             );
         } else {
             jdbcTemplate.update(
                 "INSERT INTO reporting.rpt_report (report_id, report_name, description, version, status, granularity, " +
-                "timeframe_start, timeframe_end, timeframe_today, quick_filters, general_filters, source_table, source_field, created_at, updated_at) " +
-                "VALUES (?, ?, 'Report defined via UI builder', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())",
+                "quick_filters, general_filters, source_table, source_field, " +
+                "reporting_date_type, reporting_date_static, reporting_date_expression, " +
+                "timeframe_start_type, timeframe_start_static, timeframe_start_expression, " +
+                "timeframe_end_type, timeframe_end_static, timeframe_end_expression, " +
+                "created_at, updated_at) " +
+                "VALUES (?, ?, 'Report defined via UI builder', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())",
                 reportId,
                 dto.getReportName(),
                 version,
                 incomingStatus.toLowerCase(),
                 dto.getGranularity(),
-                dto.getTimeframeStart(),
-                dto.getTimeframeEnd(),
-                dto.getTimeframeToday() != null ? dto.getTimeframeToday() : false,
                 dto.getQuickFilters(),
                 dto.getGeneralFilters(),
                 dto.getSourceTable(),
-                dto.getSourceField()
+                dto.getSourceField(),
+                reportingDateType,
+                reportingDateStatic,
+                reportingDateExpression,
+                timeframeStartType,
+                timeframeStartStatic,
+                timeframeStartExpression,
+                timeframeEndType,
+                timeframeEndStatic,
+                timeframeEndExpression
             );
         }
 

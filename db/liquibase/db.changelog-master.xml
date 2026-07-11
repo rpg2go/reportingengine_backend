@@ -20,5 +20,7 @@
     <include file="sql/014_add_is_cached_column.sql" relativeToChangelogFile="true"/>
     <include file="sql/015_add_column_value_caching.sql" relativeToChangelogFile="true"/>
     <include file="sql/016_add_column_visibility.sql" relativeToChangelogFile="true"/>
+    <include file="sql/017_add_dynamic_date_types.sql" relativeToChangelogFile="true"/>
+    <include file="sql/018_drop_legacy_timeframe_columns.sql" relativeToChangelogFile="true"/>
 
 </databaseChangeLog>

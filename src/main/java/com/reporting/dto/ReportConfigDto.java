@@ -33,32 +33,52 @@ public class ReportConfigDto {
     private Enums.ReportStatus status;
 
 
-    @Size(max = 1000, message = "Granularity must be at most 1000 characters")
     private String granularity;
 
-    @Size(max = 50, message = "Timeframe start must be at most 50 characters")
-    private String timeframeStart;
-
-    @Size(max = 50, message = "Timeframe end must be at most 50 characters")
-    private String timeframeEnd;
-
-    private Boolean timeframeToday;
     private String quickFilters;
     private String generalFilters;
     private Integer version;
     private String sourceTable;
     private String sourceField;
 
+    @Size(max = 16, message = "Reporting date type must be at most 16 characters")
+    private String reportingDateType;
+
+    private LocalDate reportingDateStatic;
+
+    @Size(max = 8, message = "Reporting date expression must be at most 8 characters")
+    private String reportingDateExpression;
+
+    @Size(max = 16, message = "Timeframe start type must be at most 16 characters")
+    private String timeframeStartType;
+
+    private LocalDate timeframeStartStatic;
+
+    @Size(max = 8, message = "Timeframe start expression must be at most 8 characters")
+    private String timeframeStartExpression;
+
+    @Size(max = 16, message = "Timeframe end type must be at most 16 characters")
+    private String timeframeEndType;
+
+    private LocalDate timeframeEndStatic;
+
+    @Size(max = 8, message = "Timeframe end expression must be at most 8 characters")
+    private String timeframeEndExpression;
+
     public ReportConfigDto() {
         this.referenceDate = LocalDate.now();
         this.status = Enums.ReportStatus.draft;
-        this.timeframeToday = false;
+        this.reportingDateType = "DYNAMIC";
+        this.reportingDateExpression = "T-2";
+        this.timeframeStartType = "FIXED";
+        this.timeframeStartStatic = LocalDate.of(2022, 1, 1);
+        this.timeframeEndType = "DYNAMIC";
+        this.timeframeEndExpression = "T-2";
     }
 
     public ReportConfigDto(String reportId, String reportName, List<ColumnDefDto> columns, List<ReportRowDto> rows, 
                            LocalDate referenceDate, Integer exploreId, Enums.ReportStatus status,
-                           String granularity, String timeframeStart, String timeframeEnd,
-                           Boolean timeframeToday, String quickFilters, String generalFilters) {
+                           String granularity, String quickFilters, String generalFilters) {
         this.reportId = reportId;
         this.reportName = reportName;
         this.columns = columns;
@@ -67,9 +87,6 @@ public class ReportConfigDto {
         this.exploreId = exploreId;
         this.status = status != null ? status : Enums.ReportStatus.draft;
         this.granularity = granularity;
-        this.timeframeStart = timeframeStart;
-        this.timeframeEnd = timeframeEnd;
-        this.timeframeToday = timeframeToday != null ? timeframeToday : false;
         this.quickFilters = quickFilters;
         this.generalFilters = generalFilters;
     }
@@ -79,7 +96,7 @@ public class ReportConfigDto {
                            LocalDate referenceDate, Integer exploreId, Enums.ReportStatus status,
                            String sourceTable, String granularity, String timeframeStart, String timeframeEnd,
                            Boolean timeframeToday, String quickFilters, String generalFilters) {
-        this(reportId, reportName, columns, rows, referenceDate, exploreId, status, granularity, timeframeStart, timeframeEnd, timeframeToday, quickFilters, generalFilters);
+        this(reportId, reportName, columns, rows, referenceDate, exploreId, status, granularity, quickFilters, generalFilters);
         if (rows != null && sourceTable != null && !sourceTable.isBlank()) {
             for (ReportRowDto r : rows) {
                 if (r.source() != null && (r.source().getSourceTable() == null || r.source().getSourceTable().isBlank())) {
@@ -87,6 +104,14 @@ public class ReportConfigDto {
                 }
             }
         }
+    }
+
+    @Deprecated
+    public ReportConfigDto(String reportId, String reportName, List<ColumnDefDto> columns, List<ReportRowDto> rows, 
+                           LocalDate referenceDate, Integer exploreId, Enums.ReportStatus status,
+                           String granularity, String timeframeStart, String timeframeEnd,
+                           Boolean timeframeToday, String quickFilters, String generalFilters) {
+        this(reportId, reportName, columns, rows, referenceDate, exploreId, status, granularity, quickFilters, generalFilters);
     }
 
     public String getReportId() { return reportId; }
@@ -112,7 +137,18 @@ public class ReportConfigDto {
 
     public LocalDate getReferenceDate() { return referenceDate; }
     public void setReferenceDate(LocalDate referenceDate) { this.referenceDate = referenceDate; }
-    public void setReportingDate(LocalDate reportingDate) { this.referenceDate = reportingDate; }
+    public void setReportingDate(String reportingDate) {
+        if (reportingDate == null || reportingDate.isBlank()) {
+            this.referenceDate = null;
+            return;
+        }
+        try {
+            this.referenceDate = LocalDate.parse(reportingDate.trim());
+        } catch (Exception e) {
+            // Quietly ignore parsing failures for relative date expressions (like 'T-2')
+            this.referenceDate = null;
+        }
+    }
 
     public Integer getExploreId() { return exploreId; }
     public void setExploreId(Integer exploreId) { this.exploreId = exploreId; }
@@ -124,14 +160,7 @@ public class ReportConfigDto {
     public String getGranularity() { return granularity; }
     public void setGranularity(String granularity) { this.granularity = granularity; }
 
-    public String getTimeframeStart() { return timeframeStart; }
-    public void setTimeframeStart(String timeframeStart) { this.timeframeStart = timeframeStart; }
 
-    public String getTimeframeEnd() { return timeframeEnd; }
-    public void setTimeframeEnd(String timeframeEnd) { this.timeframeEnd = timeframeEnd; }
-
-    public Boolean getTimeframeToday() { return timeframeToday; }
-    public void setTimeframeToday(Boolean timeframeToday) { this.timeframeToday = timeframeToday; }
 
     public String getQuickFilters() { return quickFilters; }
     public void setQuickFilters(String quickFilters) { this.quickFilters = quickFilters; }
@@ -196,4 +225,31 @@ public class ReportConfigDto {
             .findFirst()
             .orElseThrow(() -> new IllegalArgumentException("Row not found: " + rowId));
     }
+
+    public String getReportingDateType() { return reportingDateType; }
+    public void setReportingDateType(String reportingDateType) { this.reportingDateType = reportingDateType; }
+
+    public LocalDate getReportingDateStatic() { return reportingDateStatic; }
+    public void setReportingDateStatic(LocalDate reportingDateStatic) { this.reportingDateStatic = reportingDateStatic; }
+
+    public String getReportingDateExpression() { return reportingDateExpression; }
+    public void setReportingDateExpression(String reportingDateExpression) { this.reportingDateExpression = reportingDateExpression; }
+
+    public String getTimeframeStartType() { return timeframeStartType; }
+    public void setTimeframeStartType(String timeframeStartType) { this.timeframeStartType = timeframeStartType; }
+
+    public LocalDate getTimeframeStartStatic() { return timeframeStartStatic; }
+    public void setTimeframeStartStatic(LocalDate timeframeStartStatic) { this.timeframeStartStatic = timeframeStartStatic; }
+
+    public String getTimeframeStartExpression() { return timeframeStartExpression; }
+    public void setTimeframeStartExpression(String timeframeStartExpression) { this.timeframeStartExpression = timeframeStartExpression; }
+
+    public String getTimeframeEndType() { return timeframeEndType; }
+    public void setTimeframeEndType(String timeframeEndType) { this.timeframeEndType = timeframeEndType; }
+
+    public LocalDate getTimeframeEndStatic() { return timeframeEndStatic; }
+    public void setTimeframeEndStatic(LocalDate timeframeEndStatic) { this.timeframeEndStatic = timeframeEndStatic; }
+
+    public String getTimeframeEndExpression() { return timeframeEndExpression; }
+    public void setTimeframeEndExpression(String timeframeEndExpression) { this.timeframeEndExpression = timeframeEndExpression; }
 }

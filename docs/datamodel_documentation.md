@@ -96,6 +96,37 @@ To optimize performance and database load on large Data Warehouses (with potenti
 
 ---
 
+### 🔗 Understanding 'is_conformed' in Catalog Tables
+
+The catalog uses `is_conformed` flags in both column definitions and table relationships to coordinate query routing:
+
+#### 1. `reporting.meta_relationship.is_conformed`
+This boolean flag indicates whether a join relationship represents a standard conformed dimension link.
+* **Pathfinder Routing Effect:** During SQL compilation, `SchemaGraphRouter` runs Dijkstra's BFS to find the cheapest join chain from the query's fact table to target dimensions. A conformed edge (`is_conformed = true`) is assigned a cost/weight of `1` (or acts as a tie-breaker), ensuring it is always preferred over a non-conformed relationship (which has a cost/weight of `2`).
+* **Data Integration:** It defines if the database path should be considered a standard conformed link across the DWH.
+
+#### 2. `reporting.meta_column.is_conformed`
+This flag defines whether a physical table column acts as a conformed dimension key (e.g. `dim_date.date_key`, `dim_customers.segment`). It is used to quickly identify conformed key properties during metadata scanning.
+
+---
+
+### 🛑 Troubleshooting Filter Validation: "Filter references unconformed dimension table"
+
+When saving or running a report, you may encounter the validation error:
+`Filter references unconformed dimension table 'dim_table'. Valid conformed dimensions for this report layout are: [...]`
+
+#### What causes this error?
+1. **The report has no active data rows:** The engine computes the list of valid conformed dimensions by checking the target tables of all **active data rows** in the report. If there are no data rows defined yet (e.g., in a new draft), the valid dimensions list defaults to empty (`[]`), causing filters to fail validation.
+2. **Fact tables do not share the dimension:** If your report queries multiple fact tables (e.g., `fact_sales` and `fact_loans`), the engine calculates the *intersection* of their related dimension tables. If they do not share the target dimension table via `meta_relationship`, it is not conformed, and cannot be used in global filters.
+3. **Filtering directly on fact tables:** If you try to filter on a fact table (e.g., `fact_investments`) in a global filter, it will fail because fact tables are not dimension tables.
+
+#### How to resolve:
+1. Ensure the report has at least one data row mapping to a physical fact table.
+2. Verify that the table relationship from your fact table to the dimension table (e.g. `fact_sales` -> `dim_relationship_manager`) is correctly populated in the `reporting.meta_relationship` table.
+3. Use a proper dimension table (like `dim_customers`, `dim_date`, or `dim_relationship_manager`) in your global and quick filters instead of fact tables.
+
+---
+
 ### B. Report Template Configurations (Normalized Layouts)
 
 These tables define layouts, columns, row styles, metrics, and active coordinates.

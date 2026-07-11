@@ -57,9 +57,10 @@ public class SqlGeneratorServiceIT extends BaseIT {
         config.setStatus(Enums.ReportStatus.draft);
         config.setSourceTable("analytics.fact_sales");
         config.setGranularity("monthly");
-        config.setTimeframeStart("2025-01-01");
-        config.setTimeframeEnd("2025-12-31");
-        config.setTimeframeToday(false);
+        config.setTimeframeStartType("FIXED");
+        config.setTimeframeStartStatic(java.time.LocalDate.parse("2025-01-01"));
+        config.setTimeframeEndType("FIXED");
+        config.setTimeframeEndStatic(java.time.LocalDate.parse("2025-12-31"));
 
         // Act & Assert
         mockMvc.perform(post("/api/reports/preview-sql")
@@ -96,9 +97,10 @@ public class SqlGeneratorServiceIT extends BaseIT {
         config.setStatus(Enums.ReportStatus.draft);
         config.setSourceTable("analytics.fact_sales");
         config.setGranularity("monthly");
-        config.setTimeframeStart("2025-01-01");
-        config.setTimeframeEnd("2025-12-31");
-        config.setTimeframeToday(false);
+        config.setTimeframeStartType("FIXED");
+        config.setTimeframeStartStatic(java.time.LocalDate.parse("2025-01-01"));
+        config.setTimeframeEndType("FIXED");
+        config.setTimeframeEndStatic(java.time.LocalDate.parse("2025-12-31"));
 
         // Act & Assert
         mockMvc.perform(post("/api/reports/validate")
