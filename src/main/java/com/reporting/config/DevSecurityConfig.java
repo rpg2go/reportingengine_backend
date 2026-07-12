@@ -96,6 +96,10 @@ public class DevSecurityConfig {
         System.out.println("==========================================================================================\n");
     }
 
+    public String getGeneratedToken() {
+        return this.generatedToken;
+    }
+
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         log.info("Configuring Dev-profile Web Security Filter Chain...");

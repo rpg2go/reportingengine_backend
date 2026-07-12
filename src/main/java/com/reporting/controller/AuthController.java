@@ -1,5 +1,8 @@
 package com.reporting.controller;
 
+import com.reporting.config.DevSecurityConfig;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import java.nio.charset.StandardCharsets;
@@ -13,6 +16,15 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/auth")
 public class AuthController {
+
+    private final DevSecurityConfig devSecurityConfig;
+
+    @Value("${MOCK_FALLBACK_TOKEN:eyJhbGciOiJub25lIn0.eyJzdWIiOiJhZG1pbiIsInVzZXJfaW5pdGlhbHMiOiJBRCIsImFzc2lnbmVkX2NvdW50cnlfcmVzdHJpY3Rpb25zIjpbIkRFIiwiUk8iXSwicm9sZXMiOlsiVVNFUiJdfQ.}")
+    private String fallbackToken;
+
+    public AuthController(@Autowired(required = false) DevSecurityConfig devSecurityConfig) {
+        this.devSecurityConfig = devSecurityConfig;
+    }
 
     @GetMapping("/login")
     public ResponseEntity<?> login(@RequestHeader(value = "Authorization", required = false) String authHeader) {
@@ -31,13 +43,12 @@ public class AuthController {
 
                 // Simple check for local testing: validate against configured admin/password
                 if ("admin".equals(username) && "password".equals(password)) {
-                    // Generate a simulated JWT token string containing OIDC claims
-                    String mockToken = "eyJhbGciOiJub25lIn0.eyJzdWIiOiJhZG1pbiIsInVzZXJfaW5pdGlhbHMiOiJBRCIsImFzc2lnbmVkX2NvdW50cnlfcmVzdHJpY3Rpb25zIjpbIkRFIiwiUk8iXSwicm9sZXMiOlsiVVNFUiJdfQ.";
+                    String token = (devSecurityConfig != null) ? devSecurityConfig.getGeneratedToken() : fallbackToken;
 
                     Map<String, Object> response = new HashMap<>();
                     response.put("username", username);
                     response.put("authenticated", true);
-                    response.put("token", mockToken);
+                    response.put("token", token);
                     return ResponseEntity.ok(response);
                 }
             }
