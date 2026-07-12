@@ -138,6 +138,7 @@ public class SecurityConfig {
             configuration.setAllowedOriginPatterns(List.of(
                     "http://localhost:4200",
                     "http://127.0.0.1:4200",
+                    "https://editor.swagger.io",
                     "https://*.run.app"));
         }
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));

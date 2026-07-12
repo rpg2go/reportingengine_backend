@@ -28,6 +28,7 @@
 | **Conditional Soft/Hard Deletion** | Replaced default cascade delete with a hybrid deletion pattern. Reports with a history containing at least one `PUBLISHED` version are soft-deleted by setting a `deleted` flag to true across all version rows. This preserves audit histories and past reports. Reports with only `DRAFT` or `IN_REVIEW` versions are physically cascade-deleted from the database. |
 | **Report ID Visual Hiding** | Replaced all visual displays of the raw UUID or alphanumeric `reportId` in the frontend (catalogs, sidebars, details) with the user-friendly `reportName`. The `reportId` is preserved strictly in the browser address path (e.g. `/reports/:id`) and in REST request/response payloads to maintain backend alignment. |
 | **Lombok JDK 21 Compatibility** | Upgraded Lombok to `1.18.38` to resolve AST type tag compilation compatibility errors (`TypeTag :: UNKNOWN` or `IllegalAccessError` on JDK 21 javac internal enum changes). |
+| **Serverless Database Pool Tuning & Actuator Health Decoupling** | Increased backend HikariCP maximum pool size to 20 to support concurrent DWH metadata requests, and disabled database status evaluation in Spring Boot Actuator health checks (`management.health.db.enabled=false`). This prevents Cloud Run liveness probe timeouts and container restarts when the Neon database wakes up from a scale-to-zero sleep state or undergoes connection spikes. |
 
 ---
 

@@ -17,18 +17,31 @@ The backend ingests Excel layout templates, normalizes their configuration into 
 
 ## Table of Contents
 
-- [Key Project Documentation](#key-project-documentation)
-- [Key Links](#key-links)
-- [Project Structure](#project-structure)
-- [Architectural Stack & Key Optimizations](#architectural-stack--key-optimizations)
-- [Architecture Diagram](#architecture-diagram)
-- [Quick Start: Working With This Repo](#quick-start-working-with-this-repo)
+- [Reporting Engine Back-End — Enterprise Developer Guide](#reporting-engine-back-end--enterprise-developer-guide)
+  - [Repo Metadata](#repo-metadata)
+  - [Table of Contents](#table-of-contents)
+  - [Key Project Documentation](#key-project-documentation)
+  - [Key Links](#key-links)
+  - [Project Structure](#project-structure)
+  - [Architectural Stack \& Key Optimizations](#architectural-stack--key-optimizations)
+    - [Core Technologies](#core-technologies)
+  - [Architecture Diagram](#architecture-diagram)
+  - [Quick Start: Working With This Repo](#quick-start-working-with-this-repo)
     - [Prerequisites](#prerequisites)
+      - [1. Software Runtimes \& Platforms](#1-software-runtimes--platforms)
+      - [2. Step-by-Step Installation Instructions](#2-step-by-step-installation-instructions)
+        - [🍎 macOS (using Homebrew, SDKMAN!, and NVM)](#-macos-using-homebrew-sdkman-and-nvm)
+        - [🐧 Ubuntu / Debian Linux (using apt, NodeSource, and Docker Repository)](#-ubuntu--debian-linux-using-apt-nodesource-and-docker-repository)
+        - [🪟 Windows (using winget or manual packages)](#-windows-using-winget-or-manual-packages)
+      - [3. Verification Command Cheat Sheet](#3-verification-command-cheat-sheet)
     - [One-Time Setup](#one-time-setup)
     - [Per Dev Session](#per-dev-session)
-- [Useful Commands](#useful-commands)
-- [End-to-End Application Flow](#end-to-end-application-flow)
-- [Database Layers](#database-layers)
+  - [Useful Commands](#useful-commands)
+  - [End-to-End Application Flow](#end-to-end-application-flow)
+  - [Database Layers](#database-layers)
+  - [Troubleshooting Port Conflicts](#troubleshooting-port-conflicts)
+    - [1. Identify Running Processes](#1-identify-running-processes)
+    - [2. Kill the Process Manually](#2-kill-the-process-manually)
 
 ---
 
@@ -41,6 +54,7 @@ The backend ingests Excel layout templates, normalizes their configuration into 
 | [docs/DESIGN.md](docs/DESIGN.md) | Visual design tokens, color guidelines, and UX guidelines |
 | [docs/architecture-and-walkthrough.md](docs/architecture-and-walkthrough.md) | System design decisions (ADRs), solution architecture, and user journeys |
 | [docs/testing.md](docs/testing.md) | Quality assurance guidelines, testing commands, and manual REST API checks |
+| [docs/swagger-spec.yaml](docs/swagger-spec.yaml) | API Swagger Specification - complete OpenAPI 3.0.3 REST endpoints contract |
 | [deployment/README.md](deployment/README.md) | Application packaging, Docker compose guidelines, and CI/CD stages |
 | [.agents/agents/validation_agents.md](.agents/agents/validation_agents.md) | Back-end validation agents specification and execution guide |
 | [docs/regional_distribution_template.md](docs/regional_distribution_template.md) | Detailed configuration reference for the Regional Distribution template |
@@ -54,7 +68,8 @@ The backend ingests Excel layout templates, normalizes their configuration into 
 
 - **Spring Boot Backend API**: [http://127.0.0.1:8101](http://127.0.0.1:8101)
 - **Angular Frontend UI**: [http://127.0.0.1:4200](http://127.0.0.1:4200)
-- **PostgreSQL Database**: `127.0.0.1:5433` (DB: `agentic_ai`, User: `user`, Pass: `password` - maps to container port `5432`)
+- **API Swagger Specification**: [docs/swagger-spec.yaml](docs/swagger-spec.yaml)
+- **PostgreSQL Database**: `127.0.0.1:5433` (DB: `agentic_ai`, User: `user`, Pass: `*****` - maps to container port `5432`)
 
 > **Windows/macOS Performance Note**: Use `127.0.0.1` instead of `localhost` to avoid IPv6 DNS resolution delay (saves 1–2 s per request on Windows).
 

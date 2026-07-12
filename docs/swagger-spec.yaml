@@ -1,0 +1,1020 @@
+openapi: 3.0.3
+info:
+  title: Reporting Engine API Specification
+  description: >
+    Centralized OpenAPI contract mapping the metadata-driven orchestration reporting engine REST API endpoints.
+    Includes core template CRUD, schema discovery, validation rules, raw cell execution, and asynchronous high-throughput export pipelines.
+  version: 1.0.0
+servers:
+  - url: http://localhost:8101
+    description: Local Development Server
+  - url: https://report-backend-zhhposx7ra-ey.a.run.app
+    description: Production Google Cloud Run Server
+paths:
+  # ─── Auth endpoints ────────────────────────────────────────────────────────
+  /api/auth/login:
+    get:
+      summary: Validate Basic Auth credentials
+      description: Validates credentials passed via Basic Authorization header and yields authenticated user state.
+      security:
+        - BasicAuth: []
+      responses:
+        '200':
+          description: Successfully authenticated.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  username:
+                    type: string
+                    example: admin
+                  authenticated:
+                    type: boolean
+                    example: true
+        '401':
+          description: Unauthorized credentials.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # ─── Report CRUD & Execution endpoints ─────────────────────────────────────
+  /api/reports:
+    get:
+      summary: List latest versions of all report layouts
+      description: Returns the catalog view containing the latest published (or draft) configuration header for each report.
+      security:
+        - BasicAuth: []
+      responses:
+        '200':
+          description: Successful retrieval of the catalog list.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ReportHeader'
+        '401':
+          description: Unauthorized.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    post:
+      summary: Save a new report configuration template
+      description: Cascades and persists a brand new report layout definition matrix with child rows, columns, metrics, and mappings.
+      security:
+        - BasicAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReportConfigDto'
+      responses:
+        '200':
+          description: Report created successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Report created successfully
+        '400':
+          description: Validation failure or invalid parameters.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/reports/{id}:
+    get:
+      summary: Load report configuration layout DTO
+      description: Hydrates a unified config representation including columns, rows, cell mappings, and properties for a given report.
+      security:
+        - BasicAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Unique Report ID UUID string.
+        - name: version
+          in: query
+          required: false
+          schema:
+            type: integer
+          description: Optional specific configuration version to retrieve. Defaults to latest.
+        - name: date
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+          description: Optional reference date used for checking dynamic rolling column bounds.
+      responses:
+        '200':
+          description: Hydrated Report configuration DTO payload.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportConfigDto'
+        '404':
+          description: Report not found or soft-deleted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    put:
+      summary: Update/overwrite an existing report configuration template
+      description: Cascade-deletes all previous rows, columns, metrics, and mappings, replacing them with the new configuration.
+      security:
+        - BasicAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: The report identifier.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReportConfigDto'
+      responses:
+        '200':
+          description: Report updated successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Report updated successfully
+        '400':
+          description: Invalid configuration layout properties.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/reports/{id}/run:
+    post:
+      summary: Execute template rendering and export binary Excel spreadsheet
+      description: Synchronously compiles reporting rows, evaluates formulas, styles the layouts, and outputs a downloadable binary Excel file.
+      security:
+        - BasicAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: version
+          in: query
+          required: false
+          schema:
+            type: integer
+        - name: date
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Compiled layout formatted as Excel binary.
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+        '500':
+          description: Execution failure.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/reports/{reportId}/execute:
+    post:
+      summary: Execute report raw unpivoted grid evaluation
+      description: Verifies execution date in the DWH dim_date catalog, processes aggregations, resolves calculations, and returns flat cell coordinates.
+      security:
+        - BasicAuth: []
+      parameters:
+        - name: reportId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: version
+          in: query
+          required: false
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExecuteRequest'
+      responses:
+        '200':
+          description: Array of unpivoted cell metrics.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ExecuteResponseCell'
+        '400':
+          description: Invalid query date or query parameters.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/reports/validate:
+    post:
+      summary: Perform structural and semantic validation on report configuration
+      description: Verifies configuration cycle detections, conformed dimension structures, query path resolving, and mathematical expressions.
+      security:
+        - BasicAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReportConfigDto'
+      responses:
+        '200':
+          description: Structural diagnostic validation details.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationResult'
+
+  /api/reports/preview-sql:
+    post:
+      summary: Preview dry-run compiled SQL queries
+      description: Generates the underlying CTE-based Postgres query strings without running them in the database.
+      security:
+        - BasicAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReportConfigDto'
+      responses:
+        '200':
+          description: Dry-run SQL preview string.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  sql:
+                    type: string
+                    example: "WITH cte_fact_sales AS ( ... ) SELECT * FROM combined_data"
+
+  # ─── Report Version lifecycle endpoints ────────────────────────────────────
+  /api/reports/{id}/version/list:
+    get:
+      summary: List all versions of a report layout
+      description: Returns the history of configuration revisions for a report, sorted descending.
+      security:
+        - BasicAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of report layout version mappings.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ReportHeader'
+
+  /api/reports/{id}/version/submit-review:
+    post:
+      summary: Transition status from draft to in_review
+      security:
+        - BasicAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: version
+          in: query
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Successfully transitioned to in_review status.
+
+  /api/reports/{id}/version/reject:
+    post:
+      summary: Transition status from in_review back to draft
+      security:
+        - BasicAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: version
+          in: query
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Successfully rejected back to draft.
+
+  /api/reports/{id}/version/publish:
+    post:
+      summary: Publish current version and automatically clone to the next draft version
+      security:
+        - BasicAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: version
+          in: query
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Successfully published. Returns published ID.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Report published successfully.
+                  publishedVersion:
+                    type: integer
+                    example: 4
+
+  /api/reports/{id}/version/fork:
+    post:
+      summary: Manually clone a published layout version into a brand new draft
+      security:
+        - BasicAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: version
+          in: query
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Successfully cloned.
+
+  # ─── Schema & Metadata Discovery endpoints ────────────────────────────────
+  /api/reports/tables:
+    get:
+      summary: List physical tables inside DWH analytics schema
+      security:
+        - BasicAuth: []
+      responses:
+        '200':
+          description: List of fully qualified table paths.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+                  example: analytics.fact_sales
+
+  /api/reports/table-columns:
+    get:
+      summary: Get physical column names list for a DWH table
+      security:
+        - BasicAuth: []
+      parameters:
+        - name: table
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Table name (e.g., analytics.fact_sales).
+      responses:
+        '200':
+          description: List of column names.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+                  example: rm_code
+
+  /api/reports/column-types:
+    get:
+      summary: Get physical column database types map for a DWH table
+      security:
+        - BasicAuth: []
+      parameters:
+        - name: table
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Mapping of column names to SQL data types.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+                example:
+                  amount: numeric
+                  reporting_date: date
+
+  /api/reports/dimensions/values:
+    get:
+      summary: Autocomplete distinct values for a dimension table column
+      security:
+        - BasicAuth: []
+      parameters:
+        - name: table
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: column
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Array of distinct values.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+
+  /api/reports/dimension-joins:
+    get:
+      summary: Fetch conformed and FK join graph mappings for a fact table
+      security:
+        - BasicAuth: []
+      parameters:
+        - name: factTable
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Direct outgoing edges and join SQL blocks.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    dimView:
+                      type: string
+                      example: analytics.dim_customers
+                    joinType:
+                      type: string
+                      example: LEFT JOIN
+                    joinSql:
+                      type: string
+                      example: analytics.dim_customers ON analytics.dim_customers.id = analytics.fact_sales.customer_id
+
+  /api/reports/schema-catalog:
+    get:
+      summary: Get complete exploration/dimension/measure model schema catalog
+      security:
+        - BasicAuth: []
+      responses:
+        '200':
+          description: Full view and relation catalog model map.
+
+  /api/metadata/distinct-values:
+    get:
+      summary: Securely autocomplete dimension column values
+      security:
+        - BasicAuth: []
+      parameters:
+        - name: table
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: column
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Array of sanitized distinct strings.
+
+  # ─── Planned API v1 endpoints (Enterprise Pipeline) ───────────────────────
+  /api/v1/reports/execute:
+    post:
+      summary: Core report execution yielding binary spreadsheet stream
+      description: Compiles dynamic layouts using polymorphic time mapping rules and streams back a formatted Excel binary directly.
+      security:
+        - BasicAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PolymorphicTimeRequest'
+      responses:
+        '200':
+          description: Evaluated spreadsheet binary stream output.
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+        '400':
+          description: Configuration parse error or dynamic date bounds expression validation failure.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/reports/stream-download:
+    get:
+      summary: Synchronous database streaming cursor spreadsheet download
+      description: Initiates direct SQL cursor streaming to compile and write massive rows row-by-row, returning a chunked transfer binary download.
+      security:
+        - BasicAuth: []
+      parameters:
+        - name: refDate
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+          description: Selected execution reference date boundary.
+      responses:
+        '200':
+          description: Chunked spreadsheet binary stream output.
+          headers:
+            Transfer-Encoding:
+              schema:
+                type: string
+                example: chunked
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+
+  /api/v1/exports/trigger:
+    post:
+      summary: Trigger an asynchronous high-capacity data run export job
+      description: Schedules a background export runner (>1 million records) yielding a tracking ticket immediately.
+      security:
+        - BasicAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - reportId
+                - executionDate
+              properties:
+                reportId:
+                  type: string
+                  example: REGIONAL_DISTRIBUTION
+                executionDate:
+                  type: string
+                  format: date
+                  example: 2025-12-31
+      responses:
+        '202':
+          description: Export job successfully accepted for processing.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExportJobTicket'
+
+  /api/v1/exports/status/{jobId}:
+    get:
+      summary: Background poll export status gate
+      description: Retrieves the current execution state of an asynchronous job. Returns a GCS download URL upon completion.
+      security:
+        - BasicAuth: []
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Detailed status tracking state of the scheduled background run.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExportStatusDetails'
+
+components:
+  securitySchemes:
+    BasicAuth:
+      type: http
+      scheme: basic
+
+  schemas:
+    ReportHeader:
+      type: object
+      properties:
+        reportId:
+          type: string
+          example: 5c8ea188-93aa-47d7-8053-a038ae4747db
+        reportName:
+          type: string
+          example: Sales Performance Audit
+        version:
+          type: integer
+          example: 4
+        status:
+          type: string
+          enum: [draft, in_review, published]
+          example: published
+        granularity:
+          type: string
+          example: rm_code
+        deleted:
+          type: boolean
+          example: false
+
+    ReportConfigDto:
+      type: object
+      required:
+        - reportId
+        - reportName
+        - columns
+        - rows
+      properties:
+        reportId:
+          type: string
+          example: 5c8ea188-93aa-47d7-8053-a038ae4747db
+        reportName:
+          type: string
+          example: Sales Performance Audit
+        version:
+          type: integer
+          example: 4
+        status:
+          type: string
+          enum: [DRAFT, IN_REVIEW, PUBLISHED]
+          example: DRAFT
+        sourceTable:
+          type: string
+          example: analytics.fact_sales
+        sourceField:
+          type: string
+          example: rm_id
+        granularity:
+          type: string
+          example: rm_code
+        quickFilters:
+          type: string
+          description: Stringified JSON array containing runtime quick filter constraints.
+          example: '[{"attribute":"country_code","operator":"=","value":"DE","dimTable":"dim_countries"}]'
+        generalFilters:
+          type: string
+          description: Stringified JSON syntax representing free-form global DWH filters.
+          example: '{"rules":[{"field":"amount","operator":">","value":"1000"}]}'
+        referenceDate:
+          type: string
+          format: date
+          example: 2025-12-31
+        reportingDateType:
+          type: string
+          enum: [FIXED, DYNAMIC]
+          example: DYNAMIC
+        reportingDateStatic:
+          type: string
+          format: date
+          nullable: true
+          example: null
+        reportingDateExpression:
+          type: string
+          nullable: true
+          example: T-2
+        timeframeStartType:
+          type: string
+          enum: [FIXED, DYNAMIC]
+          example: FIXED
+        timeframeStartStatic:
+          type: string
+          format: date
+          nullable: true
+          example: 2022-01-01
+        timeframeStartExpression:
+          type: string
+          nullable: true
+          example: null
+        timeframeEndType:
+          type: string
+          enum: [FIXED, DYNAMIC]
+          example: DYNAMIC
+        timeframeEndStatic:
+          type: string
+          format: date
+          nullable: true
+          example: null
+        timeframeEndExpression:
+          type: string
+          nullable: true
+          example: T-2
+        columns:
+          type: array
+          items:
+            $ref: '#/components/schemas/ColumnDefDto'
+        rows:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReportRowDto'
+
+    ColumnDefDto:
+      type: object
+      required:
+        - colId
+        - colType
+        - periodOffset
+        - displayOrder
+      properties:
+        colId:
+          type: string
+          example: C1
+        label:
+          type: string
+          example: Current Week
+        colType:
+          type: string
+          enum: [WTD, MTD, YTD, ROLLING, CALC, HEADER]
+          example: WTD
+        periodOffset:
+          type: integer
+          example: 0
+        rollingN:
+          type: integer
+          nullable: true
+          example: null
+        rollingGrain:
+          type: string
+          enum: [DAY, WEEK, MONTH, YEAR]
+          nullable: true
+          example: null
+        formulaExpr:
+          type: string
+          nullable: true
+          example: null
+        tierLevel:
+          type: string
+          example: L1
+        parentId:
+          type: string
+          nullable: true
+          example: null
+        periodType:
+          type: string
+          nullable: true
+          example: null
+        displayOrder:
+          type: integer
+          example: 1
+
+    ReportRowDto:
+      type: object
+      required:
+        - rowId
+        - label
+        - rowType
+        - indentLevel
+        - displayOrder
+      properties:
+        rowId:
+          type: string
+          example: R2
+        reportId:
+          type: string
+          example: 5c8ea188-93aa-47d7-8053-a038ae4747db
+        label:
+          type: string
+          example: Net Banking Transactions
+        rowType:
+          type: string
+          enum: [section, data, calc, blank]
+          example: data
+        source:
+          $ref: '#/components/schemas/MeasureDefinitionDTO'
+        parentRowId:
+          type: string
+          nullable: true
+          example: null
+        style:
+          type: string
+          example: bold
+        indentLevel:
+          type: integer
+          example: 0
+        displayOrder:
+          type: integer
+          example: 2
+        activeCols:
+          type: array
+          items:
+            type: string
+          example: [C1, C2]
+        filterExpr:
+          type: string
+          nullable: true
+          example: analytics.fact_sales.amount > 1000
+
+    MeasureDefinitionDTO:
+      type: object
+      properties:
+        sourceTable:
+          type: string
+          example: analytics.fact_sales
+        targetColumn:
+          type: string
+          example: customer_id
+        aggregation:
+          type: string
+          enum: [SUM, COUNT, AVG, MIN, MAX]
+          example: COUNT
+        rawExpression:
+          type: string
+          nullable: true
+          example: null
+
+    ValidationResult:
+      type: object
+      properties:
+        valid:
+          type: boolean
+          example: false
+        errors:
+          type: array
+          items:
+            $ref: '#/components/schemas/ValidationError'
+
+    ValidationError:
+      type: object
+      properties:
+        elementId:
+          type: string
+          example: GLOBAL
+        fieldContext:
+          type: string
+          example: quickFilters
+        errorSeverity:
+          type: string
+          enum: [CRITICAL, WARNING]
+          example: CRITICAL
+        displayMessage:
+          type: string
+          example: Filter references unconformed dimension table 'dim_relationship_manager'.
+
+    ExecuteRequest:
+      type: object
+      properties:
+        reportingDate:
+          type: string
+          format: date
+          example: 2025-12-31
+        runtimeFilters:
+          type: array
+          items:
+            $ref: '#/components/schemas/RuntimeFilter'
+
+    RuntimeFilter:
+      type: object
+      properties:
+        tableColumn:
+          type: string
+          example: dim_countries.iso_code
+        value:
+          type: string
+          example: DE
+
+    ExecuteResponseCell:
+      type: object
+      properties:
+        rowId:
+          type: string
+          example: R2
+        colId:
+          type: string
+          example: C1
+        val:
+          type: number
+          example: 450000.75
+
+    PolymorphicTimeRequest:
+      type: object
+      required:
+        - reportId
+      properties:
+        reportId:
+          type: string
+          example: REGIONAL_DISTRIBUTION
+        version:
+          type: integer
+          example: 13
+        reportingDateType:
+          type: string
+          enum: [FIXED, DYNAMIC]
+          example: DYNAMIC
+        reportingDateExpression:
+          type: string
+          example: T-2
+        reportingDateStatic:
+          type: string
+          format: date
+          example: 2025-12-31
+
+    ExportJobTicket:
+      type: object
+      properties:
+        jobId:
+          type: string
+          example: job_a56f5c13_8f42
+        status:
+          type: string
+          enum: [ACCEPTED, PROCESSING]
+          example: ACCEPTED
+
+    ExportStatusDetails:
+      type: object
+      properties:
+        jobId:
+          type: string
+          example: job_a56f5c13_8f42
+        status:
+          type: string
+          enum: [PROCESSING, FAILED, COMPLETED]
+          example: COMPLETED
+        progressPercentage:
+          type: integer
+          example: 100
+        downloadUrl:
+          type: string
+          format: uri
+          nullable: true
+          example: https://storage.googleapis.com/report-bucket/exports/job_a56f5c13_8f42.xlsx?GoogleAccessId=...
+
+    ErrorResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: An unexpected error occurred.
+        status:
+          type: integer
+          example: 400
