@@ -57,7 +57,7 @@ while ($true) {
     Start-Sleep -Seconds 2
 }
 Write-Host ""
-Write-Host "[OK]    PostgreSQL is healthy on localhost:5433  (DB: agentic_ai | user: user | pass: password)" -ForegroundColor Green
+Write-Host "[OK]    PostgreSQL is healthy on localhost:5433  (DB: agentic_ai | user: user | pass: ********)" -ForegroundColor Green
 
 # ── Step 2: Build and start Spring Boot ───────────────────────────────────────
 Write-Host ""

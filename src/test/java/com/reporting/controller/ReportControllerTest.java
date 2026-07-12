@@ -1,7 +1,7 @@
 package com.reporting.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.reporting.config.SecurityConfig;
+import com.reporting.config.SecurityConfiguration;
 import com.reporting.domain.Report;
 import com.reporting.dto.Enums;
 import com.reporting.dto.ReportConfigDto;
@@ -35,7 +35,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @WebMvcTest(controllers = { ReportController.class, SchemaDiscoveryController.class })
-@Import(SecurityConfig.class)
+@Import(SecurityConfiguration.class)
 @DisplayName("ReportController Unit Tests")
 @WithMockUser(username = "admin", roles = { "USER" })
 @SuppressWarnings({"null", "unchecked", "rawtypes"})

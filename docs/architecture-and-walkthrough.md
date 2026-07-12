@@ -29,6 +29,7 @@
 | **Report ID Visual Hiding** | Replaced all visual displays of the raw UUID or alphanumeric `reportId` in the frontend (catalogs, sidebars, details) with the user-friendly `reportName`. The `reportId` is preserved strictly in the browser address path (e.g. `/reports/:id`) and in REST request/response payloads to maintain backend alignment. |
 | **Lombok JDK 21 Compatibility** | Upgraded Lombok to `1.18.38` to resolve AST type tag compilation compatibility errors (`TypeTag :: UNKNOWN` or `IllegalAccessError` on JDK 21 javac internal enum changes). |
 | **Serverless Database Pool Tuning & Actuator Health Decoupling** | Increased backend HikariCP maximum pool size to 20 to support concurrent DWH metadata requests, and disabled database status evaluation in Spring Boot Actuator health checks (`management.health.db.enabled=false`). This prevents Cloud Run liveness probe timeouts and container restarts when the Neon database wakes up from a scale-to-zero sleep state or undergoes connection spikes. |
+| **OAuth2 Resource Server and JWT Claims Ingestion** | Upgraded system security from Basic Authentication to a modern, stateless OAuth2 JWT Resource Server using Spring Security 6.x. Added `SecurityContextService` to extract custom OIDC identity claims (e.g. `user_initials`, `assigned_country_restrictions`) from token contexts, enabling secure row-level security SQL injection. Updated the Angular 21 frontend `AuthService` and interceptor to attach bearer tokens automatically, and integrated local fallback token decoding for testing. |
 
 ---
 

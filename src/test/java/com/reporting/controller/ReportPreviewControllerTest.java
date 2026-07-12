@@ -1,7 +1,7 @@
 package com.reporting.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.reporting.config.SecurityConfig;
+import com.reporting.config.SecurityConfiguration;
 import com.reporting.dto.ReportConfigDto;
 import com.reporting.service.SqlGeneratorService;
 import org.junit.jupiter.api.DisplayName;
@@ -25,7 +25,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(controllers = ReportPreviewController.class)
-@Import(SecurityConfig.class)
+@Import(SecurityConfiguration.class)
 @DisplayName("ReportPreviewController Unit Tests")
 @WithMockUser(username = "admin", roles = {"USER"})
 @SuppressWarnings({"null", "unchecked", "rawtypes"})

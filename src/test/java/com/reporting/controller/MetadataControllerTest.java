@@ -1,6 +1,6 @@
 package com.reporting.controller;
 
-import com.reporting.config.SecurityConfig;
+import com.reporting.config.SecurityConfiguration;
 import com.reporting.cache.MetadataCache;
 import com.reporting.catalog.SchemaCatalogLoader;
 import org.junit.jupiter.api.DisplayName;
@@ -23,7 +23,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(controllers = MetadataController.class)
-@Import(SecurityConfig.class)
+@Import(SecurityConfiguration.class)
 @DisplayName("MetadataController Unit Tests")
 @WithMockUser(username = "admin", roles = {"USER"})
 @SuppressWarnings({"null", "unchecked", "rawtypes"})

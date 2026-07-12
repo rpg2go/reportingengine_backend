@@ -1,6 +1,6 @@
 package com.reporting.controller;
 
-import com.reporting.config.SecurityConfig;
+import com.reporting.config.SecurityConfiguration;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -13,7 +13,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @WebMvcTest(controllers = AuthController.class)
-@Import(SecurityConfig.class)
+@Import(SecurityConfiguration.class)
 @DisplayName("AuthController Unit Tests")
 public class AuthControllerTest {
 
@@ -28,12 +28,14 @@ public class AuthControllerTest {
     }
 
     @Test
-    @WithMockUser(username = "admin", roles = {"USER"})
     @DisplayName("login with credentials should return 200 OK and credentials info")
     public void login_withCredentials_shouldReturn200AndUserInfo() throws Exception {
-        mockMvc.perform(get("/api/auth/login"))
+        String base64Credentials = java.util.Base64.getEncoder().encodeToString("admin:password".getBytes());
+        mockMvc.perform(get("/api/auth/login")
+                .header("Authorization", "Basic " + base64Credentials))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.username").value("admin"))
-                .andExpect(jsonPath("$.authenticated").value(true));
+                .andExpect(jsonPath("$.authenticated").value(true))
+                .andExpect(jsonPath("$.token").isNotEmpty());
     }
 }
