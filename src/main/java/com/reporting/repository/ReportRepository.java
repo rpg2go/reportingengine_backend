@@ -10,6 +10,8 @@ import java.util.Optional;
 
 public interface ReportRepository extends JpaRepository<Report, ReportPk> {
 
+    boolean existsByReportNameAndDeletedFalse(String reportName);
+
     Optional<Report> findFirstByReportIdAndDeletedFalseOrderByVersionDesc(String reportId);
 
     List<Report> findByReportIdAndDeletedFalseOrderByVersionDesc(String reportId);

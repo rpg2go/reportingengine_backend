@@ -7,5 +7,6 @@ import java.util.List;
 
 public interface ReportRowRepository extends JpaRepository<ReportRow, ReportRowId> {
     List<ReportRow> findByReportIdOrderByDisplayOrderAsc(String reportId);
+    List<ReportRow> findByReportIdAndVersionOrderByDisplayOrderAsc(String reportId, Integer version);
     void deleteByReportId(String reportId);
 }
