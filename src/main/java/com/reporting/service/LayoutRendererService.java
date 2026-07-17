@@ -2,6 +2,8 @@ package com.reporting.service;
 
 import com.reporting.dto.*;
 import org.apache.poi.ss.usermodel.*;
+import org.apache.poi.ss.util.CellRangeAddress;
+import org.apache.poi.ss.util.RegionUtil;
 import org.apache.poi.xssf.usermodel.*;
 import org.apache.poi.xssf.streaming.SXSSFWorkbook;
 import org.apache.poi.xssf.streaming.SXSSFSheet;
@@ -13,11 +15,14 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.ArrayList;
 import java.util.Map;
+import java.util.HashMap;
+import java.util.Collections;
+import java.util.Comparator;
 
 @Service
 public class LayoutRendererService {
 
-    private static class ExpandedColumn {
+    public static class ExpandedColumn {
         private final String colId;
         private final String label;
         private final boolean isExpandedSubCol;
@@ -49,67 +54,157 @@ public class LayoutRendererService {
         return start.format(fmt) + " - " + end.format(fmt);
     }
 
-    private List<ExpandedColumn> getExpandedColumns(ReportConfigDto config) {
-        List<ExpandedColumn> expanded = new ArrayList<>();
-        LocalDate refDate = config.getReferenceDate() != null ? config.getReferenceDate() : LocalDate.now();
+    public LocalDate getAdjustedRefDate(LocalDate refDate, ColumnDefDto col, List<ColumnDefDto> allCols) {
+        String periodType = getEffectivePeriodType(col, allCols);
+        if (periodType != null && "PREVIOUS_YEAR".equalsIgnoreCase(periodType.trim())) {
+            return refDate.minusYears(1);
+        }
+        return refDate;
+    }
 
-        for (ColumnDefDto col : config.getColumns()) {
-            LocalDate colRefDate = refDate;
-            if (col.periodType() != null && "PREVIOUS_YEAR".equalsIgnoreCase(col.periodType().trim())) {
-                colRefDate = colRefDate.minusYears(1);
+    private String getEffectivePeriodType(ColumnDefDto col, List<ColumnDefDto> allCols) {
+        if (col.periodType() != null && !col.periodType().isBlank()) {
+            return col.periodType();
+        }
+        if ("L2".equalsIgnoreCase(col.tierLevel()) && col.parentId() != null) {
+            String parentKey = col.parentId().trim().toUpperCase();
+            for (ColumnDefDto parent : allCols) {
+                if (parentKey.equals(parent.colId().trim().toUpperCase())) {
+                    if (parent.periodType() != null && !parent.periodType().isBlank()) {
+                        return parent.periodType();
+                    }
+                }
+            }
+        }
+        return "";
+    }
+
+    public List<ExpandedColumn> expandRollingColumn(ColumnDefDto col, LocalDate colRefDate) {
+        List<ExpandedColumn> subCols = new ArrayList<>();
+        int rollingN = col.rollingN() != null ? col.rollingN() : 1;
+        String grain = col.effectiveRollingGrain();
+
+        for (int i = 1; i <= rollingN; i++) {
+            String subColId = col.colId() + "_" + i;
+            String label = "";
+
+            switch (grain) {
+                case "DAY": {
+                    LocalDate target = colRefDate.minusDays(i);
+                    label = formatShortDay(target);
+                    break;
+                }
+                case "MONTH": {
+                    LocalDate target = colRefDate.minusMonths(i);
+                    label = formatMonthYear(target);
+                    break;
+                }
+                case "YEAR": {
+                    LocalDate target = colRefDate.minusYears(i);
+                    label = String.valueOf(target.getYear());
+                    break;
+                }
+                case "WEEK":
+                default: {
+                    LocalDate refMonday = colRefDate.with(java.time.temporal.TemporalAdjusters.previousOrSame(java.time.DayOfWeek.MONDAY));
+                    LocalDate targetMonday = refMonday.minusWeeks(i);
+                    LocalDate targetSunday = targetMonday.plusDays(6);
+                    label = formatWeekRange(targetMonday, targetSunday);
+                    break;
+                }
             }
 
+            subCols.add(new ExpandedColumn(
+                subColId,
+                label,
+                true,
+                col.colId()
+            ));
+        }
+        return subCols;
+    }
+
+    public List<ExpandedColumn> getExpandedColumns(ReportConfigDto config) {
+        List<ColumnDefDto> cols = new ArrayList<>(config.getColumns());
+        cols.sort(Comparator.comparingInt(ColumnDefDto::displayOrder));
+
+        // Build L2 children map and find L1 columns
+        Map<String, List<ColumnDefDto>> l2ChildrenMap = new HashMap<>();
+        List<ColumnDefDto> l1Cols = new ArrayList<>();
+        for (ColumnDefDto col : cols) {
+            if ("L2".equalsIgnoreCase(col.tierLevel()) && col.parentId() != null && !col.parentId().isBlank()) {
+                String key = col.parentId().trim().toUpperCase();
+                l2ChildrenMap.computeIfAbsent(key, k -> new ArrayList<>()).add(col);
+            } else {
+                l1Cols.add(col);
+            }
+        }
+
+        List<ExpandedColumn> leaves = new ArrayList<>();
+        LocalDate refDate = config.getReferenceDate() != null ? config.getReferenceDate() : LocalDate.now();
+
+        for (ColumnDefDto col : l1Cols) {
+            LocalDate colRefDate = getAdjustedRefDate(refDate, col, config.getColumns());
+
             if (col.colType() == Enums.ColType.ROLLING) {
-                int rollingN = col.rollingN() != null ? col.rollingN() : 1;
-                String grain = col.effectiveRollingGrain();
+                leaves.addAll(expandRollingColumn(col, colRefDate));
+            } else if (col.colType() == Enums.ColType.HEADER) {
+                List<ColumnDefDto> children = l2ChildrenMap.getOrDefault(col.colId().trim().toUpperCase(), Collections.emptyList());
+                if (!children.isEmpty()) {
+                    for (ColumnDefDto child : children) {
+                        LocalDate childRefDate = getAdjustedRefDate(refDate, child, config.getColumns());
+                        if (child.colType() == Enums.ColType.ROLLING) {
+                            leaves.addAll(expandRollingColumn(child, childRefDate));
+                        } else {
+                            leaves.add(new ExpandedColumn(child.colId(), child.label(), false, null));
+                        }
+                    }
+                } else {
+                    // HEADER with no children: show itself as placeholder
+                    leaves.add(new ExpandedColumn(col.colId(), col.label(), false, null));
+                }
+            } else {
+                List<ColumnDefDto> children = l2ChildrenMap.getOrDefault(col.colId().trim().toUpperCase(), Collections.emptyList());
+                if (!children.isEmpty()) {
+                    for (ColumnDefDto child : children) {
+                        LocalDate childRefDate = getAdjustedRefDate(refDate, child, config.getColumns());
+                        if (child.colType() == Enums.ColType.ROLLING) {
+                            leaves.addAll(expandRollingColumn(child, childRefDate));
+                        } else {
+                            leaves.add(new ExpandedColumn(child.colId(), child.label(), false, null));
+                        }
+                    }
+                } else {
+                    leaves.add(new ExpandedColumn(col.colId(), col.label(), false, null));
+                }
+            }
+        }
 
-                for (int i = 1; i <= rollingN; i++) {
-                    String subColId = col.colId() + "_" + i;
-                    String label = "";
-
-                    switch (grain) {
-                        case "DAY": {
-                            LocalDate target = colRefDate.minusDays(i);
-                            label = formatShortDay(target);
-                            break;
-                        }
-                        case "MONTH": {
-                            LocalDate target = colRefDate.minusMonths(i);
-                            label = formatMonthYear(target);
-                            break;
-                        }
-                        case "YEAR": {
-                            LocalDate target = colRefDate.minusYears(i);
-                            label = String.valueOf(target.getYear());
-                            break;
-                        }
-                        case "WEEK":
-                        default: {
-                            LocalDate refMonday = colRefDate.with(java.time.temporal.TemporalAdjusters.previousOrSame(java.time.DayOfWeek.MONDAY));
-                            LocalDate targetMonday = refMonday.minusWeeks(i);
-                            LocalDate targetSunday = targetMonday.plusDays(6);
-                            label = formatWeekRange(targetMonday, targetSunday);
+        // Add orphaned L2s
+        for (ColumnDefDto col : cols) {
+            if ("L2".equalsIgnoreCase(col.tierLevel())) {
+                boolean hasValidParent = false;
+                if (col.parentId() != null && !col.parentId().isBlank()) {
+                    String pKey = col.parentId().trim().toUpperCase();
+                    for (ColumnDefDto p : l1Cols) {
+                        if (pKey.equals(p.colId().trim().toUpperCase())) {
+                            hasValidParent = true;
                             break;
                         }
                     }
-
-                    expanded.add(new ExpandedColumn(
-                        subColId,
-                        label,
-                        true,
-                        col.colId()
-                    ));
                 }
-            } else {
-                expanded.add(new ExpandedColumn(
-                    col.colId(),
-                    col.label(),
-                    false,
-                    null
-                ));
+                if (!hasValidParent) {
+                    LocalDate colRefDate = getAdjustedRefDate(refDate, col, config.getColumns());
+                    if (col.colType() == Enums.ColType.ROLLING) {
+                        leaves.addAll(expandRollingColumn(col, colRefDate));
+                    } else {
+                        leaves.add(new ExpandedColumn(col.colId(), col.label(), false, null));
+                    }
+                }
             }
         }
-        return expanded;
+
+        return leaves;
     }
 
     public byte[] render(ReportConfigDto config, Map<String, Map<String, Double>> data) throws IOException {
@@ -129,11 +224,16 @@ public class LayoutRendererService {
             CellStyle normalStyle = createNormalStyle(xssfWorkbook);
             CellStyle highlightStyle = createHighlightStyle(xssfWorkbook);
 
-            // Row 1: Column Headers
-            Row headerRow = sheet.createRow(0);
-            Cell headerLabelCell = headerRow.createCell(0);
+            // Row 1 & 2: Column Headers (Row indices 0 and 1)
+            Row headerRow0 = sheet.createRow(0);
+            Row headerRow1 = sheet.createRow(1);
+
+            Cell headerLabelCell = headerRow0.createCell(0);
             headerLabelCell.setCellValue("Report Line");
             headerLabelCell.setCellStyle(headerStyle);
+            CellRangeAddress labelRegion = new CellRangeAddress(0, 1, 0, 0);
+            sheet.addMergedRegion(labelRegion);
+            applyBordersAndStyle(labelRegion, sheet, headerStyle);
 
             List<String> granularityHeaders = new ArrayList<>();
             if (config.getGranularity() != null && !config.getGranularity().isBlank()) {
@@ -149,17 +249,164 @@ public class LayoutRendererService {
 
             int colIdx = 1;
             for (String gHeader : granularityHeaders) {
-                Cell cell = headerRow.createCell(colIdx++);
+                Cell cell = headerRow0.createCell(colIdx);
                 cell.setCellValue(gHeader);
                 cell.setCellStyle(headerStyle);
+
+                CellRangeAddress region = new CellRangeAddress(0, 1, colIdx, colIdx);
+                sheet.addMergedRegion(region);
+                applyBordersAndStyle(region, sheet, headerStyle);
+                colIdx++;
+            }
+
+            List<ColumnDefDto> cols = new ArrayList<>(config.getColumns());
+            cols.sort(Comparator.comparingInt(ColumnDefDto::displayOrder));
+
+            // Build L2 children map and find L1 columns
+            Map<String, List<ColumnDefDto>> l2ChildrenMap = new HashMap<>();
+            List<ColumnDefDto> l1Cols = new ArrayList<>();
+            for (ColumnDefDto col : cols) {
+                if ("L2".equalsIgnoreCase(col.tierLevel()) && col.parentId() != null && !col.parentId().isBlank()) {
+                    String key = col.parentId().trim().toUpperCase();
+                    l2ChildrenMap.computeIfAbsent(key, k -> new ArrayList<>()).add(col);
+                } else {
+                    l1Cols.add(col);
+                }
+            }
+
+            LocalDate refDate = config.getReferenceDate() != null ? config.getReferenceDate() : LocalDate.now();
+
+            for (ColumnDefDto col : l1Cols) {
+                LocalDate colRefDate = getAdjustedRefDate(refDate, col, config.getColumns());
+
+                if (col.colType() == Enums.ColType.ROLLING) {
+                    List<ExpandedColumn> subCols = expandRollingColumn(col, colRefDate);
+                    int span = subCols.size();
+                    if (span > 0) {
+                        int startCol = colIdx;
+                        int endCol = colIdx + span - 1;
+
+                        Cell parentCell = headerRow0.createCell(startCol);
+                        parentCell.setCellValue(col.label());
+
+                        CellRangeAddress region = new CellRangeAddress(0, 0, startCol, endCol);
+                        sheet.addMergedRegion(region);
+                        applyBordersAndStyle(region, sheet, headerStyle);
+
+                        for (int i = 0; i < span; i++) {
+                            Cell childCell = headerRow1.createCell(startCol + i);
+                            childCell.setCellValue(subCols.get(i).getLabel());
+                            childCell.setCellStyle(headerStyle);
+                        }
+                        colIdx += span;
+                    }
+                } else if (col.colType() == Enums.ColType.HEADER) {
+                    List<ColumnDefDto> children = l2ChildrenMap.getOrDefault(col.colId().trim().toUpperCase(), Collections.emptyList());
+                    if (!children.isEmpty()) {
+                        int totalSpan = 0;
+                        List<String> childLabels = new ArrayList<>();
+                        for (ColumnDefDto child : children) {
+                            LocalDate childRefDate = getAdjustedRefDate(refDate, child, config.getColumns());
+                            if (child.colType() == Enums.ColType.ROLLING) {
+                                List<ExpandedColumn> subCols = expandRollingColumn(child, childRefDate);
+                                totalSpan += subCols.size();
+                                for (ExpandedColumn sc : subCols) {
+                                    childLabels.add(sc.getLabel());
+                                }
+                            } else {
+                                totalSpan += 1;
+                                childLabels.add(child.label());
+                            }
+                        }
+
+                        if (totalSpan > 0) {
+                            int startCol = colIdx;
+                            int endCol = colIdx + totalSpan - 1;
+
+                            Cell parentCell = headerRow0.createCell(startCol);
+                            parentCell.setCellValue(col.label());
+
+                            CellRangeAddress region = new CellRangeAddress(0, 0, startCol, endCol);
+                            sheet.addMergedRegion(region);
+                            applyBordersAndStyle(region, sheet, headerStyle);
+
+                            for (int i = 0; i < totalSpan; i++) {
+                                Cell childCell = headerRow1.createCell(startCol + i);
+                                childCell.setCellValue(childLabels.get(i));
+                                childCell.setCellStyle(headerStyle);
+                            }
+                            colIdx += totalSpan;
+                        }
+                    } else {
+                        // HEADER with no children: span both rows
+                        Cell parentCell = headerRow0.createCell(colIdx);
+                        parentCell.setCellValue(col.label());
+
+                        CellRangeAddress region = new CellRangeAddress(0, 1, colIdx, colIdx);
+                        sheet.addMergedRegion(region);
+                        applyBordersAndStyle(region, sheet, headerStyle);
+                        colIdx++;
+                    }
+                } else {
+                    // Ordinary L1 columns: may have L2 children
+                    List<ColumnDefDto> children = l2ChildrenMap.getOrDefault(col.colId().trim().toUpperCase(), Collections.emptyList());
+                    if (!children.isEmpty()) {
+                        int totalSpan = children.size();
+                        int startCol = colIdx;
+                        int endCol = colIdx + totalSpan - 1;
+
+                        Cell parentCell = headerRow0.createCell(startCol);
+                        parentCell.setCellValue(col.label());
+
+                        CellRangeAddress region = new CellRangeAddress(0, 0, startCol, endCol);
+                        sheet.addMergedRegion(region);
+                        applyBordersAndStyle(region, sheet, headerStyle);
+
+                        for (int i = 0; i < totalSpan; i++) {
+                            Cell childCell = headerRow1.createCell(startCol + i);
+                            childCell.setCellValue(children.get(i).label());
+                            childCell.setCellStyle(headerStyle);
+                        }
+                        colIdx += totalSpan;
+                    } else {
+                        // Truly standalone: spans both rows
+                        Cell parentCell = headerRow0.createCell(colIdx);
+                        parentCell.setCellValue(col.label());
+
+                        CellRangeAddress region = new CellRangeAddress(0, 1, colIdx, colIdx);
+                        sheet.addMergedRegion(region);
+                        applyBordersAndStyle(region, sheet, headerStyle);
+                        colIdx++;
+                    }
+                }
+            }
+
+            // Orphaned L2s
+            for (ColumnDefDto col : cols) {
+                if ("L2".equalsIgnoreCase(col.tierLevel())) {
+                    boolean hasValidParent = false;
+                    if (col.parentId() != null && !col.parentId().isBlank()) {
+                        String pKey = col.parentId().trim().toUpperCase();
+                        for (ColumnDefDto p : l1Cols) {
+                            if (pKey.equals(p.colId().trim().toUpperCase())) {
+                                hasValidParent = true;
+                                break;
+                            }
+                        }
+                    }
+                    if (!hasValidParent) {
+                        Cell parentCell = headerRow0.createCell(colIdx);
+                        parentCell.setCellValue(col.label());
+
+                        CellRangeAddress region = new CellRangeAddress(0, 1, colIdx, colIdx);
+                        sheet.addMergedRegion(region);
+                        applyBordersAndStyle(region, sheet, headerStyle);
+                        colIdx++;
+                    }
+                }
             }
 
             List<ExpandedColumn> expandedCols = getExpandedColumns(config);
-            for (ExpandedColumn col : expandedCols) {
-                Cell cell = headerRow.createCell(colIdx++);
-                cell.setCellValue(col.getLabel());
-                cell.setCellStyle(headerStyle);
-            }
 
             // Create Number Formats
             DataFormat format = workbook.createDataFormat();
@@ -173,7 +420,7 @@ public class LayoutRendererService {
             CellStyle highlightNumStyle = cloneWithFormat(xssfWorkbook, highlightStyle, numFormat);
 
             // Render Body Rows
-            int rowIdx = 1;
+            int rowIdx = 2;
             for (ReportRowDto reportRow : config.getRows()) {
                 Row row = sheet.createRow(rowIdx++);
                 
@@ -333,6 +580,10 @@ public class LayoutRendererService {
         font.setColor(IndexedColors.WHITE.getIndex());
         style.setFont(font);
 
+        // Alignment
+        style.setAlignment(HorizontalAlignment.CENTER);
+        style.setVerticalAlignment(VerticalAlignment.CENTER);
+
         // Header cells background tint fill: #1e293b
         XSSFColor fill = new XSSFColor(new java.awt.Color(30, 41, 59), new DefaultIndexedColorMap()); 
         style.setFillForegroundColor(fill);
@@ -398,9 +649,29 @@ public class LayoutRendererService {
         XSSFColor fill = new XSSFColor(new java.awt.Color(255, 220, 0), new DefaultIndexedColorMap()); // #FFDC00
         style.setFillForegroundColor(fill);
         style.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+ 
+         style.setBorderTop(BorderStyle.THIN);
+         style.setBorderBottom(BorderStyle.THIN);
+         return style;
+     }
 
-        style.setBorderTop(BorderStyle.THIN);
-        style.setBorderBottom(BorderStyle.THIN);
-        return style;
+    private void applyBordersAndStyle(CellRangeAddress region, Sheet sheet, CellStyle style) {
+        for (int r = region.getFirstRow(); r <= region.getLastRow(); r++) {
+            Row row = sheet.getRow(r);
+            if (row == null) {
+                row = sheet.createRow(r);
+            }
+            for (int c = region.getFirstColumn(); c <= region.getLastColumn(); c++) {
+                Cell cell = row.getCell(c);
+                if (cell == null) {
+                    cell = row.createCell(c);
+                }
+                cell.setCellStyle(style);
+            }
+        }
+        RegionUtil.setBorderTop(BorderStyle.THIN, region, sheet);
+        RegionUtil.setBorderBottom(BorderStyle.THIN, region, sheet);
+        RegionUtil.setBorderLeft(BorderStyle.THIN, region, sheet);
+        RegionUtil.setBorderRight(BorderStyle.THIN, region, sheet);
     }
 }

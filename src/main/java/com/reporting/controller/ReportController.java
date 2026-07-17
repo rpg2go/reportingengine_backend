@@ -164,20 +164,33 @@ public class ReportController {
             @PathVariable("id") String id,
             @RequestParam(value = "version", required = false) Integer version,
             @RequestParam(value = "date", required = false)
-            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+            @RequestParam(value = "format", required = false, defaultValue = "xlsx") String format) {
 
         LocalDate refDate = date != null ? date : LocalDate.now();
         try {
-            log.info("Running report generation for report ID: {} version: {} with refDate: {}", id, version, refDate);
-            byte[] xlsxBytes = runnerService.runReport(id, version, refDate);
-            String filename = String.format("%s_%s.xlsx", id, refDate);
+            log.info("Running report generation for report ID: {} version: {} with refDate: {} format: {}", id, version, refDate, format);
+            byte[] fileBytes = runnerService.runReport(id, version, refDate, format);
+            
+            String filename;
+            String contentType;
+            if ("csv".equalsIgnoreCase(format)) {
+                filename = String.format("%s_%s.csv", id, refDate);
+                contentType = "text/csv";
+            } else if ("pdf".equalsIgnoreCase(format)) {
+                filename = String.format("%s_%s.pdf", id, refDate);
+                contentType = "application/pdf";
+            } else {
+                filename = String.format("%s_%s.xlsx", id, refDate);
+                contentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+            }
 
             return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
-                .contentType(MediaType.APPLICATION_OCTET_STREAM)
-                .body(xlsxBytes);
+                .contentType(MediaType.parseMediaType(contentType))
+                .body(fileBytes);
         } catch (Exception e) {
-            log.error("Failed to run report ID: {} with refDate: {}", id, refDate, e);
+            log.error("Failed to run report ID: {} with refDate: {} format: {}", id, refDate, format, e);
             return ResponseEntity.status(500)
                 .contentType(MediaType.APPLICATION_JSON)
                 .body("{\"message\": \"Failed to run and compile report. Please verify configuration parameters.\"}".getBytes());

@@ -83,6 +83,13 @@
             <version>${poi.version}</version>
         </dependency>
 
+        <!-- OpenPDF for PDF generation -->
+        <dependency>
+            <groupId>com.github.librepdf</groupId>
+            <artifactId>openpdf</artifactId>
+            <version>2.0.3</version>
+        </dependency>
+
         <!-- exp4j for safe mathematical expression evaluation -->
         <dependency>
             <groupId>net.objecthunter</groupId>

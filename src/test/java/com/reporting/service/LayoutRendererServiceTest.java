@@ -58,19 +58,19 @@ public class LayoutRendererServiceTest {
             assertThat(sheet).isNotNull();
 
             // Header Row (Row 0)
-            Row headerRow = sheet.getRow(0);
-            assertThat(headerRow).isNotNull();
-            assertThat(headerRow.getCell(0).getStringCellValue()).isEqualTo("Report Line");
-            assertThat(headerRow.getCell(1).getStringCellValue()).isEqualTo("Col 1 Label");
+            Row headerRow0 = sheet.getRow(0);
+            assertThat(headerRow0).isNotNull();
+            assertThat(headerRow0.getCell(0).getStringCellValue()).isEqualTo("Report Line");
+            assertThat(headerRow0.getCell(1).getStringCellValue()).isEqualTo("Col 1 Label");
 
-            // Row 1 (R1 - Revenue)
-            Row r1Row = sheet.getRow(1);
+            // Row 2 (R1 - Revenue)
+            Row r1Row = sheet.getRow(2);
             assertThat(r1Row).isNotNull();
             assertThat(r1Row.getCell(0).getStringCellValue()).isEqualTo("Revenue");
             assertThat(r1Row.getCell(1).getNumericCellValue()).isEqualTo(5000.50);
 
-            // Row 2 (R2 - Cost, Indent Level 1)
-            Row r2Row = sheet.getRow(2);
+            // Row 3 (R2 - Cost, Indent Level 1)
+            Row r2Row = sheet.getRow(3);
             assertThat(r2Row).isNotNull();
             // Two spaces indent
             assertThat(r2Row.getCell(0).getStringCellValue()).isEqualTo("  Cost");
@@ -114,16 +114,21 @@ public class LayoutRendererServiceTest {
             assertThat(sheet).isNotNull();
 
             // Header Row (Row 0)
-            Row headerRow = sheet.getRow(0);
-            assertThat(headerRow).isNotNull();
-            assertThat(headerRow.getCell(0).getStringCellValue()).isEqualTo("Report Line");
-            // C7_1: May 2026, C7_2: April 2026, C7_3: March 2026
-            assertThat(headerRow.getCell(1).getStringCellValue()).isEqualTo("May 2026");
-            assertThat(headerRow.getCell(2).getStringCellValue()).isEqualTo("April 2026");
-            assertThat(headerRow.getCell(3).getStringCellValue()).isEqualTo("March 2026");
+            Row headerRow0 = sheet.getRow(0);
+            assertThat(headerRow0).isNotNull();
+            assertThat(headerRow0.getCell(0).getStringCellValue()).isEqualTo("Report Line");
+            assertThat(headerRow0.getCell(1).getStringCellValue()).isEqualTo("3-Mo Rolling");
 
-            // Row 1 (R1 - Revenue)
-            Row r1Row = sheet.getRow(1);
+            // Header Row (Row 1)
+            Row headerRow1 = sheet.getRow(1);
+            assertThat(headerRow1).isNotNull();
+            // C7_1: May 2026, C7_2: April 2026, C7_3: March 2026
+            assertThat(headerRow1.getCell(1).getStringCellValue()).isEqualTo("May 2026");
+            assertThat(headerRow1.getCell(2).getStringCellValue()).isEqualTo("April 2026");
+            assertThat(headerRow1.getCell(3).getStringCellValue()).isEqualTo("March 2026");
+
+            // Row 2 (R1 - Revenue)
+            Row r1Row = sheet.getRow(2);
             assertThat(r1Row).isNotNull();
             assertThat(r1Row.getCell(0).getStringCellValue()).isEqualTo("Revenue");
             assertThat(r1Row.getCell(1).getNumericCellValue()).isEqualTo(100.0);
@@ -163,32 +168,32 @@ public class LayoutRendererServiceTest {
             Sheet sheet = workbook.getSheet("Report");
             assertThat(sheet).isNotNull();
 
-            // Total rows rendered: 1 header + 1 parent + 2 sub-rows = 4 rows
-            assertThat(sheet.getPhysicalNumberOfRows()).isEqualTo(4);
+            // Total rows rendered: 2 header + 1 parent + 2 sub-rows = 5 rows
+            assertThat(sheet.getPhysicalNumberOfRows()).isEqualTo(5);
 
             // Row 0 (Header)
-            Row headerRow = sheet.getRow(0);
-            assertThat(headerRow.getCell(0).getStringCellValue()).isEqualTo("Report Line");
-            assertThat(headerRow.getCell(1).getStringCellValue()).isEqualTo("country");
-            assertThat(headerRow.getCell(2).getStringCellValue()).isEqualTo("region");
-            assertThat(headerRow.getCell(3).getStringCellValue()).isEqualTo("Col 1 Label");
+            Row headerRow0 = sheet.getRow(0);
+            assertThat(headerRow0.getCell(0).getStringCellValue()).isEqualTo("Report Line");
+            assertThat(headerRow0.getCell(1).getStringCellValue()).isEqualTo("country");
+            assertThat(headerRow0.getCell(2).getStringCellValue()).isEqualTo("region");
+            assertThat(headerRow0.getCell(3).getStringCellValue()).isEqualTo("Col 1 Label");
 
-            // Row 1 (R1 - Parent row)
-            Row r1Row = sheet.getRow(1);
+            // Row 2 (R1 - Parent row)
+            Row r1Row = sheet.getRow(2);
             assertThat(r1Row.getCell(0).getStringCellValue()).isEqualTo("Revenue");
             assertThat(r1Row.getCell(1).getStringCellValue()).isEqualTo("-");
             assertThat(r1Row.getCell(2).getStringCellValue()).isEqualTo("-");
             assertThat(r1Row.getCell(3).getNumericCellValue()).isEqualTo(1000.00);
 
-            // Row 2 (Canada|West - sorted alphabetically before USA|East)
-            Row subRow1 = sheet.getRow(2);
+            // Row 3 (Canada|West - sorted alphabetically before USA|East)
+            Row subRow1 = sheet.getRow(3);
             assertThat(subRow1.getCell(0).getStringCellValue()).isEqualTo("  ├ ");
             assertThat(subRow1.getCell(1).getStringCellValue()).isEqualTo("Canada");
             assertThat(subRow1.getCell(2).getStringCellValue()).isEqualTo("West");
             assertThat(subRow1.getCell(3).getNumericCellValue()).isEqualTo(400.00);
 
-            // Row 3 (USA|East - last sub-row, gets '└' connector)
-            Row subRow2 = sheet.getRow(3);
+            // Row 4 (USA|East - last sub-row, gets '└' connector)
+            Row subRow2 = sheet.getRow(4);
             assertThat(subRow2.getCell(0).getStringCellValue()).isEqualTo("  └ ");
             assertThat(subRow2.getCell(1).getStringCellValue()).isEqualTo("USA");
             assertThat(subRow2.getCell(2).getStringCellValue()).isEqualTo("East");
