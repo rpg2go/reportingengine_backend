@@ -2,7 +2,7 @@ package com.reporting.dto;
 
 public class Enums {
     public enum ColType {
-        WTD, MTD, YTD, ROLLING, CALC, HEADER
+        WTD, MTD, QTD, YTD, ROLLING, CALC, HEADER
     }
 
     public enum RowType {

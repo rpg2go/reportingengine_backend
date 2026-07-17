@@ -47,15 +47,15 @@ public class DateUtilsTest {
     }
 
     @Test
-    @DisplayName("MTD with offset -1: should return 1st of previous month to same day in previous month")
+    @DisplayName("MTD with offset -1: should return 1st of previous month to end of previous month")
     public void getPeriodBoundaries_mtdOffsetMinusOne_shouldReturnPreviousMonthBoundaries() {
         LocalDate[] boundaries = DateUtils.getPeriodBoundaries(refDate, ColType.MTD, -1, null);
         assertThat(boundaries[0]).isEqualTo(LocalDate.of(2026, 4, 1));
-        assertThat(boundaries[1]).isEqualTo(LocalDate.of(2026, 4, 26));
+        assertThat(boundaries[1]).isEqualTo(LocalDate.of(2026, 4, 30));
     }
 
     @Test
-    @DisplayName("MTD with offset -3 (February adjustment): should cap at length of month")
+    @DisplayName("MTD with offset -3 (February adjustment): should return last day of February")
     public void getPeriodBoundaries_mtdOffsetMinusThree_shouldCapAtEndOfFebruary() {
         LocalDate leapRefDate = LocalDate.of(2024, 5, 31); // 2024 is leap year, Feb has 29 days
         LocalDate[] boundariesLeap = DateUtils.getPeriodBoundaries(leapRefDate, ColType.MTD, -3, null);
@@ -67,6 +67,22 @@ public class DateUtilsTest {
     }
 
     @Test
+    @DisplayName("QTD with offset 0: should return start of quarter to refDate")
+    public void getPeriodBoundaries_qtdOffsetZero_shouldReturnStartOfQuarterToRefDate() {
+        LocalDate[] boundaries = DateUtils.getPeriodBoundaries(refDate, ColType.QTD, 0, null);
+        assertThat(boundaries[0]).isEqualTo(LocalDate.of(2026, 4, 1));
+        assertThat(boundaries[1]).isEqualTo(LocalDate.of(2026, 5, 26));
+    }
+
+    @Test
+    @DisplayName("QTD with offset -1: should return previous quarter start to end")
+    public void getPeriodBoundaries_qtdOffsetMinusOne_shouldReturnPreviousQuarterBoundaries() {
+        LocalDate[] boundaries = DateUtils.getPeriodBoundaries(refDate, ColType.QTD, -1, null);
+        assertThat(boundaries[0]).isEqualTo(LocalDate.of(2026, 1, 1));
+        assertThat(boundaries[1]).isEqualTo(LocalDate.of(2026, 3, 31));
+    }
+
+    @Test
     @DisplayName("YTD with offset 0: should return Jan 1st of year to refDate")
     public void getPeriodBoundaries_ytdOffsetZero_shouldReturnJanFirstToRefDate() {
         LocalDate[] boundaries = DateUtils.getPeriodBoundaries(refDate, ColType.YTD, 0, null);
@@ -75,15 +91,15 @@ public class DateUtilsTest {
     }
 
     @Test
-    @DisplayName("YTD with offset -1 (or -12): should shift by 1 year")
+    @DisplayName("YTD with offset -1 (or -12): should shift by 1 year and return end of target year")
     public void getPeriodBoundaries_ytdOffsetMinusOne_shouldShiftByOneYear() {
         LocalDate[] boundaries1 = DateUtils.getPeriodBoundaries(refDate, ColType.YTD, -1, null);
         assertThat(boundaries1[0]).isEqualTo(LocalDate.of(2025, 1, 1));
-        assertThat(boundaries1[1]).isEqualTo(LocalDate.of(2025, 5, 26));
+        assertThat(boundaries1[1]).isEqualTo(LocalDate.of(2025, 12, 31));
 
         LocalDate[] boundaries12 = DateUtils.getPeriodBoundaries(refDate, ColType.YTD, -12, null);
         assertThat(boundaries12[0]).isEqualTo(LocalDate.of(2025, 1, 1));
-        assertThat(boundaries12[1]).isEqualTo(LocalDate.of(2025, 5, 26));
+        assertThat(boundaries12[1]).isEqualTo(LocalDate.of(2025, 12, 31));
     }
 
     @Test

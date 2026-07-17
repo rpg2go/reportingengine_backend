@@ -272,6 +272,43 @@ public class SqlGeneratorService {
                 combinedFilters = generalBlock;
             }
 
+            // Report-level Timeframe Boundary Limits
+            LocalDate timeframeStartDate = resolveTimeframeDate(
+                config.getTimeframeStartType(),
+                config.getTimeframeStartStatic(),
+                config.getTimeframeStartExpression(),
+                config.getReferenceDate() != null ? config.getReferenceDate() : LocalDate.now()
+            );
+            LocalDate timeframeEndDate = resolveTimeframeDate(
+                config.getTimeframeEndType(),
+                config.getTimeframeEndStatic(),
+                config.getTimeframeEndExpression(),
+                config.getReferenceDate() != null ? config.getReferenceDate() : LocalDate.now()
+            );
+
+            String timeframeFilter = "";
+            if (timeframeStartDate != null || timeframeEndDate != null) {
+                String timeKey = getTimeKeyForTable(factTable);
+                if (timeKey != null && !timeKey.isBlank()) {
+                    String prefixedTimeKey = factTable + "." + timeKey;
+                    if (timeframeStartDate != null && timeframeEndDate != null) {
+                        timeframeFilter = String.format("(%s >= '%s' AND %s <= '%s')", prefixedTimeKey, timeframeStartDate.toString(), prefixedTimeKey, timeframeEndDate.toString());
+                    } else if (timeframeStartDate != null) {
+                        timeframeFilter = String.format("(%s >= '%s')", prefixedTimeKey, timeframeStartDate.toString());
+                    } else {
+                        timeframeFilter = String.format("(%s <= '%s')", prefixedTimeKey, timeframeEndDate.toString());
+                    }
+                }
+            }
+
+            if (!timeframeFilter.isEmpty()) {
+                if (combinedFilters.isEmpty()) {
+                    combinedFilters = timeframeFilter;
+                } else {
+                    combinedFilters = timeframeFilter + " AND " + combinedFilters;
+                }
+            }
+
             String whereClause = "";
             if (!combinedFilters.isEmpty()) {
                 whereClause = "\n    WHERE " + combinedFilters;
@@ -358,6 +395,10 @@ public class SqlGeneratorService {
                                 subEnd = colRefDate.minusDays(i);
                             } else if ("MONTH".equals(grain)) {
                                 LocalDate[] b = DateUtils.getPeriodBoundaries(colRefDate, Enums.ColType.MTD, -i, null, null);
+                                subStart = b[0];
+                                subEnd = b[1];
+                            } else if ("QUARTER".equals(grain)) {
+                                LocalDate[] b = DateUtils.getPeriodBoundaries(colRefDate, Enums.ColType.QTD, -i, null, null);
                                 subStart = b[0];
                                 subEnd = b[1];
                             } else if ("YEAR".equals(grain)) {
@@ -543,6 +584,10 @@ public class SqlGeneratorService {
                             subEnd = colRefDate.minusDays(i);
                         } else if ("MONTH".equals(grain)) {
                             LocalDate[] b = DateUtils.getPeriodBoundaries(colRefDate, Enums.ColType.MTD, -i, null, null);
+                            subStart = b[0];
+                            subEnd = b[1];
+                        } else if ("QUARTER".equals(grain)) {
+                            LocalDate[] b = DateUtils.getPeriodBoundaries(colRefDate, Enums.ColType.QTD, -i, null, null);
                             subStart = b[0];
                             subEnd = b[1];
                         } else if ("YEAR".equals(grain)) {
@@ -1822,5 +1867,41 @@ public class SqlGeneratorService {
         }
         merged.add(current);
         return merged;
+    }
+
+    private LocalDate resolveTimeframeDate(String type, LocalDate staticDate, String expression, LocalDate referenceDate) {
+        if (type == null) {
+            return null;
+        }
+        if ("FIXED".equalsIgnoreCase(type)) {
+            return staticDate;
+        } else if ("DYNAMIC".equalsIgnoreCase(type)) {
+            if (expression == null || expression.isBlank()) {
+                return referenceDate;
+            }
+            String expr = expression.trim().toUpperCase();
+            if (expr.startsWith("T")) {
+                try {
+                    String offsetStr = expr.substring(1);
+                    if (offsetStr.isEmpty()) {
+                        return referenceDate;
+                    }
+                    if (offsetStr.startsWith("-")) {
+                        int days = Integer.parseInt(offsetStr.substring(1));
+                        return referenceDate.minusDays(days);
+                    } else if (offsetStr.startsWith("+")) {
+                        int days = Integer.parseInt(offsetStr.substring(1));
+                        return referenceDate.plusDays(days);
+                    } else {
+                        int days = Integer.parseInt(offsetStr);
+                        return referenceDate.minusDays(days);
+                    }
+                } catch (Exception e) {
+                    return referenceDate;
+                }
+            }
+            return referenceDate;
+        }
+        return null;
     }
 }

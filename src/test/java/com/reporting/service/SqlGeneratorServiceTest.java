@@ -851,5 +851,62 @@ public class SqlGeneratorServiceTest {
         // Assert
         assertThat(sql).contains("analytics.fact_sales.order_date >= '2025-05-26' AND analytics.fact_sales.order_date <= '2025-05-26'");
     }
+
+    @Test
+    @DisplayName("generate with report timeframe boundaries should apply start and end filters to the query")
+    public void generate_withReportTimeframeBoundaries_shouldApplyStartAndEndFilters() {
+        // Arrange
+        List<ColumnDefDto> columns = List.of(
+            new ColumnDefDto("C1", "Col 1", Enums.ColType.WTD, 0, null, null, 1)
+        );
+        List<ReportRowDto> rows = List.of(
+            new ReportRowDto("R1", "REP1", "Row 1", Enums.RowType.data, 
+                new MeasureDefinitionDTO("visual", "SUM", "amount", "analytics.fact_sales", null), 
+                null, "normal", 0, 1, Set.of("C1"), null)
+        );
+        ReportConfigDto config = new ReportConfigDto(
+            "REP1", "Test Report", columns, rows, LocalDate.of(2026, 5, 26), 1, Enums.ReportStatus.draft,
+            "analytics.fact_sales", "weekly", null, null, false, null, null
+        );
+
+        config.setTimeframeStartType("FIXED");
+        config.setTimeframeStartStatic(LocalDate.of(2024, 1, 1));
+        config.setTimeframeEndType("DYNAMIC");
+        config.setTimeframeEndExpression("T-2");
+
+        // Act
+        String sql = service.generate(config);
+
+        // Assert
+        assertThat(sql).contains("analytics.fact_sales.order_date >= '2024-01-01' AND analytics.fact_sales.order_date <= '2026-05-24'");
+    }
+
+    @Test
+    @DisplayName("generate with QTD colType should calculate quarter boundaries correctly")
+    public void generate_withQtdColType_shouldCalculateQuarterBoundaries() {
+        // Arrange
+        List<ColumnDefDto> columns = List.of(
+            new ColumnDefDto("C1", "Col 1", Enums.ColType.QTD, 0, null, null, 1),
+            new ColumnDefDto("C2", "Col 2", Enums.ColType.QTD, -1, null, null, 2)
+        );
+        List<ReportRowDto> rows = List.of(
+            new ReportRowDto("R1", "REP1", "Row 1", Enums.RowType.data, 
+                new MeasureDefinitionDTO("visual", "SUM", "amount", "analytics.fact_sales", null), 
+                null, "normal", 0, 1, Set.of("C1", "C2"), null)
+        );
+        ReportConfigDto config = new ReportConfigDto(
+            "REP1", "Test Report", columns, rows, LocalDate.of(2026, 5, 26), 1, Enums.ReportStatus.draft,
+            "analytics.fact_sales", "weekly", null, null, false, null, null
+        );
+
+        // Act
+        String sql = service.generate(config);
+
+        // Assert
+        // C1 (QTD, offset 0): Q2 (Apr 1 to May 26, 2026)
+        assertThat(sql).contains("analytics.fact_sales.order_date >= '2026-04-01' AND analytics.fact_sales.order_date <= '2026-05-26'");
+        // C2 (QTD, offset -1): Q1 (Jan 1 to Mar 31, 2026)
+        assertThat(sql).contains("analytics.fact_sales.order_date >= '2026-01-01' AND analytics.fact_sales.order_date <= '2026-03-31'");
+    }
 }
 

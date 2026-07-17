@@ -74,8 +74,26 @@ public class DateUtils {
                 LocalDate targetMonthDate = refDate.plusMonths(offset);
                 int n = (rollingN != null && rollingN > 0) ? rollingN : 1;
                 start = targetMonthDate.withDayOfMonth(1).minusMonths(n - 1);
-                int endDay = Math.min(refDate.getDayOfMonth(), targetMonthDate.lengthOfMonth());
-                end = targetMonthDate.withDayOfMonth(endDay);
+                if (offset == 0) {
+                    end = refDate;
+                } else {
+                    end = targetMonthDate.with(TemporalAdjusters.lastDayOfMonth());
+                }
+                break;
+            }
+
+            case QTD: {
+                // Quarter-to-date window shifted by {@code offset} quarters, look back n quarters.
+                LocalDate targetQuarterDate = refDate.plusMonths(offset * 3);
+                int n = (rollingN != null && rollingN > 0) ? rollingN : 1;
+                int startMonthValue = ((targetQuarterDate.getMonthValue() - 1) / 3) * 3 + 1;
+                start = LocalDate.of(targetQuarterDate.getYear(), startMonthValue, 1).minusMonths((n - 1) * 3);
+                if (offset == 0) {
+                    end = refDate;
+                } else {
+                    LocalDate qEndMonthDate = LocalDate.of(targetQuarterDate.getYear(), startMonthValue + 2, 1);
+                    end = qEndMonthDate.with(TemporalAdjusters.lastDayOfMonth());
+                }
                 break;
             }
 
@@ -85,10 +103,11 @@ public class DateUtils {
                 LocalDate targetYearDate = refDate.plusYears(yearShift);
                 int n = (rollingN != null && rollingN > 0) ? rollingN : 1;
                 start = LocalDate.of(targetYearDate.getYear(), 1, 1).minusYears(n - 1);
-                LocalDate refMonthInTargetYear =
-                    LocalDate.of(targetYearDate.getYear(), refDate.getMonthValue(), 1);
-                int endDay = Math.min(refDate.getDayOfMonth(), refMonthInTargetYear.lengthOfMonth());
-                end = LocalDate.of(targetYearDate.getYear(), refDate.getMonthValue(), endDay);
+                if (yearShift == 0) {
+                    end = refDate;
+                } else {
+                    end = LocalDate.of(targetYearDate.getYear(), 12, 31);
+                }
                 break;
             }
 
