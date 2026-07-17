@@ -153,6 +153,18 @@ The backend is architected as a high-performance Spring Boot application priorit
 *   **Formula Engine:** `exp4j` (v0.4.8) for fast, isolated, sandbox-safe mathematical evaluation of cell and row formulas (preventing SQL or script injection).
 *   **Database:** PostgreSQL 16 (hosted via Docker container locally; Neon Serverless Postgres in production).
 
+### Column Time-Window Types & Period Boundaries
+
+The engine resolves dynamic column time boundaries in `DateUtils` according to the following configurations:
+*   **`WTD` (Week-to-Date):** Monday–Sunday window.
+*   **`MTD` (Month-to-Date):** Beginning of the month to reporting date.
+*   **`QTD` (Quarter-to-Date):** Beginning of the quarter (Q1: Jan 1, Q2: Apr 1, Q3: Jul 1, Q4: Oct 1) to reporting date.
+*   **`YTD` (Year-to-Date):** January 1st to reporting date.
+*   **`ROLLING`:** Multi-period rolling window (supporting `DAY`, `WEEK`, `MONTH`, `QUARTER`, and `YEAR` grains).
+
+**Immutability & Expansion Rules for Past Periods:**
+For all current periods (period offset = 0), the end boundary is locked to the reporting date (e.g. current day). For all past/future periods (period offset $\neq$ 0), the boundary automatically expands to cover the **entire period** (e.g. full month or quarter) rather than truncating to the day-of-period of the reporting date.
+
 ---
 
 ## Architecture Diagram
