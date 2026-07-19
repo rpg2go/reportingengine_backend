@@ -22,7 +22,7 @@ public class ReportRunnerService {
     private final CsvRendererService csvRendererService;
     private final PdfRendererService pdfRendererService;
     private final JdbcTemplate jdbcTemplate;
-    private final ReportDataRepository reportDataRepository;
+    private final AnalyticsQueryDispatcher analyticsQueryDispatcher;
 
     public ReportRunnerService(ReportConfigService configService,
                                SqlGeneratorService generatorService,
@@ -31,7 +31,7 @@ public class ReportRunnerService {
                                CsvRendererService csvRendererService,
                                PdfRendererService pdfRendererService,
                                JdbcTemplate jdbcTemplate,
-                               ReportDataRepository reportDataRepository) {
+                               AnalyticsQueryDispatcher analyticsQueryDispatcher) {
         this.configService = configService;
         this.generatorService = generatorService;
         this.postProcessorService = postProcessorService;
@@ -39,7 +39,7 @@ public class ReportRunnerService {
         this.csvRendererService = csvRendererService;
         this.pdfRendererService = pdfRendererService;
         this.jdbcTemplate = jdbcTemplate;
-        this.reportDataRepository = reportDataRepository;
+        this.analyticsQueryDispatcher = analyticsQueryDispatcher;
     }
 
     @Transactional(readOnly = true)
@@ -74,7 +74,7 @@ public class ReportRunnerService {
         Map<String, Map<String, Double>> processedData;
         try {
             log.info("Executing and post-processing generated DWH queries via streaming cursor for reportId: {}", reportId);
-            try (Stream<Object[]> dataStream = reportDataRepository.streamNativeQuery(sql)) {
+            try (Stream<Object[]> dataStream = analyticsQueryDispatcher.queryForStream(sql)) {
                 processedData = postProcessorService.process(config, dataStream);
             }
         } catch (Exception e) {

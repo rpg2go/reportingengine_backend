@@ -3,6 +3,7 @@ package com.reporting.controller;
 import com.reporting.config.SecurityConfiguration;
 import com.reporting.cache.MetadataCache;
 import com.reporting.catalog.SchemaCatalogLoader;
+import com.reporting.service.AnalyticsQueryDispatcher;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -41,6 +42,9 @@ public class MetadataControllerTest {
     @MockitoBean
     private SchemaCatalogLoader schemaCatalogLoader;
 
+    @MockitoBean
+    private AnalyticsQueryDispatcher analyticsQueryDispatcher;
+
     @Test
     @DisplayName("GET /api/metadata/distinct-values: returns values when table is registered in sem_view")
     public void getDistinctValues_registeredTable_shouldResolveAndReturnValues() throws Exception {
@@ -50,8 +54,10 @@ public class MetadataControllerTest {
                 eq("dim_investment_hierarchy")
         )).thenReturn("analytics.dim_investment_hierarchy");
 
+        when(analyticsQueryDispatcher.isSitActive()).thenReturn(false);
+
         String expectedSql = "SELECT DISTINCT CAST(asset_class AS TEXT) FROM analytics.dim_investment_hierarchy WHERE asset_class IS NOT NULL ORDER BY 1 LIMIT 100";
-        when(jdbcTemplate.queryForList(eq(expectedSql), eq(String.class)))
+        when(analyticsQueryDispatcher.queryForList(eq(expectedSql), eq(String.class)))
                 .thenReturn(List.of("Alternatives", "Equities"));
 
         mockMvc.perform(get("/api/metadata/distinct-values")
@@ -71,8 +77,10 @@ public class MetadataControllerTest {
                 eq("fact_sales")
         )).thenThrow(new RuntimeException("not found"));
 
+        when(analyticsQueryDispatcher.isSitActive()).thenReturn(false);
+
         String expectedSql = "SELECT DISTINCT CAST(region AS TEXT) FROM analytics.fact_sales WHERE region IS NOT NULL ORDER BY 1 LIMIT 100";
-        when(jdbcTemplate.queryForList(eq(expectedSql), eq(String.class)))
+        when(analyticsQueryDispatcher.queryForList(eq(expectedSql), eq(String.class)))
                 .thenReturn(List.of("US", "EU"));
 
         mockMvc.perform(get("/api/metadata/distinct-values")

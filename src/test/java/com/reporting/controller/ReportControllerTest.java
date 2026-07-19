@@ -11,6 +11,7 @@ import com.reporting.service.ReportRunnerService;
 import com.reporting.service.ReportValidationService;
 import com.reporting.cache.MetadataCache;
 import com.reporting.catalog.SchemaCatalogLoader;
+import com.reporting.service.AnalyticsQueryDispatcher;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -57,6 +58,8 @@ public class ReportControllerTest {
         private ReportValidationService validationService;
         @MockitoBean
         private NamedParameterJdbcTemplate jdbcTemplate;
+        @MockitoBean
+        private AnalyticsQueryDispatcher analyticsQueryDispatcher;
         @MockitoBean
         private MetadataCache metadataCache;
         @MockitoBean
@@ -204,7 +207,7 @@ public class ReportControllerTest {
                 when(mockJdbcOperations.queryForList(anyString(), eq(String.class)))
                                 .thenReturn(List.of("analytics.fact_sales")); // whitelist
 
-                when(mockJdbcOperations.query(anyString(), any(RowMapper.class)))
+                when(analyticsQueryDispatcher.queryForList(anyString(), eq(String.class)))
                                 .thenReturn(List.of("North", "South", "West"));
 
                 mockMvc.perform(get("/api/reports/dimensions/values")
@@ -285,7 +288,7 @@ public class ReportControllerTest {
                                 .thenReturn("analytics.dim_products");
                 when(mockJdbcOperations.queryForList(anyString(), eq(String.class)))
                                 .thenReturn(List.of("analytics.dim_products"));
-                when(mockJdbcOperations.query(anyString(), any(RowMapper.class)))
+                when(analyticsQueryDispatcher.queryForList(anyString(), eq(String.class)))
                                 .thenReturn(List.of("Gadget", "Widget"));
 
                 mockMvc.perform(get("/api/reports/dimensions/values")
@@ -305,7 +308,7 @@ public class ReportControllerTest {
                                 .thenReturn("analytics.dim_date");
                 when(mockJdbcOperations.queryForList(anyString(), eq(String.class)))
                                 .thenReturn(List.of("analytics.dim_date"));
-                when(mockJdbcOperations.query(contains("date_key"), any(RowMapper.class)))
+                when(analyticsQueryDispatcher.queryForList(contains("date_key"), eq(String.class)))
                                 .thenReturn(List.of("2024-01-01", "2024-01-02"));
 
                 mockMvc.perform(get("/api/reports/dimensions/values")

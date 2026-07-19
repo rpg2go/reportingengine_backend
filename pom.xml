@@ -74,6 +74,13 @@
             <scope>runtime</scope>
         </dependency>
 
+        <!-- Google Cloud BigQuery Client -->
+        <dependency>
+            <groupId>com.google.cloud</groupId>
+            <artifactId>google-cloud-bigquery</artifactId>
+            <version>2.38.0</version>
+        </dependency>
+
 
 
         <!-- Apache POI for Excel Processing -->

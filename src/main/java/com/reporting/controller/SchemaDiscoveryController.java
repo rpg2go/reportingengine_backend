@@ -4,6 +4,7 @@ import com.reporting.cache.MetadataCache;
 import com.reporting.catalog.SchemaCatalogLoader;
 import com.reporting.catalog.MetaTable;
 import com.reporting.catalog.MetaColumn;
+import com.reporting.service.AnalyticsQueryDispatcher;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
@@ -39,13 +40,16 @@ public class SchemaDiscoveryController {
     private final NamedParameterJdbcTemplate jdbcTemplate;
     private final MetadataCache metadataCache;
     private final SchemaCatalogLoader schemaCatalogLoader;
+    private final AnalyticsQueryDispatcher analyticsQueryDispatcher;
 
     public SchemaDiscoveryController(NamedParameterJdbcTemplate jdbcTemplate,
             MetadataCache metadataCache,
-            SchemaCatalogLoader schemaCatalogLoader) {
+            SchemaCatalogLoader schemaCatalogLoader,
+            AnalyticsQueryDispatcher analyticsQueryDispatcher) {
         this.jdbcTemplate = jdbcTemplate;
         this.metadataCache = metadataCache;
         this.schemaCatalogLoader = schemaCatalogLoader;
+        this.analyticsQueryDispatcher = analyticsQueryDispatcher;
     }
 
     // ─── table / column discovery ─────────────────────────────────────────────
@@ -246,10 +250,7 @@ public class SchemaDiscoveryController {
                 "SELECT DISTINCT %s FROM %s WHERE %s IS NOT NULL ORDER BY %s LIMIT %d",
                 queryColumn, resolved, queryColumn, queryColumn, limit);
 
-        List<String> values = jdbcTemplate.getJdbcOperations().query(sql, (rs, rowNum) -> {
-            Object val = rs.getObject(1);
-            return val != null ? val.toString() : "";
-        });
+        List<String> values = analyticsQueryDispatcher.queryForList(sql, String.class);
         return ResponseEntity.ok(values);
     }
 

@@ -4,6 +4,7 @@ import com.reporting.dto.ReportConfigDto;
 import com.reporting.service.ReportConfigService;
 import com.reporting.service.SqlGeneratorService;
 import com.reporting.service.PostProcessorService;
+import com.reporting.service.AnalyticsQueryDispatcher;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -22,15 +23,18 @@ public class ReportExecutionController {
     private final SqlGeneratorService generatorService;
     private final PostProcessorService postProcessorService;
     private final JdbcTemplate jdbcTemplate;
+    private final AnalyticsQueryDispatcher analyticsQueryDispatcher;
 
     public ReportExecutionController(ReportConfigService configService,
                                      SqlGeneratorService generatorService,
                                      PostProcessorService postProcessorService,
-                                     JdbcTemplate jdbcTemplate) {
+                                     JdbcTemplate jdbcTemplate,
+                                     AnalyticsQueryDispatcher analyticsQueryDispatcher) {
         this.configService = configService;
         this.generatorService = generatorService;
         this.postProcessorService = postProcessorService;
         this.jdbcTemplate = jdbcTemplate;
+        this.analyticsQueryDispatcher = analyticsQueryDispatcher;
     }
 
     @PostMapping("/{reportId}/execute")
@@ -51,8 +55,8 @@ public class ReportExecutionController {
                 }
                 
                 // 2. Validate Presence in DWH (dim_date catalog check)
-                String checkSql = "SELECT EXISTS(SELECT 1 FROM analytics.dim_date WHERE date_key = CAST(? AS DATE))";
-                Boolean exists = jdbcTemplate.queryForObject(checkSql, Boolean.class, request.getReportingDate());
+                String checkSql = "SELECT COUNT(1) > 0 FROM analytics.dim_date WHERE date_key = CAST(? AS DATE)";
+                Boolean exists = analyticsQueryDispatcher.queryForObject(checkSql, Boolean.class, request.getReportingDate());
                 if (exists == null || !exists) {
                     return ResponseEntity.badRequest().body(Map.of("message", "The reportingDate '" + request.getReportingDate() + "' does not exist in the DWH dim_date catalog."));
                 }
@@ -73,8 +77,8 @@ public class ReportExecutionController {
             String sql = generatorService.generate(config);
             log.info("Generated report execution SQL: \n{}", sql);
 
-            // 4. Run database query via direct JDBC
-            List<Map<String, Object>> rawData = jdbcTemplate.queryForList(sql);
+            // 4. Run database query via dispatcher
+            List<Map<String, Object>> rawData = analyticsQueryDispatcher.queryForList(sql);
 
             // 5. Post-process data with formula evaluations
             Map<String, Map<String, Double>> processedData = postProcessorService.process(config, rawData);

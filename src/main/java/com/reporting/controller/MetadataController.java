@@ -8,6 +8,7 @@ import com.reporting.cache.MetadataCache;
 import com.reporting.catalog.SchemaCatalogLoader;
 import com.reporting.catalog.MetaTable;
 import com.reporting.catalog.MetaColumn;
+import com.reporting.service.AnalyticsQueryDispatcher;
 
 import java.util.List;
 import java.util.Collections;
@@ -21,11 +22,13 @@ public class MetadataController {
     private final JdbcTemplate jdbcTemplate;
     private final MetadataCache metadataCache;
     private final SchemaCatalogLoader schemaCatalogLoader;
+    private final AnalyticsQueryDispatcher analyticsQueryDispatcher;
 
-    public MetadataController(JdbcTemplate jdbcTemplate, MetadataCache metadataCache, SchemaCatalogLoader schemaCatalogLoader) {
+    public MetadataController(JdbcTemplate jdbcTemplate, MetadataCache metadataCache, SchemaCatalogLoader schemaCatalogLoader, AnalyticsQueryDispatcher analyticsQueryDispatcher) {
         this.jdbcTemplate = jdbcTemplate;
         this.metadataCache = metadataCache;
         this.schemaCatalogLoader = schemaCatalogLoader;
+        this.analyticsQueryDispatcher = analyticsQueryDispatcher;
     }
 
     @GetMapping("/distinct-values")
@@ -92,12 +95,13 @@ public class MetadataController {
 
         try {
             // Build the SQL query securely using the validated table and column
+            String castType = analyticsQueryDispatcher.isSitActive() ? "STRING" : "TEXT";
             String sql = String.format(
-                "SELECT DISTINCT CAST(%s AS TEXT) FROM %s WHERE %s IS NOT NULL ORDER BY 1 LIMIT 100",
-                column, resolvedTable, column
+                "SELECT DISTINCT CAST(%s AS %s) FROM %s WHERE %s IS NOT NULL ORDER BY 1 LIMIT 100",
+                column, castType, resolvedTable, column
             );
 
-            List<String> values = jdbcTemplate.queryForList(sql, String.class);
+            List<String> values = analyticsQueryDispatcher.queryForList(sql, String.class);
             return ResponseEntity.ok(values);
         } catch (Exception e) {
             log.error("Failed to query distinct values for {}.{}", resolvedTable, column, e);

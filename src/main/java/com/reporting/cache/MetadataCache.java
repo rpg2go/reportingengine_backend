@@ -5,6 +5,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
+import com.reporting.service.AnalyticsQueryDispatcher;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -41,6 +42,7 @@ public class MetadataCache {
     private static final Logger log = LoggerFactory.getLogger(MetadataCache.class);
 
     private final JdbcTemplate jdbc;
+    private final AnalyticsQueryDispatcher analyticsQueryDispatcher;
 
     // ── column metadata: "schema.table" or "table" → lowercase column names ──
     private final Map<String, Set<String>> tableColumnsCache = new ConcurrentHashMap<>();
@@ -57,8 +59,9 @@ public class MetadataCache {
     // ── column values cache: "schema.table.column" or "table.column" → list of distinct values ──
     private final Map<String, List<String>> columnValuesCache = new ConcurrentHashMap<>();
 
-    public MetadataCache(JdbcTemplate jdbc) {
+    public MetadataCache(JdbcTemplate jdbc, AnalyticsQueryDispatcher analyticsQueryDispatcher) {
         this.jdbc = jdbc;
+        this.analyticsQueryDispatcher = analyticsQueryDispatcher;
     }
 
     // ─── lifecycle ────────────────────────────────────────────────────────────
@@ -254,7 +257,7 @@ public class MetadataCache {
                 String cacheKey = (qualifiedTable + "." + column).toLowerCase();
 
                 try {
-                    int limit = 100;
+                    int limit = 500;
                     if ("dim_date".equalsIgnoreCase(table) && "date_key".equalsIgnoreCase(column)) {
                         limit = 1500;
                     }
@@ -262,10 +265,7 @@ public class MetadataCache {
                         "SELECT DISTINCT %s FROM %s WHERE %s IS NOT NULL ORDER BY %s LIMIT %d",
                         column, qualifiedTable, column, column, limit
                     );
-                    List<String> values = jdbc.query(querySql, (rsVal, rowNum) -> {
-                        Object val = rsVal.getObject(1);
-                        return val != null ? val.toString() : "";
-                    });
+                    List<String> values = analyticsQueryDispatcher.queryForList(querySql, String.class);
 
                     columnValuesCache.put(cacheKey, values);
                     columnValuesCache.put((table + "." + column).toLowerCase(), values);

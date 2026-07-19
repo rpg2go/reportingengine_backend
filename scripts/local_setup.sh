@@ -19,6 +19,18 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 MVN="$PROJECT_ROOT/maven/apache-maven-3.9.6/bin/mvn"
 
+# Helper to load .env variables
+if [ -f "$PROJECT_ROOT/.env" ]; then
+  while IFS= read -r line || [ -n "$line" ]; do
+    # Skip comments and empty lines
+    if [[ ! "$line" =~ ^# ]] && [[ "$line" =~ = ]]; then
+      # Strip carriage returns if file has Windows line endings
+      clean_line=$(echo "$line" | tr -d '\r')
+      export "$clean_line"
+    fi
+  done < "$PROJECT_ROOT/.env"
+fi
+
 # ── Colors ────────────────────────────────────────────────────────────────────
 GREEN='\033[0;32m'
 CYAN='\033[0;36m'
@@ -65,10 +77,16 @@ success "PostgreSQL is healthy on localhost:5433  (DB: agentic_ai | user: user |
 
 # ── Step 2: Build and start Spring Boot ───────────────────────────────────────
 echo ""
-info "Compiling and starting Spring Boot backend on port 8101..."
+PROFILE="dev"
+if [ "$1" == "sit" ]; then
+  PROFILE="sit"
+fi
+
+info "Compiling and starting Spring Boot backend (profile: $PROFILE) on port 8101..."
 echo -e "${YELLOW}  (Press Ctrl+C to stop)${NC}"
 echo ""
 
 "$MVN" spring-boot:run \
   -f "$PROJECT_ROOT/pom.xml" \
+  -Dspring-boot.run.profiles="$PROFILE" \
   -Dspring-boot.run.jvmArguments="-Dserver.port=8101"
