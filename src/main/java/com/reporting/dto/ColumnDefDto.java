@@ -47,20 +47,14 @@ public record ColumnDefDto(
 
     String parentId,
 
-    String periodType,
-
     int displayOrder
 ) {
     public ColumnDefDto(String colId, String label, Enums.ColType colType, int periodOffset, Integer rollingN, String formulaExpr, int displayOrder) {
-        this(colId, label, colType, periodOffset, rollingN, null, formulaExpr, "L1", null, null, displayOrder);
+        this(colId, label, colType, periodOffset, rollingN, null, formulaExpr, "L1", null, displayOrder);
     }
 
     public ColumnDefDto(String colId, String label, Enums.ColType colType, int periodOffset, Integer rollingN, String rollingGrain, String formulaExpr, int displayOrder) {
-        this(colId, label, colType, periodOffset, rollingN, rollingGrain, formulaExpr, "L1", null, null, displayOrder);
-    }
-
-    public ColumnDefDto(String colId, String label, Enums.ColType colType, int periodOffset, Integer rollingN, String rollingGrain, String formulaExpr, String tierLevel, String parentId, int displayOrder) {
-        this(colId, label, colType, periodOffset, rollingN, rollingGrain, formulaExpr, tierLevel, parentId, null, displayOrder);
+        this(colId, label, colType, periodOffset, rollingN, rollingGrain, formulaExpr, "L1", null, displayOrder);
     }
 
     public boolean isSqlColumn() {

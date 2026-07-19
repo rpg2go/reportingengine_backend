@@ -347,15 +347,31 @@ public class SqlGeneratorService {
                     boolean hasTimeKey = timeKey != null && !timeKey.isBlank();
 
                     LocalDate colRefDate = config.getReferenceDate() != null ? config.getReferenceDate() : LocalDate.now();
-                    String effPeriodType = getEffectivePeriodType(col, config.getColumns());
-                    if (effPeriodType != null && "PREVIOUS_YEAR".equalsIgnoreCase(effPeriodType.trim())) {
-                        colRefDate = colRefDate.minusYears(1);
+                    int shiftOffset = 0;
+                    String shiftGrain = "WEEK";
+                    if (col.colType() == Enums.ColType.ROLLING) {
+                        shiftOffset = col.periodOffset();
+                        shiftGrain = col.effectiveRollingGrain();
+                    } else if ("L2".equalsIgnoreCase(col.tierLevel()) && col.parentId() != null) {
+                        String pId = col.parentId().trim().toUpperCase();
+                        for (ColumnDefDto parent : config.getColumns()) {
+                            if (pId.equals(parent.colId().trim().toUpperCase())) {
+                                if (parent.colType() == Enums.ColType.ROLLING) {
+                                    shiftOffset = parent.periodOffset();
+                                    shiftGrain = parent.effectiveRollingGrain();
+                                }
+                                break;
+                            }
+                        }
+                    }
+                    if (shiftOffset != 0) {
+                        colRefDate = TimeWindowResolver.shiftRefDateByGrain(colRefDate, shiftOffset, shiftGrain);
                     }
 
                     LocalDate[] boundaries = DateUtils.getPeriodBoundaries(
                         colRefDate,
                         col.colType(),
-                        col.periodOffset(),
+                        col.colType() == Enums.ColType.ROLLING ? 0 : col.periodOffset(),
                         col.rollingN(),
                         col.effectiveRollingGrain()   // DAY | WEEK | MONTH (null → WEEK)
                     );
@@ -387,7 +403,7 @@ public class SqlGeneratorService {
                     if (col.colType() == Enums.ColType.ROLLING) {
                         int rollingN = col.rollingN() != null ? col.rollingN() : 1;
                         String grain = col.effectiveRollingGrain();
-                        for (int i = 1; i <= rollingN; i++) {
+                        for (int i = rollingN; i >= 1; i--) {
                             LocalDate subStart;
                             LocalDate subEnd;
                             if ("DAY".equals(grain)) {
@@ -519,7 +535,7 @@ public class SqlGeneratorService {
 
                     if (col.colType() == Enums.ColType.ROLLING) {
                         int rollingN = col.rollingN() != null ? col.rollingN() : 1;
-                        for (int i = 1; i <= rollingN; i++) {
+                        for (int i = rollingN; i >= 1; i--) {
                             String subColId = col.colId() + "_" + i;
                             String subAlias = "val_" + row.rowId().toLowerCase() + "_" + subColId.toLowerCase();
                             combinedSelectList.add(String.format("COALESCE(%s.%s, 0) AS %s", cteName, subAlias, subAlias));
@@ -555,14 +571,30 @@ public class SqlGeneratorService {
         for (ColumnDefDto col : config.getColumns()) {
             if (col.isSqlColumn()) {
                 LocalDate colRefDate = config.getReferenceDate() != null ? config.getReferenceDate() : LocalDate.now();
-                String effPeriodType = getEffectivePeriodType(col, config.getColumns());
-                if (effPeriodType != null && "PREVIOUS_YEAR".equalsIgnoreCase(effPeriodType.trim())) {
-                    colRefDate = colRefDate.minusYears(1);
+                int shiftOffset = 0;
+                String shiftGrain = "WEEK";
+                if (col.colType() == Enums.ColType.ROLLING) {
+                    shiftOffset = col.periodOffset();
+                    shiftGrain = col.effectiveRollingGrain();
+                } else if ("L2".equalsIgnoreCase(col.tierLevel()) && col.parentId() != null) {
+                    String pId = col.parentId().trim().toUpperCase();
+                    for (ColumnDefDto parent : config.getColumns()) {
+                        if (pId.equals(parent.colId().trim().toUpperCase())) {
+                            if (parent.colType() == Enums.ColType.ROLLING) {
+                                shiftOffset = parent.periodOffset();
+                                shiftGrain = parent.effectiveRollingGrain();
+                            }
+                            break;
+                        }
+                    }
+                }
+                if (shiftOffset != 0) {
+                    colRefDate = TimeWindowResolver.shiftRefDateByGrain(colRefDate, shiftOffset, shiftGrain);
                 }
                 LocalDate[] boundaries = DateUtils.getPeriodBoundaries(
                     colRefDate,
                     col.colType(),
-                    col.periodOffset(),
+                    col.colType() == Enums.ColType.ROLLING ? 0 : col.periodOffset(),
                     col.rollingN(),
                     col.effectiveRollingGrain()
                 );
@@ -576,7 +608,7 @@ public class SqlGeneratorService {
                 if (col.colType() == Enums.ColType.ROLLING) {
                     int rollingN = col.rollingN() != null ? col.rollingN() : 1;
                     String grain = col.effectiveRollingGrain();
-                    for (int i = 1; i <= rollingN; i++) {
+                    for (int i = rollingN; i >= 1; i--) {
                         LocalDate subStart;
                         LocalDate subEnd;
                         if ("DAY".equals(grain)) {
@@ -680,7 +712,7 @@ public class SqlGeneratorService {
 
                 if (col.colType() == Enums.ColType.ROLLING) {
                     int rollingN = col.rollingN() != null ? col.rollingN() : 1;
-                    for (int i = 1; i <= rollingN; i++) {
+                    for (int i = rollingN; i >= 1; i--) {
                         String subColId = col.colId() + "_" + i;
                         String subAlias = "val_" + row.rowId().toLowerCase() + "_" + subColId.toLowerCase();
                         String subSelect = String.format(
@@ -1817,22 +1849,7 @@ public class SqlGeneratorService {
         return metricClause;
     }
 
-    private String getEffectivePeriodType(ColumnDefDto col, List<ColumnDefDto> allCols) {
-        if (col.periodType() != null && !col.periodType().isBlank()) {
-            return col.periodType();
-        }
-        if (col.parentId() != null && !col.parentId().isBlank()) {
-            String parentId = col.parentId().trim().toUpperCase();
-            for (ColumnDefDto parent : allCols) {
-                if (parentId.equals(parent.colId().trim().toUpperCase())) {
-                    if (parent.periodType() != null && !parent.periodType().isBlank()) {
-                        return parent.periodType();
-                    }
-                }
-            }
-        }
-        return null;
-    }
+
 
     private static class DateInterval {
         LocalDate start;

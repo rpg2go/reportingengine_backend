@@ -55,28 +55,28 @@ public class LayoutRendererService {
     }
 
     public LocalDate getAdjustedRefDate(LocalDate refDate, ColumnDefDto col, List<ColumnDefDto> allCols) {
-        String periodType = getEffectivePeriodType(col, allCols);
-        if (periodType != null && "PREVIOUS_YEAR".equalsIgnoreCase(periodType.trim())) {
-            return refDate.minusYears(1);
-        }
-        return refDate;
-    }
-
-    private String getEffectivePeriodType(ColumnDefDto col, List<ColumnDefDto> allCols) {
-        if (col.periodType() != null && !col.periodType().isBlank()) {
-            return col.periodType();
-        }
-        if ("L2".equalsIgnoreCase(col.tierLevel()) && col.parentId() != null) {
+        int offset = 0;
+        String grain = "WEEK";
+        if (col.colType() == Enums.ColType.ROLLING) {
+            offset = col.periodOffset();
+            grain = col.effectiveRollingGrain();
+        } else if ("L2".equalsIgnoreCase(col.tierLevel()) && col.parentId() != null) {
             String parentKey = col.parentId().trim().toUpperCase();
             for (ColumnDefDto parent : allCols) {
                 if (parentKey.equals(parent.colId().trim().toUpperCase())) {
-                    if (parent.periodType() != null && !parent.periodType().isBlank()) {
-                        return parent.periodType();
+                    if (parent.colType() == Enums.ColType.ROLLING) {
+                        offset = parent.periodOffset();
+                        grain = parent.effectiveRollingGrain();
                     }
+                    break;
                 }
             }
         }
-        return "";
+
+        if (offset != 0) {
+            return TimeWindowResolver.shiftRefDateByGrain(refDate, offset, grain);
+        }
+        return refDate;
     }
 
     public List<ExpandedColumn> expandRollingColumn(ColumnDefDto col, LocalDate colRefDate) {
@@ -84,7 +84,7 @@ public class LayoutRendererService {
         int rollingN = col.rollingN() != null ? col.rollingN() : 1;
         String grain = col.effectiveRollingGrain();
 
-        for (int i = 1; i <= rollingN; i++) {
+        for (int i = rollingN; i >= 1; i--) {
             String subColId = col.colId() + "_" + i;
             String label = "";
 

@@ -112,7 +112,6 @@ public class ReportCloneService {
                 .formulaExpr(col.getFormulaExpr())
                 .tierLevel(col.getTierLevel())
                 .parentId(col.getParentId())
-                .periodType(col.getPeriodType())
                 .displayOrder(col.getDisplayOrder())
                 .build();
             clonedColumns.add(clonedCol);

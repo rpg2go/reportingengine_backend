@@ -122,18 +122,18 @@ public class LayoutRendererServiceTest {
             // Header Row (Row 1)
             Row headerRow1 = sheet.getRow(1);
             assertThat(headerRow1).isNotNull();
-            // C7_1: May 2026, C7_2: April 2026, C7_3: March 2026
-            assertThat(headerRow1.getCell(1).getStringCellValue()).isEqualTo("May 2026");
+            // C7_3: March 2026, C7_2: April 2026, C7_1: May 2026
+            assertThat(headerRow1.getCell(1).getStringCellValue()).isEqualTo("March 2026");
             assertThat(headerRow1.getCell(2).getStringCellValue()).isEqualTo("April 2026");
-            assertThat(headerRow1.getCell(3).getStringCellValue()).isEqualTo("March 2026");
+            assertThat(headerRow1.getCell(3).getStringCellValue()).isEqualTo("May 2026");
 
             // Row 2 (R1 - Revenue)
             Row r1Row = sheet.getRow(2);
             assertThat(r1Row).isNotNull();
             assertThat(r1Row.getCell(0).getStringCellValue()).isEqualTo("Revenue");
-            assertThat(r1Row.getCell(1).getNumericCellValue()).isEqualTo(100.0);
+            assertThat(r1Row.getCell(1).getNumericCellValue()).isEqualTo(0.0);
             assertThat(r1Row.getCell(2).getNumericCellValue()).isEqualTo(200.0);
-            assertThat(r1Row.getCell(3).getNumericCellValue()).isEqualTo(0.0);
+            assertThat(r1Row.getCell(3).getNumericCellValue()).isEqualTo(100.0);
         }
     }
 

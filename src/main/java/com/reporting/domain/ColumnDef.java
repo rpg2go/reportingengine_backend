@@ -54,9 +54,6 @@ public class ColumnDef {
     @Column(name = "parent_id", length = 50)
     private String parentId;
 
-    @Column(name = "period_type", length = 50)
-    private String periodType;
-
     @Column(name = "display_order", nullable = false)
     private Integer displayOrder;
 }

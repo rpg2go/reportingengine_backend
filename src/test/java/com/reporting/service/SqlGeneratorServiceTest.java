@@ -781,7 +781,7 @@ public class SqlGeneratorServiceTest {
     public void generate_rollingWithYearGrain_shouldCompileSubColumns() {
         // Arrange
         List<ColumnDefDto> columns = List.of(
-            new ColumnDefDto("C1", "Col 1", Enums.ColType.ROLLING, 0, 3, "YEAR", null, "L1", null, null, 1)
+            new ColumnDefDto("C1", "Col 1", Enums.ColType.ROLLING, 0, 3, "YEAR", null, "L1", null, 1)
         );
         List<ReportRowDto> rows = List.of(
             new ReportRowDto("R1", "REP1", "Row 1", Enums.RowType.data, 
@@ -807,8 +807,8 @@ public class SqlGeneratorServiceTest {
     public void generate_withHeaderColType_shouldIgnoreHeaderColumn() {
         // Arrange
         List<ColumnDefDto> columns = List.of(
-            new ColumnDefDto("C1", "Header Col", Enums.ColType.HEADER, 0, 0, null, null, "L1", null, null, 1),
-            new ColumnDefDto("C2", "Col 2", Enums.ColType.WTD, 0, 0, null, null, "L1", null, null, 2)
+            new ColumnDefDto("C1", "Header Col", Enums.ColType.HEADER, 0, 0, null, null, "L1", null, 1),
+            new ColumnDefDto("C2", "Col 2", Enums.ColType.WTD, 0, 0, null, null, "L1", null, 2)
         );
         List<ReportRowDto> rows = List.of(
             new ReportRowDto("R1", "REP1", "Row 1", Enums.RowType.data, 
@@ -829,11 +829,11 @@ public class SqlGeneratorServiceTest {
     }
 
     @Test
-    @DisplayName("generate with PREVIOUS_YEAR periodType should subtract one year from reference date")
-    public void generate_withPreviousYearPeriodType_shouldSubtractOneYear() {
+    @DisplayName("generate with ROLLING and periodOffset -52 should subtract 52 weeks from reference date")
+    public void generate_withRollingOffsetMinus52Weeks_shouldSubtractOneYear() {
         // Arrange
         List<ColumnDefDto> columns = List.of(
-            new ColumnDefDto("C1", "Col 1", Enums.ColType.WTD, 0, 0, null, null, "L1", null, "PREVIOUS_YEAR", 1)
+            new ColumnDefDto("C1", "Col 1", Enums.ColType.ROLLING, -52, 3, "WEEK", null, "L1", null, 1)
         );
         List<ReportRowDto> rows = List.of(
             new ReportRowDto("R1", "REP1", "Row 1", Enums.RowType.data, 
@@ -849,7 +849,7 @@ public class SqlGeneratorServiceTest {
         String sql = service.generate(config);
 
         // Assert
-        assertThat(sql).contains("analytics.fact_sales.order_date >= '2025-05-26' AND analytics.fact_sales.order_date <= '2025-05-26'");
+        assertThat(sql).contains("analytics.fact_sales.order_date >= '2025-05-07' AND analytics.fact_sales.order_date <= '2025-05-27'");
     }
 
     @Test

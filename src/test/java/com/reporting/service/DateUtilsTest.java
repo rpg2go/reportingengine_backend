@@ -91,15 +91,33 @@ public class DateUtilsTest {
     }
 
     @Test
-    @DisplayName("YTD with offset -1 (or -12): should shift by 1 year and return end of target year")
+    @DisplayName("YTD with offset -1: should shift by 1 year and return end of target year")
     public void getPeriodBoundaries_ytdOffsetMinusOne_shouldShiftByOneYear() {
         LocalDate[] boundaries1 = DateUtils.getPeriodBoundaries(refDate, ColType.YTD, -1, null);
         assertThat(boundaries1[0]).isEqualTo(LocalDate.of(2025, 1, 1));
         assertThat(boundaries1[1]).isEqualTo(LocalDate.of(2025, 12, 31));
 
-        LocalDate[] boundaries12 = DateUtils.getPeriodBoundaries(refDate, ColType.YTD, -12, null);
-        assertThat(boundaries12[0]).isEqualTo(LocalDate.of(2025, 1, 1));
-        assertThat(boundaries12[1]).isEqualTo(LocalDate.of(2025, 12, 31));
+        LocalDate[] boundaries2 = DateUtils.getPeriodBoundaries(refDate, ColType.YTD, -2, null);
+        assertThat(boundaries2[0]).isEqualTo(LocalDate.of(2024, 1, 1));
+        assertThat(boundaries2[1]).isEqualTo(LocalDate.of(2024, 12, 31));
+    }
+
+    @Test
+    @DisplayName("ROLLING with native grain offsets (YoY shifts)")
+    public void getPeriodBoundaries_rollingWithNativeGrainOffsets_shouldShiftCorrectly() {
+        // ROLLING WEEK with offset -52 (1 year shift)
+        LocalDate[] boundariesWeek = DateUtils.getPeriodBoundaries(refDate, ColType.ROLLING, -52, 3, "WEEK");
+        // 2026-05-26 - 52 weeks = 2025-05-27
+        // start = 2025-05-27 - 3 weeks + 1 day = 2025-05-07
+        assertThat(boundariesWeek[0]).isEqualTo(LocalDate.of(2025, 5, 7));
+        assertThat(boundariesWeek[1]).isEqualTo(LocalDate.of(2025, 5, 27));
+
+        // ROLLING MONTH with offset -12 (1 year shift)
+        LocalDate[] boundariesMonth = DateUtils.getPeriodBoundaries(refDate, ColType.ROLLING, -12, 2, "MONTH");
+        // 2026-05-26 - 12 months = 2025-05-26
+        // start = 2025-05-26 - 2 months + 1 day = 2025-03-27
+        assertThat(boundariesMonth[0]).isEqualTo(LocalDate.of(2025, 3, 27));
+        assertThat(boundariesMonth[1]).isEqualTo(LocalDate.of(2025, 5, 26));
     }
 
     @Test

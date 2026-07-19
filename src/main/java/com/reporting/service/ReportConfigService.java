@@ -48,7 +48,7 @@ public class ReportConfigService {
         // 2. Columns — direct JDBC query filtered by version
         List<ColumnDefDto> columns = jdbcTemplate.query(
             "SELECT col_id, label, col_type, COALESCE(period_offset,0) AS period_offset, " +
-            "rolling_n, rolling_grain, formula_expr, COALESCE(tier_level, 'L1') AS tier_level, parent_id, period_type, display_order " +
+            "rolling_n, rolling_grain, formula_expr, COALESCE(tier_level, 'L1') AS tier_level, parent_id, display_order " +
             "FROM reporting.rpt_column_def WHERE report_id = ? AND version = ? ORDER BY display_order",
             (rs, rowNum) -> new ColumnDefDto(
                 rs.getString("col_id"),
@@ -60,7 +60,6 @@ public class ReportConfigService {
                 rs.getString("formula_expr"),
                 rs.getString("tier_level"),
                 rs.getString("parent_id"),
-                rs.getString("period_type"),
                 rs.getInt("display_order")
             ), reportId, version);
 
@@ -340,8 +339,8 @@ public class ReportConfigService {
 
         // 4. Save Column Definitions via JDBC
         if (dto.getColumns() != null) {
-            String insertColSql = "INSERT INTO reporting.rpt_column_def (report_id, version, col_id, label, col_type, period_offset, rolling_n, rolling_grain, formula_expr, tier_level, parent_id, period_type, display_order) " +
-                                  "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+            String insertColSql = "INSERT INTO reporting.rpt_column_def (report_id, version, col_id, label, col_type, period_offset, rolling_n, rolling_grain, formula_expr, tier_level, parent_id, display_order) " +
+                                  "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
             for (int i = 0; i < dto.getColumns().size(); i++) {
                 ColumnDefDto cdDto = dto.getColumns().get(i);
                 jdbcTemplate.update(
@@ -357,7 +356,6 @@ public class ReportConfigService {
                     cdDto.formulaExpr(),
                     cdDto.tierLevel() != null ? cdDto.tierLevel() : "L1",
                     cdDto.parentId(),
-                    cdDto.periodType(),
                     i + 1
                 );
             }
