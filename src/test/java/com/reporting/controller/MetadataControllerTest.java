@@ -16,7 +16,6 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.List;
 
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -27,7 +26,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @Import(SecurityConfiguration.class)
 @DisplayName("MetadataController Unit Tests")
 @WithMockUser(username = "admin", roles = {"USER"})
-@SuppressWarnings({"null", "unchecked", "rawtypes"})
+@SuppressWarnings("null")
 public class MetadataControllerTest {
 
     @Autowired

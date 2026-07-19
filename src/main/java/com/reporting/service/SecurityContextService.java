@@ -10,10 +10,10 @@ import org.springframework.stereotype.Service;
 
 import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 
 /**
- * Service to extract identity claims, user boundaries, and security restrictions 
+ * Service to extract identity claims, user boundaries, and security
+ * restrictions
  * from the active Spring Security JWT Context.
  */
 @Service
@@ -62,7 +62,8 @@ public class SecurityContextService {
     /**
      * Extracts the assigned country restrictions from the OIDC JWT token.
      *
-     * @return List of country codes (e.g. ["DE", "RO"]). If empty, it means global access.
+     * @return List of country codes (e.g. ["DE", "RO"]). If empty, it means global
+     *         access.
      */
     @SuppressWarnings("unchecked")
     public List<String> getCurrentUserCountryRestrictions() {
@@ -79,7 +80,8 @@ public class SecurityContextService {
     }
 
     /**
-     * Verifies if the authenticated user is authorized to query data for a specific country code.
+     * Verifies if the authenticated user is authorized to query data for a specific
+     * country code.
      *
      * @param countryCode Target country code.
      * @return true if authorized, false otherwise.
@@ -93,8 +95,10 @@ public class SecurityContextService {
     }
 
     /**
-     * Injects country-level row-security filters into the incoming report configuration DTO.
-     * Demonstrates how the extracted security claims are passed down to our query pipelines.
+     * Injects country-level row-security filters into the incoming report
+     * configuration DTO.
+     * Demonstrates how the extracted security claims are passed down to our query
+     * pipelines.
      *
      * @param sourceTable Table to filter (e.g., "analytics.fact_sales")
      * @return SQL filter clause representation based on user restrictions.
@@ -116,10 +120,10 @@ public class SecurityContextService {
             sql.append("country_code = '").append(restrictions.get(i).replace("'", "''")).append("'");
         }
         sql.append(")");
-        
-        log.debug("Generated row-level security clause for user: {} against table: {}: {}", 
+
+        log.debug("Generated row-level security clause for user: {} against table: {}: {}",
                 getCurrentUserInitials(), sourceTable, sql);
-        
+
         return sql.toString();
     }
 }

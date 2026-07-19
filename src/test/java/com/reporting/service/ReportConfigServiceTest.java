@@ -18,7 +18,7 @@ import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("ReportConfigService Unit Tests")
-@SuppressWarnings({"null", "unchecked", "rawtypes"})
+@SuppressWarnings("null")
 public class ReportConfigServiceTest {
 
     @Mock private ReportRepository reportRepository;

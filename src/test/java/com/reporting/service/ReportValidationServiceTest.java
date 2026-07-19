@@ -17,9 +17,9 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import java.util.*;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.lenient;
 
+@SuppressWarnings("deprecation")
 @ExtendWith(MockitoExtension.class)
 @DisplayName("ReportValidationService Unit Tests")
 public class ReportValidationServiceTest {

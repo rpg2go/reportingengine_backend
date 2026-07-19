@@ -23,6 +23,7 @@ import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+@SuppressWarnings({"deprecation", "unused"})
 @DisplayName("ReportRunnerService Integration Tests")
 @Transactional
 public class ReportRunnerServiceIT extends BaseIT {

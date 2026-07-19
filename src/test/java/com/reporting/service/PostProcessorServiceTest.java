@@ -14,6 +14,7 @@ import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+@SuppressWarnings("deprecation")
 @DisplayName("PostProcessorService Unit Tests")
 public class PostProcessorServiceTest {
 

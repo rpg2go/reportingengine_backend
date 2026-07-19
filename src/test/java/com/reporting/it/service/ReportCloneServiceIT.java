@@ -21,6 +21,7 @@ import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+@SuppressWarnings({"deprecation", "unused"})
 @DisplayName("ReportCloneService Integration Tests")
 @Transactional
 public class ReportCloneServiceIT extends BaseIT {

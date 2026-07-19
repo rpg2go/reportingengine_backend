@@ -19,6 +19,7 @@ import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+@SuppressWarnings("deprecation")
 @DisplayName("ReportConfigService Integration Tests")
 @Transactional
 public class ReportConfigServiceIT extends BaseIT {

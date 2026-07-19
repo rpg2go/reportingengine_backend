@@ -174,8 +174,8 @@ public class PostgresExcelStreamService {
                     rowCount.get(), elapsed);
 
         } finally {
-            workbook.dispose();
-            log.debug("SXSSFWorkbook temporary files disposed");
+            workbook.close();
+            log.debug("SXSSFWorkbook closed and temporary files disposed");
         }
     }
 

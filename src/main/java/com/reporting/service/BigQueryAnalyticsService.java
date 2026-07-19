@@ -6,7 +6,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
 
-import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
@@ -14,7 +13,8 @@ import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
 /**
- * BigQuery execution layer running columnar calculations, unpacking response schemas,
+ * BigQuery execution layer running columnar calculations, unpacking response
+ * schemas,
  * enforcing runtime query validations, and mapping datasets.
  * Loaded only in the 'sit' (production-like) profile.
  */
@@ -36,8 +36,10 @@ public class BigQueryAnalyticsService {
     }
 
     /**
-     * Executes SQL on BigQuery and returns a flat list of maps, matching the jdbcTemplate queryForList contract.
-     * Memory-safe for average queries, but paging is handled under the hood by BigQuery.
+     * Executes SQL on BigQuery and returns a flat list of maps, matching the
+     * jdbcTemplate queryForList contract.
+     * Memory-safe for average queries, but paging is handled under the hood by
+     * BigQuery.
      */
     public List<Map<String, Object>> queryForList(String sql) {
         String qualifiedSql = qualifyTableReferences(sql);
@@ -72,8 +74,10 @@ public class BigQueryAnalyticsService {
     }
 
     /**
-     * Executes SQL on BigQuery and returns a lazy stream of Object arrays, matching the reportDataRepository stream contract.
-     * Prevents memory spikes by leveraging BigQuery client-side paging under the hood.
+     * Executes SQL on BigQuery and returns a lazy stream of Object arrays, matching
+     * the reportDataRepository stream contract.
+     * Prevents memory spikes by leveraging BigQuery client-side paging under the
+     * hood.
      */
     public Stream<Object[]> queryForStream(String sql) {
         String qualifiedSql = qualifyTableReferences(sql);
@@ -107,7 +111,8 @@ public class BigQueryAnalyticsService {
     }
 
     /**
-     * Executes SQL on BigQuery and returns a list of elements mapped to a single type (e.g. distinct values list).
+     * Executes SQL on BigQuery and returns a list of elements mapped to a single
+     * type (e.g. distinct values list).
      */
     public <T> List<T> queryForList(String sql, Class<T> elementType) {
         String qualifiedSql = qualifyTableReferences(sql);
@@ -143,7 +148,8 @@ public class BigQueryAnalyticsService {
     }
 
     /**
-     * Executes SQL on BigQuery and returns a single object value (e.g., date existence check).
+     * Executes SQL on BigQuery and returns a single object value (e.g., date
+     * existence check).
      */
     @SuppressWarnings("unchecked")
     public <T> T queryForObject(String sql, Class<T> requiredType, Object... args) {
@@ -193,7 +199,8 @@ public class BigQueryAnalyticsService {
     }
 
     /**
-     * Enforces query safety. Rejects any query containing mutations or SQL injection risk.
+     * Enforces query safety. Rejects any query containing mutations or SQL
+     * injection risk.
      */
     private void validateQuerySafety(String sql) {
         if (sql == null || sql.isBlank()) {
@@ -202,20 +209,23 @@ public class BigQueryAnalyticsService {
 
         String uppercaseSql = sql.trim().toUpperCase();
         if (!uppercaseSql.startsWith("SELECT") && !uppercaseSql.startsWith("WITH")) {
-            throw new SecurityException("Forbidden: Only read-only SELECT or WITH statements are allowed to run against the BigQuery warehouse.");
+            throw new SecurityException(
+                    "Forbidden: Only read-only SELECT or WITH statements are allowed to run against the BigQuery warehouse.");
         }
 
         // Check for mutation keywords
-        String[] forbiddenKeywords = {"INSERT", "UPDATE", "DELETE", "DROP", "ALTER", "MERGE", "CREATE", "TRUNCATE"};
+        String[] forbiddenKeywords = { "INSERT", "UPDATE", "DELETE", "DROP", "ALTER", "MERGE", "CREATE", "TRUNCATE" };
         for (String keyword : forbiddenKeywords) {
             if (uppercaseSql.matches(".*\\b" + keyword + "\\b.*")) {
-                throw new SecurityException("Forbidden: Write or DDL command detected in BigQuery SQL query: " + keyword);
+                throw new SecurityException(
+                        "Forbidden: Write or DDL command detected in BigQuery SQL query: " + keyword);
             }
         }
     }
 
     /**
-     * Unpacks response fields from BigQuery FieldValue types into standard Java equivalents.
+     * Unpacks response fields from BigQuery FieldValue types into standard Java
+     * equivalents.
      */
     private Object convertFieldValue(FieldValue fieldValue, Field field) {
         if (fieldValue == null || fieldValue.isNull()) {
@@ -257,13 +267,17 @@ public class BigQueryAnalyticsService {
     }
 
     /**
-     * Re-writes input SQL to prepend the active GCP project ID to dataset references.
-     * Wraps fully qualified table names inside standard BigQuery backticks (`project.dataset.table`)
+     * Re-writes input SQL to prepend the active GCP project ID to dataset
+     * references.
+     * Wraps fully qualified table names inside standard BigQuery backticks
+     * (`project.dataset.table`)
      * to safely escape hyphens in the GCP project ID.
      */
     private String qualifyTableReferences(String sql) {
-        if (sql == null) return null;
-        if (projectId == null || projectId.isBlank()) return sql;
+        if (sql == null)
+            return null;
+        if (projectId == null || projectId.isBlank())
+            return sql;
 
         String targetPrefix1 = "analytics";
         String targetPrefix2 = (datasetName != null && !datasetName.isBlank()) ? datasetName : "analytics";
@@ -277,12 +291,13 @@ public class BigQueryAnalyticsService {
     }
 
     private String replaceTableRef(String sql, String target) {
-        // Matches target.tableName or `target.tableName`, and rewrites to `projectId.target.tableName`
+        // Matches target.tableName or `target.tableName`, and rewrites to
+        // `projectId.target.tableName`
         // Ensuring it doesn't match if it's already prefixed by projectId.
         String quotedProjectId = java.util.regex.Pattern.quote(projectId + ".");
         String quotedTarget = java.util.regex.Pattern.quote(target);
         String patternStr = "(?i)(?<!" + quotedProjectId + ")(?:`?\\b" + quotedTarget + "\\.([a-zA-Z0-9_]+)\\b`?)";
-        
+
         String replacement = "`" + projectId + "." + target + ".$1`";
         return sql.replaceAll(patternStr, replacement);
     }

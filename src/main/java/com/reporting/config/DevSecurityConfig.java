@@ -36,7 +36,6 @@ import java.security.interfaces.RSAPrivateKey;
 import java.security.interfaces.RSAPublicKey;
 import java.util.Date;
 import java.util.List;
-import java.util.Map;
 
 /**
  * Developer Profile Security Configuration.
@@ -88,12 +87,16 @@ public class DevSecurityConfig {
     @EventListener(ApplicationReadyEvent.class)
     public void logPreSignedToken() {
         System.out.println("\n");
-        System.out.println("==========================================================================================");
-        System.out.println("🚀 SECURITY WARNING: DEVELOPMENT PROFILE ACTIVE (JWT EPHEMERAL ASYMMETRIC SIGNER ENABLED) 🚀");
+        System.out
+                .println("==========================================================================================");
+        System.out.println(
+                "🚀 SECURITY WARNING: DEVELOPMENT PROFILE ACTIVE (JWT EPHEMERAL ASYMMETRIC SIGNER ENABLED) 🚀");
         System.out.println("Use the following pre-signed token to authenticate API calls (valid for 24 hours):");
-        System.out.println("------------------------------------------------------------------------------------------");
+        System.out
+                .println("------------------------------------------------------------------------------------------");
         System.out.println("Bearer " + generatedToken);
-        System.out.println("==========================================================================================\n");
+        System.out.println(
+                "==========================================================================================\n");
     }
 
     public String getGeneratedToken() {
@@ -105,26 +108,24 @@ public class DevSecurityConfig {
         log.info("Configuring Dev-profile Web Security Filter Chain...");
 
         http
-            .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-            .csrf(csrf -> csrf.disable())
-            .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-            .headers(headers -> headers
-                .contentSecurityPolicy(csp -> csp.policyDirectives("default-src 'self'"))
-                .frameOptions(frame -> frame.sameOrigin())
-                .xssProtection(Customizer.withDefaults())
-                .referrerPolicy(referrer -> referrer.policy(ReferrerPolicyHeaderWriter.ReferrerPolicy.NO_REFERRER))
-            )
-            .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/actuator/health/**").permitAll()
-                .requestMatchers("/api/auth/**").permitAll()
-                .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                .requestMatchers("/api/v1/**").authenticated()
-                .requestMatchers("/api/**").authenticated()
-                .anyRequest().authenticated()
-            )
-            .oauth2ResourceServer(oauth2 -> oauth2
-                .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter()))
-            );
+                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+                .csrf(csrf -> csrf.disable())
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .headers(headers -> headers
+                        .contentSecurityPolicy(csp -> csp.policyDirectives("default-src 'self'"))
+                        .frameOptions(frame -> frame.sameOrigin())
+                        .xssProtection(Customizer.withDefaults())
+                        .referrerPolicy(
+                                referrer -> referrer.policy(ReferrerPolicyHeaderWriter.ReferrerPolicy.NO_REFERRER)))
+                .authorizeHttpRequests(auth -> auth
+                        .requestMatchers("/actuator/health/**").permitAll()
+                        .requestMatchers("/api/auth/**").permitAll()
+                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                        .requestMatchers("/api/v1/**").authenticated()
+                        .requestMatchers("/api/**").authenticated()
+                        .anyRequest().authenticated())
+                .oauth2ResourceServer(oauth2 -> oauth2
+                        .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter())));
 
         return http.build();
     }
@@ -156,7 +157,8 @@ public class DevSecurityConfig {
                 "https://editor.swagger.io",
                 "https://*.run.app"));
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
-        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Requested-With", "X-Correlation-ID"));
+        configuration
+                .setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Requested-With", "X-Correlation-ID"));
         configuration.setExposedHeaders(List.of("Content-Disposition", "X-Correlation-ID"));
         configuration.setAllowCredentials(true);
 

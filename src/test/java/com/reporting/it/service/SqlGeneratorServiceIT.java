@@ -27,7 +27,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @DisplayName("SqlGeneratorService & Preview IT Tests")
 @WithMockUser(username = "admin", roles = {"USER"})
-@SuppressWarnings({"null", "unchecked", "rawtypes"})
+@SuppressWarnings("null")
 public class SqlGeneratorServiceIT extends BaseIT {
 
     @Autowired

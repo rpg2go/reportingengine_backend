@@ -1,7 +1,6 @@
 package com.reporting.service;
 
 import com.reporting.dto.ReportConfigDto;
-import com.reporting.repository.ReportDataRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -25,13 +24,13 @@ public class ReportRunnerService {
     private final AnalyticsQueryDispatcher analyticsQueryDispatcher;
 
     public ReportRunnerService(ReportConfigService configService,
-                               SqlGeneratorService generatorService,
-                               PostProcessorService postProcessorService,
-                               LayoutRendererService rendererService,
-                               CsvRendererService csvRendererService,
-                               PdfRendererService pdfRendererService,
-                               JdbcTemplate jdbcTemplate,
-                               AnalyticsQueryDispatcher analyticsQueryDispatcher) {
+            SqlGeneratorService generatorService,
+            PostProcessorService postProcessorService,
+            LayoutRendererService rendererService,
+            CsvRendererService csvRendererService,
+            PdfRendererService pdfRendererService,
+            JdbcTemplate jdbcTemplate,
+            AnalyticsQueryDispatcher analyticsQueryDispatcher) {
         this.configService = configService;
         this.generatorService = generatorService;
         this.postProcessorService = postProcessorService;
@@ -56,15 +55,17 @@ public class ReportRunnerService {
     public byte[] runReport(String reportId, Integer version, LocalDate referenceDate, String format) throws Exception {
         LocalDate refDate = referenceDate != null ? referenceDate : LocalDate.now();
 
-        log.info("Starting report run execution for reportId: {} version: {} with referenceDate: {} format: {}", reportId, version, refDate, format);
+        log.info("Starting report run execution for reportId: {} version: {} with referenceDate: {} format: {}",
+                reportId, version, refDate, format);
 
         // 1. Load Config
         ReportConfigDto config = version != null
-            ? configService.loadFromDb(reportId, version, refDate)
-            : configService.loadFromDb(reportId, refDate);
-        log.info("Loaded configuration for reportId: {}, Columns count: {}, Rows count: {}", 
-            reportId, config.getColumns().size(), config.getRows().size());
-        log.info("Report filters used - Quick Filters: {}, General Filters: {}", config.getQuickFilters(), config.getGeneralFilters());
+                ? configService.loadFromDb(reportId, version, refDate)
+                : configService.loadFromDb(reportId, refDate);
+        log.info("Loaded configuration for reportId: {}, Columns count: {}, Rows count: {}",
+                reportId, config.getColumns().size(), config.getRows().size());
+        log.info("Report filters used - Quick Filters: {}, General Filters: {}", config.getQuickFilters(),
+                config.getGeneralFilters());
 
         // 3. Generate SQL
         String sql = generatorService.generate(config);
@@ -73,13 +74,16 @@ public class ReportRunnerService {
         // 4. Execute SQL and Post-Process via database cursor
         Map<String, Map<String, Double>> processedData;
         try {
-            log.info("Executing and post-processing generated DWH queries via streaming cursor for reportId: {}", reportId);
+            log.info("Executing and post-processing generated DWH queries via streaming cursor for reportId: {}",
+                    reportId);
             try (Stream<Object[]> dataStream = analyticsQueryDispatcher.queryForStream(sql)) {
                 processedData = postProcessorService.process(config, dataStream);
             }
         } catch (Exception e) {
-            log.error("Failed to execute and process streaming report SQL query for reportId: {}. Generated SQL: \n{}", reportId, sql, e);
-            throw new RuntimeException("Database execution or processing failed for generated SQL query: " + e.getMessage(), e);
+            log.error("Failed to execute and process streaming report SQL query for reportId: {}. Generated SQL: \n{}",
+                    reportId, sql, e);
+            throw new RuntimeException(
+                    "Database execution or processing failed for generated SQL query: " + e.getMessage(), e);
         }
 
         // 6. Render

@@ -5,7 +5,6 @@ import com.reporting.dto.Enums;
 import com.reporting.dto.ReportConfigDto;
 import com.reporting.dto.ReportRowDto;
 import com.reporting.dto.MeasureDefinitionDTO;
-import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
@@ -20,6 +19,7 @@ import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+@SuppressWarnings("deprecation")
 @DisplayName("LayoutRendererService Unit Tests")
 public class LayoutRendererServiceTest {
 

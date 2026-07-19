@@ -8,15 +8,14 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import com.reporting.catalog.SchemaGraphRouter;
 
 import java.time.LocalDate;
-import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.*;
 
+@SuppressWarnings("deprecation")
 @DisplayName("SqlGeneratorService Unit Tests")
 public class SqlGeneratorServiceTest {
 

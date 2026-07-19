@@ -11,8 +11,6 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
 import java.util.*;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 @Service
 public class SqlGeneratorService {
@@ -296,7 +294,7 @@ public class SqlGeneratorService {
                     } else if (timeframeStartDate != null) {
                         timeframeFilter = String.format("(%s >= '%s')", prefixedTimeKey, timeframeStartDate.toString());
                     } else {
-                        timeframeFilter = String.format("(%s <= '%s')", prefixedTimeKey, timeframeEndDate.toString());
+                    timeframeFilter = String.format("(%s <= '%s')", prefixedTimeKey, timeframeEndDate.toString()); // NOSONAR: guarded by outer null-check
                     }
                 }
             }
@@ -911,6 +909,7 @@ public class SqlGeneratorService {
      * @param factTableName the fact table whose qualifier must be removed
      * @return the rewritten JOIN clause with {@code spine_raw} qualification
      */
+    @SuppressWarnings("unused")
     private String rewriteSpineJoinClause(String joinClause, String factTableName) {
         if (joinClause == null || factTableName == null) {
             return joinClause;
