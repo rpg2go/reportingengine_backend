@@ -161,7 +161,7 @@ public class SchemaCatalogLoader {
      */
     private void loadColumns() {
         final String sql = "SELECT column_id, table_id, column_name, data_type, " +
-                "       is_primary_key, is_foreign_key, is_conformed, description, is_cached, is_filterable, is_visible " +
+                "       is_primary_key, is_foreign_key, description, is_cached, is_filterable, is_visible " +
                 "FROM   reporting.meta_column " +
                 "ORDER  BY table_id, column_id";
 
@@ -175,7 +175,6 @@ public class SchemaCatalogLoader {
             String dataType = rs.getString("data_type");
             boolean isPk = rs.getBoolean("is_primary_key");
             boolean isFk = rs.getBoolean("is_foreign_key");
-            boolean isConformed = rs.getBoolean("is_conformed");
             String desc = rs.getString("description");
             boolean isCached = rs.getBoolean("is_cached");
             if (rs.wasNull()) {
@@ -197,7 +196,7 @@ public class SchemaCatalogLoader {
                 return;
             }
 
-            MetaColumn col = new MetaColumn(columnId, tableId, colName, dataType, isPk, isFk, isConformed, desc, isCached, isFilterable, isVisible);
+            MetaColumn col = new MetaColumn(columnId, tableId, colName, dataType, isPk, isFk, desc, isCached, isFilterable, isVisible);
             parent.addColumn(col);
             count[0]++;
         });

@@ -13,7 +13,6 @@ INSERT INTO reporting.meta_column (
     data_type,
     is_primary_key,
     is_foreign_key,
-    is_conformed,
     is_filterable,
     is_cached,
     is_visible,
@@ -53,21 +52,19 @@ SELECT
           AND tc.table_name = c.table_name 
           AND kcu.column_name = c.column_name
     ) AS is_foreign_key,
-    -- 3. Conformed check for conformed foreign keys/attributes
-    (c.column_name IN ('customer_id', 'location_id', 'rm_id', 'country_code')) AS is_conformed,
-    -- 4. Filterable check (strings/booleans that are not PKs/FKs)
+    -- 3. Filterable check (strings/booleans that are not PKs/FKs)
     (
         c.data_type IN ('character varying', 'varchar', 'text', 'boolean')
         AND c.column_name NOT LIKE '%_id' 
         AND c.column_name <> 'id'
     ) AS is_filterable,
-    -- 5. Caching check
+    -- 4. Caching check
     (
         c.data_type IN ('character varying', 'varchar', 'text', 'boolean')
         AND c.column_name NOT LIKE '%_id' 
         AND c.column_name <> 'id'
     ) AS is_cached,
-    -- 6. Visibility check (hidden primary keys, visible others)
+    -- 5. Visibility check (hidden primary keys, visible others)
     NOT EXISTS (
         SELECT 1 
         FROM information_schema.table_constraints tc 

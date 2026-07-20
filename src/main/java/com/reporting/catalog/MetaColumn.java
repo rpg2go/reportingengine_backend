@@ -47,16 +47,6 @@ public final class MetaColumn {
      */
     private final boolean foreignKey;
 
-    /**
-     * {@code true} when this column is a <em>conformed dimension key</em> —
-     * a key that is shared across multiple fact tables and therefore safe to
-     * use as a spine join key without causing fan-out.
-     *
-     * <p>Example conformed keys in this schema: {@code customer_id},
-     * {@code location_id}, {@code rm_id}.</p>
-     */
-    private final boolean conformed;
-
     /** Optional human-readable description loaded from the catalog. */
     private final String description;
 
@@ -80,9 +70,8 @@ public final class MetaColumn {
                       String dataType,
                       boolean primaryKey,
                       boolean foreignKey,
-                      boolean conformed,
                       String description) {
-        this(columnId, tableId, columnName, dataType, primaryKey, foreignKey, conformed, description, false, false, true);
+        this(columnId, tableId, columnName, dataType, primaryKey, foreignKey, description, false, false, true);
     }
 
     /**
@@ -94,10 +83,9 @@ public final class MetaColumn {
                       String dataType,
                       boolean primaryKey,
                       boolean foreignKey,
-                      boolean conformed,
                       String description,
                       boolean isCached) {
-        this(columnId, tableId, columnName, dataType, primaryKey, foreignKey, conformed, description, isCached, false, true);
+        this(columnId, tableId, columnName, dataType, primaryKey, foreignKey, description, isCached, false, true);
     }
 
     /**
@@ -109,11 +97,10 @@ public final class MetaColumn {
                       String dataType,
                       boolean primaryKey,
                       boolean foreignKey,
-                      boolean conformed,
                       String description,
                       boolean isCached,
                       boolean filterable) {
-        this(columnId, tableId, columnName, dataType, primaryKey, foreignKey, conformed, description, isCached, filterable, true);
+        this(columnId, tableId, columnName, dataType, primaryKey, foreignKey, description, isCached, filterable, true);
     }
 
     /**
@@ -125,7 +112,6 @@ public final class MetaColumn {
                       String dataType,
                       boolean primaryKey,
                       boolean foreignKey,
-                      boolean conformed,
                       String description,
                       boolean isCached,
                       boolean filterable,
@@ -136,7 +122,6 @@ public final class MetaColumn {
         this.dataType    = dataType;
         this.primaryKey  = primaryKey;
         this.foreignKey  = foreignKey;
-        this.conformed   = conformed;
         this.description = description;
         this.isCached    = isCached;
         this.filterable  = filterable;
@@ -193,15 +178,6 @@ public final class MetaColumn {
         return foreignKey;
     }
 
-    /**
-     * @return {@code true} if this is a conformed dimension key shared across
-     *         multiple fact tables; conformed keys are preferred by the router
-     *         to prevent data fan-out
-     */
-    public boolean isConformed() {
-        return conformed;
-    }
-
     /** @return optional human-readable annotation, or {@code null} */
     public String getDescription() {
         return description;
@@ -230,7 +206,6 @@ public final class MetaColumn {
                ", name='"    + columnName + '\'' +
                ", pk="       + primaryKey +
                ", fk="       + foreignKey +
-               ", conformed="+ conformed  +
                '}';
     }
 }

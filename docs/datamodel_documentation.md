@@ -96,7 +96,7 @@ To optimize performance and database load on large Data Warehouses (with potenti
 
 ---
 
-### 🔗 Understanding 'is_conformed' in Catalog Tables
+### 🔗 Understanding 'is_conformed' and 'weight' in Catalog Tables
 
 The catalog uses `is_conformed` flags in both column definitions and table relationships to coordinate query routing:
 
@@ -105,8 +105,10 @@ This boolean flag indicates whether a join relationship represents a standard co
 * **Pathfinder Routing Effect:** During SQL compilation, `SchemaGraphRouter` runs Dijkstra's BFS to find the cheapest join chain from the query's fact table to target dimensions. A conformed edge (`is_conformed = true`) is assigned a cost/weight of `1` (or acts as a tie-breaker), ensuring it is always preferred over a non-conformed relationship (which has a cost/weight of `2`).
 * **Data Integration:** It defines if the database path should be considered a standard conformed link across the DWH.
 
-#### 2. `reporting.meta_column.is_conformed`
-This flag defines whether a physical table column acts as a conformed dimension key (e.g. `dim_date.date_key`, `dim_customers.segment`). It is used to quickly identify conformed key properties during metadata scanning.
+#### 2. Overlap between `meta_relationship.is_conformed` and `meta_relationship.weight`
+Although all current seed records map `is_conformed = true` directly to `weight = 1` and `is_conformed = false` to `weight = 2`, they serve separate architectural concerns:
+* **Separation of Concerns**: `is_conformed` describes **logical business semantics** (whether the join traverses a conformed key), whereas `weight` describes **physical graph routing cost**.
+* **Routing Flexibility**: The `SchemaGraphRouter` pathfinder requires a numeric `weight` for Dijkstra's shortest path calculations. Keeping a separate `weight` column allows assigning fine-grained costs (e.g., a weight of `3` or `4` to indicate expensive bridge tables or non-preferred joins), which a simple binary boolean flag cannot support.
 
 ---
 
