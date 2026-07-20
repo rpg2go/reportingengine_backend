@@ -235,11 +235,11 @@ flowchart TD
     DB[(PostgreSQL<br/>reporting schema)]
 
     subgraph DB_TABLES["5 Database Tables"]
-        T1[rpt_report<br/>id=REGIONAL_DISTRIBUTION v4 draft]
-        T2[rpt_column_def<br/>C1..C7 — C7 rollingGrain=MONTH]
-        T3[rpt_row<br/>R1 header + R2-R5 data rows]
-        T4[rpt_row_metric<br/>visual mode SUM/AVG + raw COUNT]
-        T5[rpt_row_column_map<br/>all 35 cells enabled]
+        T1[report_config<br/>id=REGIONAL_DISTRIBUTION v4 draft]
+        T2[column_definition<br/>C1..C7 — C7 rollingGrain=MONTH]
+        T3[row_definition<br/>R1 header + R2-R5 data rows]
+        T4[row_metric_mapping<br/>visual mode SUM/AVG + raw COUNT]
+        T5[row_column_intersection<br/>all 35 cells enabled]
     end
 
     DB --> DB_TABLES

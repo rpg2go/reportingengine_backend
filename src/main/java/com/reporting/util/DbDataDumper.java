@@ -56,7 +56,7 @@ public class DbDataDumper {
             // 1. Dump analytics.* data
             dumpAnalyticsData(conn);
 
-            // 2. Dump reporting.rpt_* data
+            // 2. Dump reporting data
             dumpReportingData(conn);
 
             // 3. Dump reporting.meta_* data
@@ -125,44 +125,40 @@ public class DbDataDumper {
     }
 
     private static void dumpReportingData(Connection conn) throws Exception {
-        String path = "db/liquibase/sql/007_seed_reporting_data.sql";
+        String path = "db/liquibase/sql/006_seed_reporting_data.sql";
         try (PrintWriter writer = new PrintWriter(new FileWriter(path))) {
             writer.println("--liquibase formatted sql");
-            writer.println("--changeset devops:007_seed_reporting_data runOnChange:true endDelimiter:;");
-            writer.println();
-            writer.println("ALTER TABLE reporting.rpt_row DISABLE TRIGGER ALL;");
+            writer.println("--changeset devops:006_seed_reporting_data runOnChange:true endDelimiter:;");
             writer.println();
 
             String[] tables = {
-                "reporting.rpt_style",
-                "reporting.rpt_report",
-                "reporting.rpt_column_def",
-                "reporting.rpt_row",
-                "reporting.rpt_row_metric",
-                "reporting.rpt_row_formula",
-                "reporting.rpt_row_column_map"
+                "reporting.row_style",
+                "reporting.report_config",
+                "reporting.column_definition",
+                "reporting.row_definition",
+                "reporting.row_metric_mapping",
+                "reporting.row_formula",
+                "reporting.row_column_intersection"
             };
 
             for (String table : tables) {
                 dumpTableData(conn, writer, table);
             }
-
-            writer.println("ALTER TABLE reporting.rpt_row ENABLE TRIGGER ALL;");
         }
         System.out.println("Dumped reporting data to " + path);
     }
 
     private static void dumpCatalogData(Connection conn) throws Exception {
-        String path = "db/liquibase/sql/008_seed_catalog_data.sql";
+        String path = "db/liquibase/sql/007_seed_catalog_data.sql";
         try (PrintWriter writer = new PrintWriter(new FileWriter(path))) {
             writer.println("--liquibase formatted sql");
-            writer.println("--changeset devops:008_seed_catalog_data runOnChange:true endDelimiter:;");
+            writer.println("--changeset devops:007_seed_catalog_data runOnChange:true endDelimiter:;");
             writer.println();
 
             String[] tables = {
-                "reporting.meta_table",
-                "reporting.meta_column",
-                "reporting.meta_relationship"
+                "catalog.meta_table",
+                "catalog.meta_column",
+                "catalog.meta_relationship"
             };
 
             for (String table : tables) {
@@ -187,7 +183,7 @@ public class DbDataDumper {
         try (ResultSet rs = meta.getColumns(null, schema, table, null)) {
             while (rs.next()) {
                 String colName = rs.getString("COLUMN_NAME");
-                if ("rpt_report".equals(table) && "name".equals(colName)) {
+                if ("report_config".equals(table) && "name".equals(colName)) {
                     colName = "report_name";
                 }
                 columns.add(colName);

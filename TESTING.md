@@ -49,8 +49,8 @@ src/test/resources
 
 ## 📝 Test Class Naming Conventions
 
-* **Unit Tests**: Suffixed with `Test`, e.g., [DateUtilsTest](file:///Users/mariusdruga/Workspace/reportingengine_backend/src/test/java/com/reporting/service/DateUtilsTest.java) for [DateUtils](file:///Users/mariusdruga/Workspace/reportingengine_backend/src/main/java/com/reporting/service/DateUtils.java).
-* **Integration Tests**: Suffixed with `IT`, e.g., [ReportConfigServiceIT](file:///Users/mariusdruga/Workspace/reportingengine_backend/src/test/java/com/reporting/service/ReportConfigServiceIT.java) for [ReportConfigService](file:///Users/mariusdruga/Workspace/reportingengine_backend/src/main/java/com/reporting/service/ReportConfigService.java).
+* **Unit Tests**: Suffixed with `Test`, e.g., [DateUtilsTest](src/test/java/com/reporting/service/DateUtilsTest.java) for [DateUtils](src/main/java/com/reporting/service/DateUtils.java).
+* **Integration Tests**: Suffixed with `IT`, e.g., [ReportConfigServiceIT](src/test/java/com/reporting/service/ReportConfigServiceIT.java) for [ReportConfigService](src/main/java/com/reporting/service/ReportConfigService.java).
 * **Test Methods**: Follow the descriptive convention:
   `methodName_should_expectedBehavior_when_scenario`
   *Example*: `getPeriodBoundaries_weekOffsetMinusOne_shouldReturnPreviousFullWeek()`

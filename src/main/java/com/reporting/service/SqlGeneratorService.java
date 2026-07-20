@@ -936,7 +936,7 @@ public class SqlGeneratorService {
         String val = null;
         try {
             val = jdbcTemplate.queryForObject(
-                "SELECT time_key FROM reporting.meta_table WHERE schema_name || '.' || table_name = ?",
+                "SELECT time_key FROM catalog.meta_table WHERE schema_name || '.' || table_name = ?",
                 String.class,
                 table
             );

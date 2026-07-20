@@ -60,7 +60,7 @@ To ensure high-quality software, the workspace maintains a strict testing strate
     *   Target Coverage: **90%+** for service classes, **85%+** for controllers, and **95%+** for utility classes.
 2.  **Stateful Validation (Integration Tests)**:
     *   Tests ending with `*IT.java` (e.g. `ReportConfigServiceIT.java`) test components in context.
-    *   Extend [BaseIT](file:///Users/mariusdruga/Workspace/reportingengine_backend/src/test/java/com/reporting/BaseIT.java) to automatically boot up a dockerized PostgreSQL container (via Testcontainers) and run Liquibase migrations.
+    *   Extend [BaseIT](../src/test/java/com/reporting/BaseIT.java) to automatically boot up a dockerized PostgreSQL container (via Testcontainers) and run Liquibase migrations.
     *   Annotate tests/methods with `@Transactional` to auto-rollback changes.
 3.  **Security Gates & SQL Injection Checking**:
     *   Ensure any new endpoint or query parameter parameterization is tested against malicious inputs (e.g. `;`, `UNION`, `--`) to check for SQL injection vulnerability.
@@ -98,29 +98,29 @@ Run the following commands in their respective environments to check quality met
 ### 1. Unit Tests
 
 - **Backend (Java)**:
-  - [FilterCompilerServiceTest](file:///Users/mariusdruga/Workspace/reportingengine_backend/src/test/java/com/reporting/service/FilterCompilerServiceTest.java): Tests structured JSON filter compilation, sealed interface type checks, and record AST-to-SQL generation.
-  - [PostProcessorServiceTest](file:///Users/mariusdruga/Workspace/reportingengine_backend/src/test/java/com/reporting/service/PostProcessorServiceTest.java): Tests formula parsing calculations with sample expressions (e.g., `R2 / R3`, `C1 - C2`) and asserts expected outputs.
-  - [SqlGeneratorServiceTest](file:///Users/mariusdruga/Workspace/reportingengine_backend/src/test/java/com/reporting/service/SqlGeneratorServiceTest.java): Tests CTE generation, granularity column mappings, and filter pushdown logic using mocked config DTOs.
-  - [ReportValidationServiceTest](file:///Users/mariusdruga/Workspace/reportingengine_backend/src/test/java/com/reporting/service/ReportValidationServiceTest.java): Tests cyclic formula detection, schema expression validation, and missing metric error paths.
-  - [DateUtilsTest](file:///Users/mariusdruga/Workspace/reportingengine_backend/src/test/java/com/reporting/service/DateUtilsTest.java): Tests period boundary calculations (week, month, quarter, year) across rolling column offsets.
-  - [LayoutRendererServiceTest](file:///Users/mariusdruga/Workspace/reportingengine_backend/src/test/java/com/reporting/service/LayoutRendererServiceTest.java): Tests POI cell styling and Excel rendering logic.
-  - [SemanticResolverServiceTest](file:///Users/mariusdruga/Workspace/reportingengine_backend/src/test/java/com/reporting/service/SemanticResolverServiceTest.java): Tests metric metadata resolution (legacy path).
-  - [ReportConfigServiceTest](file:///Users/mariusdruga/Workspace/reportingengine_backend/src/test/java/com/reporting/service/ReportConfigServiceTest.java): Tests JDBC save and cascade-delete behaviour with mocked templates.
-  - [MetadataControllerTest](file:///Users/mariusdruga/Workspace/reportingengine_backend/src/test/java/com/reporting/controller/MetadataControllerTest.java): Tests injection rejection — malformed strings, SQL keywords (e.g. `;`, `UNION`) return `400 Bad Request`.
-  - [ReportPreviewControllerTest](file:///Users/mariusdruga/Workspace/reportingengine_backend/src/test/java/com/reporting/controller/ReportPreviewControllerTest.java): Tests the SQL preview endpoint with mocked generator output.
-  - [AuthControllerTest](file:///Users/mariusdruga/Workspace/reportingengine_backend/src/test/java/com/reporting/controller/AuthControllerTest.java): Tests Basic Auth response with valid and invalid credentials.
-  - [ReportControllerTest](file:///Users/mariusdruga/Workspace/reportingengine_backend/src/test/java/com/reporting/controller/ReportControllerTest.java): Tests report CRUD endpoints (list, get, save, run, validate) and SchemaDiscoveryController endpoints (autocomplete, schema meta).
+  - [FilterCompilerServiceTest](../src/test/java/com/reporting/service/FilterCompilerServiceTest.java): Tests structured JSON filter compilation, sealed interface type checks, and record AST-to-SQL generation.
+  - [PostProcessorServiceTest](../src/test/java/com/reporting/service/PostProcessorServiceTest.java): Tests formula parsing calculations with sample expressions (e.g., `R2 / R3`, `C1 - C2`) and asserts expected outputs.
+  - [SqlGeneratorServiceTest](../src/test/java/com/reporting/service/SqlGeneratorServiceTest.java): Tests CTE generation, granularity column mappings, and filter pushdown logic using mocked config DTOs.
+  - [ReportValidationServiceTest](../src/test/java/com/reporting/service/ReportValidationServiceTest.java): Tests cyclic formula detection, schema expression validation, and missing metric error paths.
+  - [DateUtilsTest](../src/test/java/com/reporting/service/DateUtilsTest.java): Tests period boundary calculations (week, month, quarter, year) across rolling column offsets.
+  - [LayoutRendererServiceTest](../src/test/java/com/reporting/service/LayoutRendererServiceTest.java): Tests POI cell styling and Excel rendering logic.
+  - [SemanticResolverServiceTest](../src/test/java/com/reporting/service/SemanticResolverServiceTest.java): Tests metric metadata resolution (legacy path).
+  - [ReportConfigServiceTest](../src/test/java/com/reporting/service/ReportConfigServiceTest.java): Tests JDBC save and cascade-delete behaviour with mocked templates.
+  - [MetadataControllerTest](../src/test/java/com/reporting/controller/MetadataControllerTest.java): Tests injection rejection — malformed strings, SQL keywords (e.g. `;`, `UNION`) return `400 Bad Request`.
+  - [ReportPreviewControllerTest](../src/test/java/com/reporting/controller/ReportPreviewControllerTest.java): Tests the SQL preview endpoint with mocked generator output.
+  - [AuthControllerTest](../src/test/java/com/reporting/controller/AuthControllerTest.java): Tests Basic Auth response with valid and invalid credentials.
+  - [ReportControllerTest](../src/test/java/com/reporting/controller/ReportControllerTest.java): Tests report CRUD endpoints (list, get, save, run, validate) and SchemaDiscoveryController endpoints (autocomplete, schema meta).
   > [!NOTE]
   > Because backend tests require Java 21, ensure your local environment points to the JDK 21 installation. If the default shell is targeting a lower JDK version, run commands with `export JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home` prefixed.
 - **Frontend**: Verify authentication guards block page access, and components emit events when layout coordinates change.
 
 ### 2. Integration Tests
 
-- **[ReportControllerIT](file:///Users/mariusdruga/Workspace/reportingengine_backend/src/test/java/com/reporting/controller/ReportControllerIT.java)**: Bootstraps a full Spring MVC context against a live Testcontainers PostgreSQL DB. Validates `/api/reports` returns 200 with a list, and that protected endpoints correctly reject unauthenticated requests.
-- **[SqlGeneratorServiceIT](file:///Users/mariusdruga/Workspace/reportingengine_backend/src/test/java/com/reporting/service/SqlGeneratorServiceIT.java)**: Runs `SqlGeneratorService` against a live seeded database. Verifies the generated CTE SQL structure and asserts that filter pushdown lands in the correct fact CTE scope.
-- **[ReportConfigServiceIT](file:///Users/mariusdruga/Workspace/reportingengine_backend/src/test/java/com/reporting/service/ReportConfigServiceIT.java)**: Tests cascade deletion and JDBC Template saves against a real database to ensure configurations are cleanly written and updated.
-- **[ReportRunnerServiceIT](file:///Users/mariusdruga/Workspace/reportingengine_backend/src/test/java/com/reporting/service/ReportRunnerServiceIT.java)**: End-to-end pipeline test: config load → SQL generation → database execution → post-processing → Excel rendering, against a seeded Testcontainers database.
-- **[ReportSeededValidationIT](file:///Users/mariusdruga/Workspace/reportingengine_backend/src/test/java/com/reporting/ReportSeededValidationIT.java)**: Smoke-tests all 14 seeded production report templates: validates that each report's configuration passes `ReportValidationService` checks without errors.
+- **[ReportControllerIT](../src/test/java/com/reporting/controller/ReportControllerIT.java)**: Bootstraps a full Spring MVC context against a live Testcontainers PostgreSQL DB. Validates `/api/reports` returns 200 with a list, and that protected endpoints correctly reject unauthenticated requests.
+- **[SqlGeneratorServiceIT](../src/test/java/com/reporting/service/SqlGeneratorServiceIT.java)**: Runs `SqlGeneratorService` against a live seeded database. Verifies the generated CTE SQL structure and asserts that filter pushdown lands in the correct fact CTE scope.
+- **[ReportConfigServiceIT](../src/test/java/com/reporting/service/ReportConfigServiceIT.java)**: Tests cascade deletion and JDBC Template saves against a real database to ensure configurations are cleanly written and updated.
+- **[ReportRunnerServiceIT](../src/test/java/com/reporting/service/ReportRunnerServiceIT.java)**: End-to-end pipeline test: config load → SQL generation → database execution → post-processing → Excel rendering, against a seeded Testcontainers database.
+- **[ReportSeededValidationIT](../src/test/java/com/reporting/ReportSeededValidationIT.java)**: Smoke-tests all 14 seeded production report templates: validates that each report's configuration passes `ReportValidationService` checks without errors.
 
 
 ### 3. Manual Verification
@@ -140,4 +140,3 @@ Invoke-RestMethod -Uri "http://localhost:8101/api/reports" `
   -Method Get `
   -Headers @{ Authorization = "Basic " + [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes("admin:password")) }
 ```
-

@@ -7,22 +7,13 @@
 
     <!-- Table Schemas Include Routing -->
     <include file="sql/000_create_analytics_tables.sql" relativeToChangelogFile="true"/>
-    <include file="sql/002_create_reporting_tables.sql" relativeToChangelogFile="true"/>
-    <include file="sql/003_create_catalog_tables.sql" relativeToChangelogFile="true"/>
+    <include file="sql/001_create_reporting_tables.sql" relativeToChangelogFile="true"/>
+    <include file="sql/002_create_catalog_tables.sql" relativeToChangelogFile="true"/>
 
     <!-- Data Seeding Include Routing -->
     <include file="sql/005_seed_analytics_data.sql" relativeToChangelogFile="true"/>
-    <include file="sql/007_seed_reporting_data.sql" relativeToChangelogFile="true"/>
-    <include file="sql/008_seed_catalog_data.sql" relativeToChangelogFile="true"/>
+    <include file="sql/006_seed_reporting_data.sql" relativeToChangelogFile="true"/>
+    <include file="sql/007_seed_catalog_data.sql" relativeToChangelogFile="true"/>
     <include file="sql/011_reset_sequences.sql" relativeToChangelogFile="true"/>
-    <include file="sql/012_fix_seeded_reports.sql" relativeToChangelogFile="true"/>
-    <include file="sql/013_add_deleted_column.sql" relativeToChangelogFile="true"/>
-    <include file="sql/014_add_is_cached_column.sql" relativeToChangelogFile="true"/>
-    <include file="sql/015_add_column_value_caching.sql" relativeToChangelogFile="true"/>
-    <include file="sql/016_add_column_visibility.sql" relativeToChangelogFile="true"/>
-    <include file="sql/017_add_dynamic_date_types.sql" relativeToChangelogFile="true"/>
-    <include file="sql/018_drop_legacy_timeframe_columns.sql" relativeToChangelogFile="true"/>
-    <include file="sql/019_drop_period_type_column.sql" relativeToChangelogFile="true"/>
-    <include file="sql/020_drop_meta_column_is_conformed.sql" relativeToChangelogFile="true"/>
 
 </databaseChangeLog>

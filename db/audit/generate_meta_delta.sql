@@ -6,7 +6,7 @@
 -- into reporting.meta_column to resolve catalog synchronization bugs.
 -- =============================================================================
 
-INSERT INTO reporting.meta_column (
+INSERT INTO catalog.meta_column (
     table_id,
     column_name,
     label,
@@ -78,10 +78,10 @@ SELECT
     ) AS is_visible,
     'Physical column [' || c.column_name || '] of analytical table [' || c.table_name || '].' AS description
 FROM information_schema.columns c
-JOIN reporting.meta_table mt 
+JOIN catalog.meta_table mt 
     ON mt.schema_name = c.table_schema 
    AND mt.table_name = c.table_name
-LEFT JOIN reporting.meta_column mc 
+LEFT JOIN catalog.meta_column mc 
     ON mc.table_id = mt.table_id 
    AND mc.column_name = c.column_name
 WHERE c.table_schema = 'analytics'

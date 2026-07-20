@@ -88,7 +88,7 @@ public class ReportConfigServiceIT extends BaseIT {
 
         // Verify rows exist in DB
         Integer rowCountBefore = jdbcTemplate
-                .queryForObject("SELECT COUNT(*) FROM reporting.rpt_row WHERE report_id = ?", Integer.class, reportId);
+                .queryForObject("SELECT COUNT(*) FROM reporting.row_definition WHERE report_id = ?", Integer.class, reportId);
         assertThat(rowCountBefore).isEqualTo(1);
 
         // Act: Save updated configuration without any rows
@@ -99,11 +99,11 @@ public class ReportConfigServiceIT extends BaseIT {
 
         // Assert: Rows and mapping tables are empty for this report (deleted cascade)
         Integer rowCountAfter = jdbcTemplate
-                .queryForObject("SELECT COUNT(*) FROM reporting.rpt_row WHERE report_id = ?", Integer.class, reportId);
+                .queryForObject("SELECT COUNT(*) FROM reporting.row_definition WHERE report_id = ?", Integer.class, reportId);
         assertThat(rowCountAfter).isEqualTo(0);
 
         Integer mapCountAfter = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM reporting.rpt_row_column_map WHERE report_id = ?", Integer.class, reportId);
+                "SELECT COUNT(*) FROM reporting.row_column_intersection WHERE report_id = ?", Integer.class, reportId);
         assertThat(mapCountAfter).isEqualTo(0);
     }
 }

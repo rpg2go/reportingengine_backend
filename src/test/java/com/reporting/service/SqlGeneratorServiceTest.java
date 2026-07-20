@@ -30,7 +30,7 @@ public class SqlGeneratorServiceTest {
         
         // Mock getTimeKeyForTable
         when(jdbcTemplate.queryForObject(
-            eq("SELECT time_key FROM reporting.meta_table WHERE schema_name || '.' || table_name = ?"),
+            eq("SELECT time_key FROM catalog.meta_table WHERE schema_name || '.' || table_name = ?"),
             eq(String.class),
             any(Object.class)
         )).thenReturn("order_date");

@@ -4,7 +4,7 @@ import jakarta.persistence.*;
 import lombok.*;
 
 @Entity
-@Table(name = "rpt_row", schema = "reporting")
+@Table(name = "row_definition", schema = "reporting")
 @IdClass(ReportRowId.class)
 @Getter
 @Setter

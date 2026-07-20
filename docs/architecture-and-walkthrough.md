@@ -4,11 +4,11 @@
 
 | Decision | Rationale |
 | :--- | :--- |
-| **Bypassed Semantic Layer** | Completely bypassed lookups to `reporting.sem_*` tables. Reports bind directly to physical database tables (e.g. `analytics.fact_sales`) and measure aggregation expressions are entered directly in row configurations. This simplifies query compilation, increases execution speed, and reduces complex joins. |
-| **Catalog-Driven Join Graph** | Introduced `SchemaCatalogLoader` (reads `meta_table`, `meta_column`, `meta_relationship` at startup) and `SchemaGraphRouter` (Dijkstra BFS, edge cost 1 for conformed keys, cost 2 for non-conformed FKs). `SqlGeneratorService` delegates all multi-hop LEFT JOIN resolution to this router, eliminating any hardcoded join strings. If the `010` migration has not been applied, the router returns an empty list and the service generates joins-free SQL gracefully. |
-| **State & Cascade Overwrite** | Implemented a cascade-delete strategy on saving report definitions. It clears child configurations (`ColumnDef`, `ReportRow`, `RowMetric`, `RowFormula`, `RowColumnMap`) in a flushed session transaction before saving the header. This eliminates "orphan" rows or column records. |
+| **Bypassed Semantic Layer** | Completely bypassed lookups to legacy semantic metadata tables. Reports bind directly to physical database tables (e.g. `analytics.fact_sales`) and measure aggregation expressions are entered directly in row configurations. This simplifies query compilation, increases execution speed, and reduces complex joins. |
+| **Catalog-Driven Join Graph** | Introduced `SchemaCatalogLoader` (reads `catalog.meta_table`, `catalog.meta_column`, `catalog.meta_relationship` at startup) and `SchemaGraphRouter` (Dijkstra BFS, edge cost 1 for conformed keys, cost 2 for non-conformed FKs). `SqlGeneratorService` delegates all multi-hop LEFT JOIN resolution to this router, eliminating any hardcoded join strings. |
+| **State & Cascade Overwrite** | Implemented a cascade-delete strategy on saving report definitions. It clears child configurations (`column_definition`, `row_definition`, `row_metric_mapping`, `row_formula`, `row_column_intersection`) in a flushed session transaction before saving the header. This eliminates "orphan" rows or column records. |
 | **Report Version Lifecycle** | `ReportVersionController` enforces a `draft → in_review → published` state machine. Publishing auto-creates the next draft by cloning all child configurations via direct JDBC `INSERT … SELECT`. Manual `fork` is permitted only from a published version and only if no higher version already exists. |
-| **Angular Standalone Architecture** | Frontend utilizes Angular 21 standalone components without `NgModules`. Each component declares its imports directly, making code cleaner and improving module load speeds. |
+| **Angular Standalone Architecture** | Frontend utilizes Angular standalone components without `NgModules`. Each component declares its imports directly, making code cleaner and improving module load speeds. |
 | **exp4j Math Evaluation** | Used `exp4j` for mathematical calculations in formula cells. It performs rapid, safe evaluations of mathematical expressions (e.g., `R2 / R3`) without executing raw JavaScript or SQL-injection-prone scripts. |
 | **Direct JDBC over JPA for Hot Paths** | `loadFromDb()` uses raw JDBC queries with `RowCallbackHandler` instead of JPA repository calls. This eliminates entity hydration overhead and JOIN inflation from Hibernate, reducing report load latency from ~163ms to ~59ms. |
 | **Direct JDBC Save Path** | Refactored row, column, and metric persistence in `ReportConfigService` to use raw `JdbcTemplate` updates. This resolves Hibernate cascade overhead, eliminates hydrations, and prevents orphan rows during report saves. |
@@ -16,20 +16,20 @@
 | **Security-Validated Autocomplete** | Implemented `/api/metadata/distinct-values` with direct JDBC queries and regex sanitization (`^[a-zA-Z0-9_]+$`) on dynamic table/column parameters to block SQL injection while supporting dynamic dimension autocomplete lookups. |
 | **Centralized Exception Handling** | `GlobalExceptionHandler` (`@ControllerAdvice`) maps common exceptions (validation errors, illegal arguments, not-found) to structured JSON HTTP responses, preventing raw stack traces from leaking to clients. |
 | **Parallel Frontend Data Fetching** | Angular `ngOnInit` uses RxJS `forkJoin` to fire `/api/reports/tables` and `/api/reports/{id}` concurrently. Total perceived load time equals the slower of the two requests instead of their sum. |
-| **Metadata Pre-Caching** | Pre-loads DWH schema catalog structures (columns, time keys, semantic measures, and views) into memory via `MetadataCache` at startup. This eliminates repeated slow queries against `information_schema` and `sem_view` on every report compilation run, dropping template compiler overhead to ~50ms. |
+| **Metadata Pre-Caching** | Pre-loads DWH schema catalog structures (columns, time keys, semantic measures, and views) into memory via `MetadataCache` at startup. This eliminates repeated slow queries against `information_schema` on every report compilation run, dropping template compiler overhead to ~50ms. |
 | **Modular Monolith Deconstruction (Phase A)** | Decoupled bloated REST controllers into granular domains (`ReportController` for CRUD/validation, `ReportVersionController` for version lifecycle REST hooks, `ReportExecutionController` for grid query runs, and `SchemaDiscoveryController` for schema discovery). Extracted versioning rules into `VersioningService`. |
 | **Request Trace Correlation** | Added `CorrelationIdFilter` to intercept all REST requests and inject a standard `X-Correlation-ID` header into HTTP response headers and Thread-local log context (SLF4J MDC) for distributed request tracing. |
 | **Robust Health Check Probes** | Integrated Spring Boot Actuator health checks and configured `deploy.sh` with Cloud Run `--liveness-probe` and `--startup-probe` parameters pointing to `/actuator/health/liveness` and `/actuator/health/readiness`. |
 | **Resilient Catalog Listing (Latest Published View)** | Modified the report listing catalog query to fetch the latest `published` version using `findLatestPublishedPerReport()` rather than raw `MAX(version)` (which flips to draft immediately after publish due to the auto-forking system). |
-| **Pure SQL Liquibase Migrations** | Replaced custom Java migration scripts with pure SQL changeset files routed by a master XML changelog (`db/liquibase/db.changelog-master.xml`). Connection configurations are loaded from `.env` (supporting local vs. Neon GCP production databases) and executed via `./scripts/deploy-liquibase.sh`. Enabled trigger suppression and `runOnChange` parameters in seeds to safely bypass checksum checks and self-referencing foreign key violations. |
-| **Unified Package Refactoring** | Completely deleted the legacy `com.banking.reporting` package and consolidated all components (including `HierarchicalColumnDto` and `ExcelExporterService`) under the unified `com.reporting` namespace to prevent split package issues and enforce structural consistency. |
+| **Pure SQL Liquibase Migrations** | Replaced custom Java migration scripts with pure SQL changeset files routed by a master XML changelog (`db/liquibase/db.changelog-master.xml`). Migration files are split per schema (`001_create_reporting_tables.sql` and `002_create_catalog_tables.sql`). Connection configurations are loaded from `.env` (supporting local vs. Neon GCP production databases) and executed via `./scripts/deploy-liquibase.sh`. |
+| **Unified Package Refactoring** | Completely deleted the legacy package folders and consolidated all components (including `HierarchicalColumnDto` and `ExcelExporterService`) under the unified `com.reporting` namespace to prevent split package issues and enforce structural consistency. |
 | **Java 21 & Spring Boot 3.5 Migration** | Modernized runtime and library dependencies to target the Java 21 LTS and Spring Boot 3.5.0-SNAPSHOT parent framework baseline. Enabled Project Loom virtual threads (`spring.threads.virtual.enabled=true`) for Tomcat HTTP request processing and upgraded Apache POI to version `5.3.0`. |
 | **Sealed AST Filter Compiler** | Extracted recursive row-level parenthetical expression compiling logic from `SqlGeneratorService` into a dedicated `FilterCompilerService`. The compiler maps input filter configurations into a Java 21 sealed AST structure (`FilterNode` permitting record types `RuleNode` and `GroupNode`) and parses it using switch pattern matching expressions. |
 | **Conditional Soft/Hard Deletion** | Replaced default cascade delete with a hybrid deletion pattern. Reports with a history containing at least one `PUBLISHED` version are soft-deleted by setting a `deleted` flag to true across all version rows. This preserves audit histories and past reports. Reports with only `DRAFT` or `IN_REVIEW` versions are physically cascade-deleted from the database. |
 | **Report ID Visual Hiding** | Replaced all visual displays of the raw UUID or alphanumeric `reportId` in the frontend (catalogs, sidebars, details) with the user-friendly `reportName`. The `reportId` is preserved strictly in the browser address path (e.g. `/reports/:id`) and in REST request/response payloads to maintain backend alignment. |
-| **Lombok JDK 21 Compatibility** | Upgraded Lombok to `1.18.38` to resolve AST type tag compilation compatibility errors (`TypeTag :: UNKNOWN` or `IllegalAccessError` on JDK 21 javac internal enum changes). |
+| **Lombok JDK 21 Compatibility** | Upgraded Lombok to `1.18.38` to resolve AST type tag compilation compatibility errors. |
 | **Serverless Database Pool Tuning & Actuator Health Decoupling** | Increased backend HikariCP maximum pool size to 20 to support concurrent DWH metadata requests, and disabled database status evaluation in Spring Boot Actuator health checks (`management.health.db.enabled=false`). This prevents Cloud Run liveness probe timeouts and container restarts when the Neon database wakes up from a scale-to-zero sleep state or undergoes connection spikes. |
-| **OAuth2 Resource Server and JWT Claims Ingestion** | Upgraded system security from Basic Authentication to a modern, stateless OAuth2 JWT Resource Server using Spring Security 6.x. Added `SecurityContextService` to extract custom OIDC identity claims (e.g. `user_initials`, `assigned_country_restrictions`) from token contexts, enabling secure row-level security SQL injection. Updated the Angular 21 frontend `AuthService` and interceptor to attach bearer tokens automatically, and integrated local fallback token decoding for testing. |
+| **OAuth2 Resource Server and JWT Claims Ingestion** | Upgraded security to OAuth2 JWT Resource Server. Added `SecurityContextService` to extract custom claims from token contexts. |
 
 ---
 
@@ -45,7 +45,6 @@ The system follows a classic decoupled 3-tier architecture:
 2. **Backend Services (Spring Boot)**:
    - Run on port `8101`.
    - Built on Spring Boot `3.5` and Java `21`, with Project Loom virtual threads enabled (`spring.threads.virtual.enabled=true`) for non-blocking HTTP request and execution handling.
-   - Spring Security implements Basic Auth validating credentials against stored users.
    - Core Services:
      - **`SqlGeneratorService`**: Constructs dynamic PostgreSQL queries using Common Table Expressions (CTEs) and conditional date boundaries. Delegates multi-hop JOIN resolution to `SchemaGraphRouter` and filter expression parsing to `FilterCompilerService`.
      - **`FilterCompilerService`**: Compiles structured row filter configurations into a record-based AST and produces standard SQL clauses via switch pattern matching.
@@ -53,12 +52,12 @@ The system follows a classic decoupled 3-tier architecture:
      - **`LayoutRendererService`**: Writes styled workbook data sheets back to POI cells.
      - **`ReportRunnerService`**: Orchestrates the full pipeline: Load Config → Resolve Metrics → Generate SQL → Execute → Post-Process → Render.
    - Catalog Package:
-     - **`SchemaCatalogLoader`**: Reads `meta_*` registry tables at startup and assembles an in-memory graph.
+     - **`SchemaCatalogLoader`**: Reads `catalog.meta_*` registry tables at startup and assembles an in-memory graph.
      - **`SchemaGraphRouter`**: Weighted Dijkstra BFS pathfinder for dynamic LEFT JOIN resolution.
 
 3. **Data Layer (PostgreSQL Container)**:
-   - Exposed on port `5432` in Docker container.
-   - Separated into `reporting` schema (config metadata) and `analytics` schema (warehouse facts).
+   - Exposed on port `5433` (mapping to `5432` in container).
+   - Separated into `reporting` schema (layouts and templates), `catalog` schema (DWH metadata registry), and `analytics` schema (warehouse tables).
 
 ---
 
@@ -81,7 +80,7 @@ Configuration is handled through:
 
 ## Security
 
-Security enforces a simple Basic Auth scheme:
+Security enforces a stateless JWT-based authentication system:
 - CORS filters on backend permit origins from `http://127.0.0.1:4200` to prevent access blocks.
 - Route guards (`authGuard`) in Angular block routing access to components if the authorization headers/tokens are missing.
 
@@ -89,9 +88,10 @@ Security enforces a simple Basic Auth scheme:
 
 ## Data Layer
 
-The PostgreSQL instance manages two main schemas:
-- **`reporting`**: Holds configurations (`rpt_report`, `rpt_column_def`, `rpt_row`, `rpt_row_metric`, `rpt_row_formula`, `rpt_row_column_map`).
-- **`analytics`**: Houses dimensional warehouse facts (e.g., `fact_sales`, `dim_dates`, `fact_investments`).
+The PostgreSQL instance manages three main schemas:
+- **`reporting`**: Holds configurations (`report_config`, `column_definition`, `row_definition`, `row_metric_mapping`, `row_formula`, `row_column_intersection`).
+- **`catalog`**: Holds the metadata schema registry (`meta_table`, `meta_column`, `meta_relationship`).
+- **`analytics`**: Houses dimensional warehouse facts (e.g., `fact_sales`, `dim_date`, `fact_investments`).
 
 ---
 
@@ -101,7 +101,7 @@ The PostgreSQL instance manages two main schemas:
 
 1. The user clicks a report card to open the **Report Builder**.
 2. The screen fetches current rows/columns via `GET /api/reports/{id}`.
-3. The user re-orders rows, modifies a cell's custom SQL aggregation expression (e.g. `SUM(quantity)`), or updates filters.
+3. The user re-orders rows, modifies a cell's custom SQL aggregation expression (e.g. `SUM(amount)`), or updates filters.
 4. The user clicks **Save**, executing a `PUT /api/reports/{id}` request that cascade-overwrites old parameters.
 
 ### Journey 3: Report Generation & Download

@@ -82,9 +82,10 @@ reportingengine_backend/
 ├── .agents/                    # ADK validation agents configuration & code
 │   ├── agents/                 # Validator specifications
 │   └── validation/             # Executable validation agent (agent.py, tools.py)
-├── db/                         # Database container configuration
-│   ├── migrations/             # SQL migration scripts (000 to 015)
-│   └── Dockerfile              # Custom Postgres image bundling migrations
+├── db/                         # Database configuration and Liquibase scripts
+│   └── liquibase/              # Liquibase migrations and SQL scripts
+│       ├── db.changelog-master.xml  # Changelog ledger routing migrations
+│       └── sql/                # Split DDL and seeding files per schema (000 to 011)
 ├── docs/                       # Architecture, data model, and testing docs
 ├── documentation/              # Business user design plans and authoring guides
 ├── src/                        # Spring Boot Java application source code
@@ -464,9 +465,10 @@ Below is a summary of the most useful commands for building and running the back
 
 ## Database Layers
 
-The PostgreSQL instance manages two schemas in the `agentic_ai` database:
+The PostgreSQL instance manages three schemas in the `agentic_ai` database:
 
-- **`reporting.*`**: Stores metadata, report definitions, explores, views, dimension/measure columns, join paths, and import audit history.
+- **`reporting.*`**: Stores report template layouts (headers, columns, rows, metrics, formulas, style formats, and coordinates).
+- **`catalog.*`**: Stores the metadata schema registry (physical table configurations, columns, visible/filterable flags, and Dijkstra-weighted join pathways).
 - **`analytics.*`**: Represents the physical Data Warehouse (DWH) containing dimension and fact tables (seeding transaction, performance, investment, and sales data for 2024–2026).
 
 ---

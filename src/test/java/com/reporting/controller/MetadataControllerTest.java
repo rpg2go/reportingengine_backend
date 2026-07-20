@@ -48,7 +48,7 @@ public class MetadataControllerTest {
     @DisplayName("GET /api/metadata/distinct-values: returns values when table is registered in sem_view")
     public void getDistinctValues_registeredTable_shouldResolveAndReturnValues() throws Exception {
         when(jdbcTemplate.queryForObject(
-                eq("SELECT schema_name || '.' || table_name AS table_ref FROM reporting.meta_table WHERE table_name = ?"),
+                eq("SELECT schema_name || '.' || table_name AS table_ref FROM catalog.meta_table WHERE table_name = ?"),
                 eq(String.class),
                 eq("dim_investment_hierarchy")
         )).thenReturn("analytics.dim_investment_hierarchy");
@@ -71,7 +71,7 @@ public class MetadataControllerTest {
     @DisplayName("GET /api/metadata/distinct-values: falls back to analytics schema if not found in sem_view")
     public void getDistinctValues_unregisteredTable_shouldFallbackAndReturnValues() throws Exception {
         when(jdbcTemplate.queryForObject(
-                eq("SELECT schema_name || '.' || table_name AS table_ref FROM reporting.meta_table WHERE table_name = ?"),
+                eq("SELECT schema_name || '.' || table_name AS table_ref FROM catalog.meta_table WHERE table_name = ?"),
                 eq(String.class),
                 eq("fact_sales")
         )).thenThrow(new RuntimeException("not found"));

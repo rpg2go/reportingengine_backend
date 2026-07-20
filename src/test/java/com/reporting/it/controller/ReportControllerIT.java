@@ -73,7 +73,7 @@ public class ReportControllerIT extends BaseIT {
         int expectedNextVersion = version + 1;
 
         // Clean up the target version in case a previous aborted run left it behind using direct SQL
-        jdbcTemplate.update("DELETE FROM reporting.rpt_report WHERE report_id = ? AND version = ?", reportId, expectedNextVersion);
+        jdbcTemplate.update("DELETE FROM reporting.report_config WHERE report_id = ? AND version = ?", reportId, expectedNextVersion);
 
         try {
             mockMvc.perform(post("/api/reports/" + reportId + "/version/fork")
@@ -89,7 +89,7 @@ public class ReportControllerIT extends BaseIT {
                     .andExpect(jsonPath("$.status").value("draft"));
         } finally {
             // Clean up the created draft version using direct SQL
-            jdbcTemplate.update("DELETE FROM reporting.rpt_report WHERE report_id = ? AND version = ?", reportId, expectedNextVersion);
+            jdbcTemplate.update("DELETE FROM reporting.report_config WHERE report_id = ? AND version = ?", reportId, expectedNextVersion);
         }
     }
 }

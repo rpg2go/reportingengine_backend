@@ -6,37 +6,34 @@ This document defines the database architecture, schema structures, and relation
 
 ## 📐 Schema Separation
 
-The platform utilizes two PostgreSQL schemas inside the database to decouple reporting configurations and DWH structures:
+The platform utilizes three PostgreSQL schemas inside the database to decouple reporting configurations, DWH structures, and metadata explore routing:
 
-1.  **`reporting` Schema**: Stores the metadata catalog of DWH structures ([meta_table](file:///Users/mariusdruga/Workspace/reportingengine_backend/db/liquibase/sql/003_create_catalog_tables.sql#L9-L18), [meta_column](file:///Users/mariusdruga/Workspace/reportingengine_backend/db/liquibase/sql/003_create_catalog_tables.sql#L23-L35), and [meta_relationship](file:///Users/mariusdruga/Workspace/reportingengine_backend/db/liquibase/sql/003_create_catalog_tables.sql#L40-L51)) along with report templates, style layouts, and grid mapping coordinates.
-2.  **`analytics` Schema**: Represents the actual Data Warehouse (DWH) containing physical facts (e.g., `fact_sales`) and dimensions (e.g., `dim_date`, `dim_location`).
+1.  **`reporting` Schema**: Stores report templates, style layouts, rows, metrics, formulas, and grid mapping coordinates.
+2.  **`catalog` Schema**: Stores the metadata catalog registry of DWH structures ([meta_table](../db/liquibase/sql/002_create_catalog_tables.sql#L9-L19), [meta_column](../db/liquibase/sql/002_create_catalog_tables.sql#L24-L37), and [meta_relationship](../db/liquibase/sql/002_create_catalog_tables.sql#L40-L54)).
+3.  **`analytics` Schema**: Represents the actual Data Warehouse (DWH) containing physical facts (e.g., `fact_sales`) and dimensions (e.g., `dim_date`, `dim_location`).
 
 ```mermaid
 erDiagram
-    reporting-meta_table ||--o{ reporting-meta_column : defines
-    reporting-meta_table ||--o{ reporting-meta_relationship : joins
+    catalog-meta_table ||--o{ catalog-meta_column : defines
+    catalog-meta_table ||--o{ catalog-meta_relationship : joins
     
-    reporting-rpt_report ||--o{ reporting-rpt_column_def : "defines columns"
-    reporting-rpt_report ||--o{ reporting-rpt_row : "defines rows"
-    reporting-rpt_row ||--|| reporting-rpt_row_metric : "binds metrics"
-    reporting-rpt_row ||--|| reporting-rpt_row_formula : "binds formulas"
-    reporting-rpt_row_column_map }|--|| reporting-rpt_row : references
-    reporting-rpt_row_column_map }|--|| reporting-rpt_column_def : references
+    reporting-report_config ||--o{ reporting-column_definition : "defines columns"
+    reporting-report_config ||--o{ reporting-row_definition : "defines rows"
+    reporting-row_definition ||--|| reporting-row_metric_mapping : "binds metrics"
+    reporting-row_definition ||--|| reporting-row_formula : "binds formulas"
+    reporting-row_column_intersection }|--|| reporting-row_definition : references
+    reporting-row_column_intersection }|--|| reporting-column_definition : references
     
-    reporting-rpt_report }|--|| analytics-fact_table : "queries data directly (resolves join pathways via meta_relationship)"
+    reporting-report_config }|--|| analytics-fact_table : "queries data directly (resolves join pathways via meta_relationship)"
 ```
 
 ---
 
-## 🗄️ 1. The `reporting` Schema: Metadata Catalog & Configurations
+## 🗄️ 1. The `catalog` Schema: Schema Registry Catalog
 
-The `reporting` schema contains two main sub-groups of tables: the **DWH Metadata Catalog** (replacing the deprecated `sem_*` layers) and the **Report Template Layout Configurations**.
+These tables register the physical table structures, columns, and foreign key relationships of the Data Warehouse. At startup, [SchemaCatalogLoader.java](../src/main/java/com/reporting/catalog/SchemaCatalogLoader.java) caches this graph in-memory, and [SchemaGraphRouter.java](../src/main/java/com/reporting/catalog/SchemaGraphRouter.java) executes Dijkstra's BFS to resolve LEFT JOIN chains between facts and dimensions.
 
-### A. DWH Metadata Catalog (Schema Registry)
-
-These tables register the physical table structures, columns, and foreign key relationships of the Data Warehouse. At startup, [SchemaCatalogLoader.java](file:///Users/mariusdruga/Workspace/reportingengine_backend/src/main/java/com/reporting/catalog/SchemaCatalogLoader.java) caches this graph in-memory, and [SchemaGraphRouter.java](file:///Users/mariusdruga/Workspace/reportingengine_backend/src/main/java/com/reporting/catalog/SchemaGraphRouter.java) executes Dijkstra's BFS to resolve LEFT JOIN chains between facts and dimensions.
-
-#### 1. `reporting.meta_table`
+#### 1. `catalog.meta_table`
 
 Registers physical tables inside the DWH.
 - `table_id` (SERIAL PRIMARY KEY)
@@ -45,9 +42,10 @@ Registers physical tables inside the DWH.
 - `label` (VARCHAR(256)) — UI display name
 - `table_type` (VARCHAR(20) NOT NULL CHECK (table_type IN ('fact', 'dimension', 'bridge')))
 - `time_key` (VARCHAR(128)) — column name containing the date key (e.g. `'reporting_date'`)
+- `is_cached` (BOOLEAN NOT NULL DEFAULT TRUE) — controls if table metadata is cached
 - `description` (TEXT)
 
-#### 2. `reporting.meta_column`
+#### 2. `catalog.meta_column`
 
 Registers physical columns of the tables.
 - `column_id` (SERIAL PRIMARY KEY)
@@ -57,13 +55,12 @@ Registers physical columns of the tables.
 - `data_type` (VARCHAR(64))
 - `is_primary_key` (BOOLEAN DEFAULT FALSE)
 - `is_foreign_key` (BOOLEAN DEFAULT FALSE)
-- `is_conformed` (BOOLEAN DEFAULT FALSE)
 - `is_filterable` (BOOLEAN DEFAULT FALSE) — controls if autocomplete dropdown values are supported
 - `is_cached` (BOOLEAN DEFAULT FALSE) — controls if distinct values are pre-loaded into JVM memory at boot
 - `is_visible` (BOOLEAN DEFAULT TRUE) — controls if the column is shown in the frontend catalog and builders
 - `description` (TEXT)
 
-#### 3. `reporting.meta_relationship`
+#### 3. `catalog.meta_relationship`
 
 Defines physical join routes between tables.
 - `relationship_id` (SERIAL PRIMARY KEY)
@@ -73,7 +70,7 @@ Defines physical join routes between tables.
 - `to_column` (VARCHAR(128) NOT NULL) — target column
 - `join_type` (VARCHAR(20) DEFAULT 'LEFT' CHECK (join_type IN ('LEFT', 'INNER', 'RIGHT')))
 - `is_conformed` (BOOLEAN DEFAULT FALSE)
-- `weight` (INTEGER DEFAULT 1) — Dijktra edge cost (1 = conformed key, 2 = non-conformed FK)
+- `weight` (INTEGER DEFAULT 1) — Dijkstra edge cost (1 = conformed key, 2 = non-conformed FK)
 - `description` (TEXT)
 
 ---
@@ -100,7 +97,7 @@ To optimize performance and database load on large Data Warehouses (with potenti
 
 The catalog uses `is_conformed` flags in both column definitions and table relationships to coordinate query routing:
 
-#### 1. `reporting.meta_relationship.is_conformed`
+#### 1. `catalog.meta_relationship.is_conformed`
 This boolean flag indicates whether a join relationship represents a standard conformed dimension link.
 * **Pathfinder Routing Effect:** During SQL compilation, `SchemaGraphRouter` runs Dijkstra's BFS to find the cheapest join chain from the query's fact table to target dimensions. A conformed edge (`is_conformed = true`) is assigned a cost/weight of `1` (or acts as a tie-breaker), ensuring it is always preferred over a non-conformed relationship (which has a cost/weight of `2`).
 * **Data Integration:** It defines if the database path should be considered a standard conformed link across the DWH.
@@ -124,16 +121,16 @@ When saving or running a report, you may encounter the validation error:
 
 #### How to resolve:
 1. Ensure the report has at least one data row mapping to a physical fact table.
-2. Verify that the table relationship from your fact table to the dimension table (e.g. `fact_sales` -> `dim_relationship_manager`) is correctly populated in the `reporting.meta_relationship` table.
-3. Use a proper dimension table (like `dim_customers`, `dim_date`, or `dim_relationship_manager`) in your global and quick filters instead of fact tables.
+2. Verify that the table relationship from your fact table to the dimension table (e.g. `fact_sales` -> `dim_location`) is correctly populated in the `catalog.meta_relationship` table.
+3. Use a proper dimension table (like `dim_customers`, `dim_date`, or `dim_location`) in your global and quick filters instead of fact tables.
 
 ---
 
-### B. Report Template Configurations (Normalized Layouts)
+## 🗄️ 2. The `reporting` Schema: Report Template Configurations (Normalized Layouts)
 
 These tables define layouts, columns, row styles, metrics, and active coordinates.
 
-#### 1. `reporting.rpt_report`
+#### 1. `reporting.report_config`
 
 Defines report headers.
 - `report_id` (VARCHAR(50)) — alphanumeric identifier (e.g., `'SALES_OVERVIEW'`)
@@ -144,15 +141,21 @@ Defines report headers.
 - `source_table` (VARCHAR(150)) — physical fact table scanned (e.g. `'analytics.fact_sales'`)
 - `source_field` (VARCHAR(150)) — fallback field mapping
 - `granularity` (VARCHAR(1000)) — physical `GROUP BY` column (e.g. `'dim_location.country_name'`)
-- `timeframe_start` (VARCHAR(50)) — offset parameter start
-- `timeframe_end` (VARCHAR(50)) — offset parameter end
-- `timeframe_today` (BOOLEAN DEFAULT FALSE) — anchors relative to execution date
+- `reporting_date_type`        (VARCHAR(16) DEFAULT 'DYNAMIC' CHECK (reporting_date_type IN ('FIXED', 'DYNAMIC')))
+- `reporting_date_static`      (DATE)
+- `reporting_date_expression`  (VARCHAR(8) DEFAULT 'T-2')
+- `timeframe_start_type`       (VARCHAR(16) DEFAULT 'FIXED')
+- `timeframe_start_static`     (DATE DEFAULT '2022-01-01')
+- `timeframe_start_expression` (VARCHAR(8))
+- `timeframe_end_type`         (VARCHAR(16) DEFAULT 'DYNAMIC' CHECK (timeframe_end_type IN ('FIXED', 'DYNAMIC')))
+- `timeframe_end_static`       (DATE)
+- `timeframe_end_expression`   (VARCHAR(8) DEFAULT 'T-2')
 - `quick_filters` (TEXT) — JSON configuration for distinct dropdown values
 - `general_filters` (TEXT) — JSON array for push-down fact filter logic
 - `deleted` (BOOLEAN DEFAULT FALSE) — soft-delete flag
 - **Primary Key**: `(report_id, version)`
 
-#### 2. `reporting.rpt_style`
+#### 2. `reporting.row_style`
 
 Stores cell style attributes.
 - `style_id` (SERIAL PRIMARY KEY)
@@ -165,7 +168,7 @@ Stores cell style attributes.
 - `color_hex` (VARCHAR(7))
 - `bg_color_hex` (VARCHAR(7))
 
-#### 3. `reporting.rpt_column_def`
+#### 3. `reporting.column_definition`
 
 Defines report headers and rolling period configurations.
 - `column_def_id` (SERIAL PRIMARY KEY)
@@ -175,17 +178,16 @@ Defines report headers and rolling period configurations.
 - `label` (VARCHAR(200))
 - `col_type` (VARCHAR(20) CHECK (col_type IN ('WTD', 'MTD', 'YTD', 'ROLLING', 'CALC', 'HEADER')))
 - `period_offset` (INTEGER DEFAULT 0) — relative offset (e.g. `0` = current, `-1` = prior period)
-- `period_type` (VARCHAR(50)) — time scope details
 - `rolling_n` (INTEGER) — rolling boundary count
 - `rolling_grain` (VARCHAR(10) CHECK (rolling_grain IN ('DAY', 'WEEK', 'MONTH', 'YEAR')))
 - `formula_expr` (TEXT) — expression for `'CALC'` columns
 - `display_order` (INTEGER NOT NULL) — ordering index
 - `tier_level` (VARCHAR(10) DEFAULT 'L1' CHECK (tier_level IN ('L1', 'L2', 'L3')))
 - `parent_id` (VARCHAR(50))
-- **Foreign Key**: `(report_id, version) REFERENCES rpt_report (report_id, version) ON DELETE CASCADE`
+- **Foreign Key**: `(report_id, version) REFERENCES report_config (report_id, version) ON DELETE CASCADE`
 - **Unique Constraint**: `(report_id, version, col_id)`
 
-#### 4. `reporting.rpt_row`
+#### 4. `reporting.row_definition`
 
 Defines layout rows.
 - `row_id` (VARCHAR(50) NOT NULL) — row grid ID (e.g. `'R1'`)
@@ -196,13 +198,13 @@ Defines layout rows.
 - `row_type` (VARCHAR(20) CHECK (row_type IN ('section', 'data', 'calc', 'blank')))
 - `display_order` (INTEGER NOT NULL)
 - `indent_level` (INTEGER DEFAULT 0)
-- `style_id` (INTEGER REFERENCES `rpt_style(style_id)`)
+- `style_id` (INTEGER REFERENCES `row_style(style_id)`)
 - `filter_expr` (TEXT) — row-level DWH custom filters (e.g. `'category = ''Software'''`)
 - **Primary Key**: `(report_id, version, row_id)`
-- **Foreign Key**: `(report_id, version) REFERENCES rpt_report (report_id, version) ON DELETE CASCADE`
-- **Self-referential FK**: `(report_id, version, parent_row_id) REFERENCES rpt_row (report_id, version, row_id) ON DELETE CASCADE`
+- **Foreign Key**: `(report_id, version) REFERENCES report_config (report_id, version) ON DELETE CASCADE`
+- **Self-referential FK**: `(report_id, version, parent_row_id) REFERENCES row_definition (report_id, version, row_id) ON DELETE CASCADE`
 
-#### 5. `reporting.rpt_row_metric`
+#### 5. `reporting.row_metric_mapping`
 
 Links `'data'` rows to physical SQL aggregate expressions.
 - `row_metric_id` (SERIAL PRIMARY KEY)
@@ -211,10 +213,10 @@ Links `'data'` rows to physical SQL aggregate expressions.
 - `row_id` (VARCHAR(50))
 - `sql_expr` (TEXT) — SQL aggregation (e.g. `'SUM(analytics.fact_sales.amount)'`)
 - `measure_definition` (TEXT) — metadata JSON
-- **Foreign Key**: `(report_id, version, row_id) REFERENCES rpt_row (report_id, version, row_id) ON DELETE CASCADE`
+- **Foreign Key**: `(report_id, version, row_id) REFERENCES row_definition (report_id, version, row_id) ON DELETE CASCADE`
 - **Unique Constraint**: `(report_id, version, row_id)`
 
-#### 6. `reporting.rpt_row_formula`
+#### 6. `reporting.row_formula`
 
 Links `'calc'` rows to algebraic formulas evaluated via `exp4j`.
 - `row_formula_id` (SERIAL PRIMARY KEY)
@@ -222,10 +224,10 @@ Links `'calc'` rows to algebraic formulas evaluated via `exp4j`.
 - `version` (INTEGER)
 - `row_id` (VARCHAR(50))
 - `formula_expr` (TEXT) — algebraic expression (e.g. `'R2 / R3'`)
-- **Foreign Key**: `(report_id, version, row_id) REFERENCES rpt_row (report_id, version, row_id) ON DELETE CASCADE`
+- **Foreign Key**: `(report_id, version, row_id) REFERENCES row_definition (report_id, version, row_id) ON DELETE CASCADE`
 - **Unique Constraint**: `(report_id, version, row_id)`
 
-#### 7. `reporting.rpt_row_column_map`
+#### 7. `reporting.row_column_intersection`
 
 Indicates active layout coordinates (grid intersections).
 - `mapping_id` (SERIAL PRIMARY KEY)
@@ -234,8 +236,8 @@ Indicates active layout coordinates (grid intersections).
 - `row_id` (VARCHAR(50))
 - `col_id` (VARCHAR(10))
 - `is_enabled` (BOOLEAN DEFAULT TRUE)
-- **Foreign Key (Row)**: `(report_id, version, row_id) REFERENCES rpt_row (report_id, version, row_id) ON DELETE CASCADE`
-- **Foreign Key (Col)**: `(report_id, version, col_id) REFERENCES rpt_column_def (report_id, version, col_id) ON DELETE CASCADE`
+- **Foreign Key (Row)**: `(report_id, version, row_id) REFERENCES row_definition (report_id, version, row_id) ON DELETE CASCADE`
+- **Foreign Key (Col)**: `(report_id, version, col_id) REFERENCES column_definition (report_id, version, col_id) ON DELETE CASCADE`
 - **Unique Constraint**: `(report_id, version, row_id, col_id)`
 
 ---
@@ -259,28 +261,28 @@ CREATE TABLE analytics.fact_inventory (
 );
 ```
 
-### Step 2: Populate the Metadata Catalog (`reporting` schema)
+### Step 2: Populate the Metadata Catalog (`catalog` schema)
 
 Register the metadata catalog configurations to allow `SchemaGraphRouter` to discover relationships and build dynamic SQL joins:
 
 ```sql
 -- 1. Register the Table
-INSERT INTO reporting.meta_table (schema_name, table_name, label, table_type, time_key, description)
+INSERT INTO catalog.meta_table (schema_name, table_name, label, table_type, time_key, description)
 VALUES ('analytics', 'fact_inventory', 'Inventory Fact', 'fact', 'reporting_date', 'Inventory level counts');
 
 -- 2. Register columns
-INSERT INTO reporting.meta_column (table_id, column_name, label, data_type, is_primary_key, is_foreign_key, is_conformed)
+INSERT INTO catalog.meta_column (table_id, column_name, label, data_type, is_primary_key, is_foreign_key)
 VALUES 
-  ((SELECT table_id FROM reporting.meta_table WHERE table_name = 'fact_inventory'), 'id', 'ID', 'integer', TRUE, FALSE, FALSE),
-  ((SELECT table_id FROM reporting.meta_table WHERE table_name = 'fact_inventory'), 'reporting_date', 'Date', 'date', FALSE, TRUE, FALSE),
-  ((SELECT table_id FROM reporting.meta_table WHERE table_name = 'fact_inventory'), 'warehouse_id', 'Warehouse ID', 'integer', FALSE, TRUE, TRUE);
+  ((SELECT table_id FROM catalog.meta_table WHERE table_name = 'fact_inventory'), 'id', 'ID', 'integer', TRUE, FALSE),
+  ((SELECT table_id FROM catalog.meta_table WHERE table_name = 'fact_inventory'), 'reporting_date', 'Date', 'date', FALSE, TRUE),
+  ((SELECT table_id FROM catalog.meta_table WHERE table_name = 'fact_inventory'), 'warehouse_id', 'Warehouse ID', 'integer', FALSE, TRUE);
 
 -- 3. Register relationships (joins)
-INSERT INTO reporting.meta_relationship (from_table_id, from_column, to_table_id, to_column, join_type, weight)
+INSERT INTO catalog.meta_relationship (from_table_id, from_column, to_table_id, to_column, join_type, weight)
 VALUES (
-    (SELECT table_id FROM reporting.meta_table WHERE table_name = 'fact_inventory'),
+    (SELECT table_id FROM catalog.meta_table WHERE table_name = 'fact_inventory'),
     'warehouse_id',
-    (SELECT table_id FROM reporting.meta_table WHERE table_name = 'dim_location'),
+    (SELECT table_id FROM catalog.meta_table WHERE table_name = 'dim_location'),
     'id',
     'LEFT',
     1
@@ -293,35 +295,35 @@ Now insert the configuration template mapping directly to the physical facts:
 
 ```sql
 -- 1. Insert Report Header
-INSERT INTO reporting.rpt_report (report_id, report_name, version, status, source_table, granularity)
+INSERT INTO reporting.report_config (report_id, report_name, version, status, source_table, granularity)
 VALUES ('INV_STATUS', 'Warehouse Inventory Status', 1, 'published', 'analytics.fact_inventory', 'dim_location.country_name');
 
 -- 2. Define Columns (C1 = Current Week, C2 = Prior Week)
-INSERT INTO reporting.rpt_column_def (report_id, col_id, label, col_type, period_offset, display_order)
+INSERT INTO reporting.column_definition (report_id, col_id, label, col_type, period_offset, display_order)
 VALUES 
   ('INV_STATUS', 'C1', 'Current Week', 'WTD', 0, 1),
   ('INV_STATUS', 'C2', 'Prior Week', 'WTD', -1, 2);
 
 -- 3. Define Rows
-INSERT INTO reporting.rpt_row (report_id, row_id, label, row_type, display_order, indent_level)
+INSERT INTO reporting.row_definition (report_id, row_id, label, row_type, display_order, indent_level)
 VALUES 
   ('INV_STATUS', 'R1', 'INVENTORY REPORT', 'section', 1, 0),
   ('INV_STATUS', 'R2', 'Stock Quantity On Hand', 'data', 2, 1),
   ('INV_STATUS', 'R3', 'Average Unit Cost', 'data', 3, 1),
   ('INV_STATUS', 'R4', 'Total Value on Hand', 'calc', 4, 1);
 
--- 4. Map Data Rows to physical aggregates
-INSERT INTO reporting.rpt_row_metric (report_id, row_id, sql_expr)
+-- 5. Map Data Rows to physical aggregates
+INSERT INTO reporting.row_metric_mapping (report_id, row_id, sql_expr)
 VALUES 
   ('INV_STATUS', 'R2', 'SUM(analytics.fact_inventory.stock_qty)'),
   ('INV_STATUS', 'R3', 'AVG(analytics.fact_inventory.unit_cost)');
 
--- 5. Map Calc Row to algebra
-INSERT INTO reporting.rpt_row_formula (report_id, row_id, formula_expr)
+-- 6. Map Calc Row to algebra
+INSERT INTO reporting.row_formula (report_id, row_id, formula_expr)
 VALUES ('INV_STATUS', 'R4', 'R2 * R3');
 
--- 6. Enable the grid cells mapping
-INSERT INTO reporting.rpt_row_column_map (report_id, row_id, col_id, is_enabled)
+-- 7. Enable the grid cells mapping
+INSERT INTO reporting.row_column_intersection (report_id, row_id, col_id, is_enabled)
 VALUES 
   ('INV_STATUS', 'R2', 'C1', TRUE),
   ('INV_STATUS', 'R2', 'C2', TRUE),

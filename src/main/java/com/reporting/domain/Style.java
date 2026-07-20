@@ -4,7 +4,7 @@ import jakarta.persistence.*;
 import lombok.*;
 
 @Entity
-@Table(name = "rpt_style", schema = "reporting")
+@Table(name = "row_style", schema = "reporting")
 @Getter
 @Setter
 @NoArgsConstructor

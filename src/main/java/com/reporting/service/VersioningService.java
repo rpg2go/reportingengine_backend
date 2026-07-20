@@ -234,11 +234,11 @@ public class VersioningService {
      *
      * <p>Tables cloned (in dependency order):
      * <ol>
-     *   <li>{@code reporting.rpt_column_def}</li>
-     *   <li>{@code reporting.rpt_row}</li>
-     *   <li>{@code reporting.rpt_row_metric}</li>
-     *   <li>{@code reporting.rpt_row_formula}</li>
-     *   <li>{@code reporting.rpt_row_column_map}</li>
+     *   <li>{@code reporting.column_definition}</li>
+     *   <li>{@code reporting.row_definition}</li>
+     *   <li>{@code reporting.row_metric_mapping}</li>
+     *   <li>{@code reporting.row_formula}</li>
+     *   <li>{@code reporting.row_column_intersection}</li>
      * </ol>
      *
      * @param reportId    the report identifier
@@ -247,42 +247,42 @@ public class VersioningService {
      */
     private void cloneChildRecords(String reportId, int fromVersion, int toVersion) {
         jdbcTemplate.update(
-            "INSERT INTO reporting.rpt_column_def " +
+            "INSERT INTO reporting.column_definition " +
             "  (report_id, version, col_id, label, col_type, period_offset, rolling_n, rolling_grain, formula_expr, tier_level, parent_id, display_order) " +
             "SELECT report_id, ? AS version, col_id, label, col_type, period_offset, rolling_n, rolling_grain, formula_expr, tier_level, parent_id, display_order " +
-            "FROM reporting.rpt_column_def WHERE report_id = ? AND version = ?",
+            "FROM reporting.column_definition WHERE report_id = ? AND version = ?",
             toVersion, reportId, fromVersion
         );
 
         jdbcTemplate.update(
-            "INSERT INTO reporting.rpt_row " +
+            "INSERT INTO reporting.row_definition " +
             "  (row_id, report_id, version, parent_row_id, label, row_type, display_order, indent_level, style_id, filter_expr) " +
             "SELECT row_id, report_id, ? AS version, parent_row_id, label, row_type, display_order, indent_level, style_id, filter_expr " +
-            "FROM reporting.rpt_row WHERE report_id = ? AND version = ?",
+            "FROM reporting.row_definition WHERE report_id = ? AND version = ?",
             toVersion, reportId, fromVersion
         );
 
         jdbcTemplate.update(
-            "INSERT INTO reporting.rpt_row_metric " +
+            "INSERT INTO reporting.row_metric_mapping " +
             "  (report_id, version, row_id, sql_expr, measure_definition) " +
             "SELECT report_id, ? AS version, row_id, sql_expr, measure_definition " +
-            "FROM reporting.rpt_row_metric WHERE report_id = ? AND version = ?",
+            "FROM reporting.row_metric_mapping WHERE report_id = ? AND version = ?",
             toVersion, reportId, fromVersion
         );
 
         jdbcTemplate.update(
-            "INSERT INTO reporting.rpt_row_formula " +
+            "INSERT INTO reporting.row_formula " +
             "  (report_id, version, row_id, formula_expr) " +
             "SELECT report_id, ? AS version, row_id, formula_expr " +
-            "FROM reporting.rpt_row_formula WHERE report_id = ? AND version = ?",
+            "FROM reporting.row_formula WHERE report_id = ? AND version = ?",
             toVersion, reportId, fromVersion
         );
 
         jdbcTemplate.update(
-            "INSERT INTO reporting.rpt_row_column_map " +
+            "INSERT INTO reporting.row_column_intersection " +
             "  (report_id, version, row_id, col_id, is_enabled) " +
             "SELECT report_id, ? AS version, row_id, col_id, is_enabled " +
-            "FROM reporting.rpt_row_column_map WHERE report_id = ? AND version = ?",
+            "FROM reporting.row_column_intersection WHERE report_id = ? AND version = ?",
             toVersion, reportId, fromVersion
         );
 
