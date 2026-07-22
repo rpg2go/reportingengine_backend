@@ -4,7 +4,7 @@ import jakarta.persistence.*;
 import lombok.*;
 
 @Entity
-@Table(name = "row_formula", schema = "reporting",
+@Table(name = "row_formula", schema = "report_builder_owner",
        uniqueConstraints = @UniqueConstraint(columnNames = {"report_id", "version", "row_id"}))
 @Getter
 @Setter

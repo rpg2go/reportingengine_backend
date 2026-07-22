@@ -1,12 +1,12 @@
 --liquibase formatted sql
 --changeset devops:001_create_reporting_tables endDelimiter:;
 
-CREATE SCHEMA IF NOT EXISTS reporting;
+CREATE SCHEMA IF NOT EXISTS report_builder_owner;
 
 -- -----------------------------------------------------------------------------
 -- row_style
 -- -----------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS reporting.row_style (
+CREATE TABLE IF NOT EXISTS report_builder_owner.row_style (
     style_id      SERIAL PRIMARY KEY,
     name          VARCHAR(50) NOT NULL UNIQUE,
     font_size     INTEGER DEFAULT 11,
@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS reporting.row_style (
 -- -----------------------------------------------------------------------------
 -- report_config
 -- -----------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS reporting.report_config (
+CREATE TABLE IF NOT EXISTS report_builder_owner.report_config (
     report_id                  VARCHAR(50) NOT NULL,
     version                    INTEGER NOT NULL DEFAULT 1,
     report_name                VARCHAR(200) NOT NULL,
@@ -50,7 +50,7 @@ CREATE TABLE IF NOT EXISTS reporting.report_config (
 -- -----------------------------------------------------------------------------
 -- column_definition
 -- -----------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS reporting.column_definition (
+CREATE TABLE IF NOT EXISTS report_builder_owner.column_definition (
     column_def_id  SERIAL PRIMARY KEY,
     report_id      VARCHAR(50) NOT NULL,
     version        INTEGER NOT NULL DEFAULT 1,
@@ -64,14 +64,14 @@ CREATE TABLE IF NOT EXISTS reporting.column_definition (
     display_order  INTEGER NOT NULL,
     tier_level     VARCHAR(10) DEFAULT 'L1' NOT NULL CHECK (tier_level IN ('L1', 'L2', 'L3')),
     parent_id      VARCHAR(50) DEFAULT NULL,
-    FOREIGN KEY (report_id, version) REFERENCES reporting.report_config(report_id, version) ON DELETE CASCADE,
+    FOREIGN KEY (report_id, version) REFERENCES report_builder_owner.report_config(report_id, version) ON DELETE CASCADE,
     CONSTRAINT uq_column_definition UNIQUE (report_id, version, col_id)
 );
 
 -- -----------------------------------------------------------------------------
 -- row_definition
 -- -----------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS reporting.row_definition (
+CREATE TABLE IF NOT EXISTS report_builder_owner.row_definition (
     row_id        VARCHAR(50) NOT NULL,
     report_id     VARCHAR(50) NOT NULL,
     version       INTEGER NOT NULL DEFAULT 1,
@@ -80,62 +80,62 @@ CREATE TABLE IF NOT EXISTS reporting.row_definition (
     row_type      VARCHAR(20) NOT NULL CHECK (row_type IN ('section', 'data', 'calc', 'blank')),
     display_order INTEGER NOT NULL,
     indent_level  INTEGER NOT NULL DEFAULT 0,
-    style_id      INTEGER REFERENCES reporting.row_style(style_id),
+    style_id      INTEGER REFERENCES report_builder_owner.row_style(style_id),
     filter_expr   TEXT,
     PRIMARY KEY (report_id, version, row_id),
-    FOREIGN KEY (report_id, version) REFERENCES reporting.report_config(report_id, version) ON DELETE CASCADE,
-    CONSTRAINT fk_row_definition_parent FOREIGN KEY (report_id, version, parent_row_id) REFERENCES reporting.row_definition(report_id, version, row_id) ON DELETE CASCADE DEFERRABLE INITIALLY DEFERRED
+    FOREIGN KEY (report_id, version) REFERENCES report_builder_owner.report_config(report_id, version) ON DELETE CASCADE,
+    CONSTRAINT fk_row_definition_parent FOREIGN KEY (report_id, version, parent_row_id) REFERENCES report_builder_owner.row_definition(report_id, version, row_id) ON DELETE CASCADE DEFERRABLE INITIALLY DEFERRED
 );
 
 -- -----------------------------------------------------------------------------
 -- row_metric_mapping
 -- -----------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS reporting.row_metric_mapping (
+CREATE TABLE IF NOT EXISTS report_builder_owner.row_metric_mapping (
     row_metric_id      SERIAL PRIMARY KEY,
     report_id          VARCHAR(50) NOT NULL,
     version            INTEGER NOT NULL DEFAULT 1,
     row_id             VARCHAR(50) NOT NULL,
     sql_expr           TEXT,
     measure_definition TEXT,
-    FOREIGN KEY (report_id, version, row_id) REFERENCES reporting.row_definition(report_id, version, row_id) ON DELETE CASCADE,
+    FOREIGN KEY (report_id, version, row_id) REFERENCES report_builder_owner.row_definition(report_id, version, row_id) ON DELETE CASCADE,
     CONSTRAINT uq_row_metric_mapping UNIQUE (report_id, version, row_id)
 );
 
 -- -----------------------------------------------------------------------------
 -- row_formula
 -- -----------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS reporting.row_formula (
+CREATE TABLE IF NOT EXISTS report_builder_owner.row_formula (
     row_formula_id SERIAL PRIMARY KEY,
     report_id      VARCHAR(50) NOT NULL,
     version        INTEGER NOT NULL DEFAULT 1,
     row_id         VARCHAR(50) NOT NULL,
     formula_expr   TEXT NOT NULL,
-    FOREIGN KEY (report_id, version, row_id) REFERENCES reporting.row_definition(report_id, version, row_id) ON DELETE CASCADE,
+    FOREIGN KEY (report_id, version, row_id) REFERENCES report_builder_owner.row_definition(report_id, version, row_id) ON DELETE CASCADE,
     CONSTRAINT uq_row_formula UNIQUE (report_id, version, row_id)
 );
 
 -- -----------------------------------------------------------------------------
 -- row_column_intersection
 -- -----------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS reporting.row_column_intersection (
+CREATE TABLE IF NOT EXISTS report_builder_owner.row_column_intersection (
     mapping_id  SERIAL PRIMARY KEY,
     report_id   VARCHAR(50) NOT NULL,
     version     INTEGER NOT NULL DEFAULT 1,
     row_id      VARCHAR(50) NOT NULL,
     col_id      VARCHAR(10) NOT NULL,
     is_enabled  BOOLEAN NOT NULL DEFAULT TRUE,
-    FOREIGN KEY (report_id, version, row_id) REFERENCES reporting.row_definition(report_id, version, row_id) ON DELETE CASCADE,
-    CONSTRAINT fk_row_column_intersection_col FOREIGN KEY (report_id, version, col_id) REFERENCES reporting.column_definition(report_id, version, col_id) ON DELETE CASCADE,
+    FOREIGN KEY (report_id, version, row_id) REFERENCES report_builder_owner.row_definition(report_id, version, row_id) ON DELETE CASCADE,
+    CONSTRAINT fk_row_column_intersection_col FOREIGN KEY (report_id, version, col_id) REFERENCES report_builder_owner.column_definition(report_id, version, col_id) ON DELETE CASCADE,
     CONSTRAINT uq_row_column_intersection UNIQUE (report_id, version, row_id, col_id)
 );
 
 -- -----------------------------------------------------------------------------
 -- Indexes
 -- -----------------------------------------------------------------------------
-CREATE INDEX IF NOT EXISTS idx_rpt_report_status     ON reporting.report_config(status);
-CREATE INDEX IF NOT EXISTS idx_rpt_col_report_order  ON reporting.column_definition(report_id, display_order);
-CREATE INDEX IF NOT EXISTS idx_rpt_row_report_order  ON reporting.row_definition(report_id, display_order);
-CREATE INDEX IF NOT EXISTS idx_rpt_row_type          ON reporting.row_definition(report_id, row_type);
-CREATE INDEX IF NOT EXISTS idx_rpt_row_metric        ON reporting.row_metric_mapping(report_id, row_id);
-CREATE INDEX IF NOT EXISTS idx_rpt_row_formula       ON reporting.row_formula(report_id, row_id);
-CREATE INDEX IF NOT EXISTS idx_rpt_col_map           ON reporting.row_column_intersection(report_id, row_id);
+CREATE INDEX IF NOT EXISTS idx_rpt_report_status     ON report_builder_owner.report_config(status);
+CREATE INDEX IF NOT EXISTS idx_rpt_col_report_order  ON report_builder_owner.column_definition(report_id, display_order);
+CREATE INDEX IF NOT EXISTS idx_rpt_row_report_order  ON report_builder_owner.row_definition(report_id, display_order);
+CREATE INDEX IF NOT EXISTS idx_rpt_row_type          ON report_builder_owner.row_definition(report_id, row_type);
+CREATE INDEX IF NOT EXISTS idx_rpt_row_metric        ON report_builder_owner.row_metric_mapping(report_id, row_id);
+CREATE INDEX IF NOT EXISTS idx_rpt_row_formula       ON report_builder_owner.row_formula(report_id, row_id);
+CREATE INDEX IF NOT EXISTS idx_rpt_col_map           ON report_builder_owner.row_column_intersection(report_id, row_id);

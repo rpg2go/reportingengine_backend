@@ -19,6 +19,12 @@ public class AuthController {
 
     private final DevSecurityConfig devSecurityConfig;
 
+    @Value("${security.admin.username}")
+    private String adminUsername;
+
+    @Value("${security.admin.password}")
+    private String adminPassword;
+
     @Value("${MOCK_FALLBACK_TOKEN:eyJhbGciOiJub25lIn0.eyJzdWIiOiJhZG1pbiIsInVzZXJfaW5pdGlhbHMiOiJBRCIsImFzc2lnbmVkX2NvdW50cnlfcmVzdHJpY3Rpb25zIjpbIkRFIiwiUk8iXSwicm9sZXMiOlsiVVNFUiJdfQ.}")
     private String fallbackToken;
 
@@ -41,8 +47,8 @@ public class AuthController {
                 String username = values[0];
                 String password = values[1];
 
-                // Simple check for local testing: validate against configured admin/password
-                if ("admin".equals(username) && "password".equals(password)) {
+                // Validate against configured admin/password properties
+                if (adminUsername.equals(username) && adminPassword.equals(password)) {
                     String token = (devSecurityConfig != null) ? devSecurityConfig.getGeneratedToken() : fallbackToken;
 
                     Map<String, Object> response = new HashMap<>();

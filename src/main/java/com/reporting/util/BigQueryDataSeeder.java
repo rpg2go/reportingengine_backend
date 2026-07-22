@@ -15,14 +15,30 @@ public class BigQueryDataSeeder {
 
     public static void main(String[] args) {
         Map<String, String> env = loadEnvFile();
-        String dbUrl = env.get("LOCAL_DATABASE_URL");
+        String dbUrl = env.get("DATABASE_URL");
+        if (dbUrl == null || dbUrl.isBlank()) {
+            dbUrl = System.getenv("DATABASE_URL");
+        }
         if (dbUrl == null || dbUrl.isBlank()) {
             throw new IllegalArgumentException(
-                    "LOCAL_DATABASE_URL environment variable is missing or empty in .env file.");
+                    "DATABASE_URL environment variable is missing or empty in .env file.");
         }
 
-        String user = "user";
-        String password = "password";
+        String user = env.get("SPRING_DATASOURCE_USERNAME");
+        if (user == null || user.isBlank()) {
+            user = System.getenv("SPRING_DATASOURCE_USERNAME");
+        }
+        if (user == null || user.isBlank()) {
+            throw new IllegalArgumentException("SPRING_DATASOURCE_USERNAME is not defined in .env file or environment variables.");
+        }
+
+        String password = env.get("SPRING_DATASOURCE_PASSWORD");
+        if (password == null || password.isBlank()) {
+            password = System.getenv("SPRING_DATASOURCE_PASSWORD");
+        }
+        if (password == null || password.isBlank()) {
+            throw new IllegalArgumentException("SPRING_DATASOURCE_PASSWORD is not defined in .env file or environment variables.");
+        }
 
         // Convert standard postgres:// URI to JDBC URL and parse credentials
         if (dbUrl.startsWith("postgresql://") || dbUrl.startsWith("postgres://")) {

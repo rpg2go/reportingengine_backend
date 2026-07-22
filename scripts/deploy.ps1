@@ -37,7 +37,7 @@ if (-not (Get-Variable -Name GCP_REGION -Scope Script -ErrorAction SilentlyConti
 Write-Host "Deployment region: $GCP_REGION" -ForegroundColor Cyan
 
 # Validate required variables
-$requiredVars = @("GCP_PROJECT_ID", "BACKEND_SERVICE_NAME", "SPRING_DATASOURCE_URL", "SPRING_DATASOURCE_USERNAME", "SPRING_DATASOURCE_PASSWORD")
+$requiredVars = @("GCP_PROJECT_ID", "BACKEND_SERVICE_NAME", "DATABASE_URL", "SPRING_DATASOURCE_USERNAME", "SPRING_DATASOURCE_PASSWORD")
 foreach ($var in $requiredVars) {
     if (-not (Get-Variable -Name $var -ErrorAction SilentlyContinue)) {
         Write-Error "Error: Required environment variable $var is missing from .env"
@@ -48,11 +48,12 @@ foreach ($var in $requiredVars) {
 Write-Host "Setting gcloud project to $GCP_PROJECT_ID..." -ForegroundColor Cyan
 gcloud config set project $GCP_PROJECT_ID
 
-Write-Host "Deploying Backend Service ($BACKEND_SERVICE_NAME) to Cloud Run..." -ForegroundColor Cyan
+$cloudDbUrl = if ($NEON_DATABASE_URL) { $NEON_DATABASE_URL } else { $DATABASE_URL }
+Write-Host "Deploying Backend Service ($BACKEND_SERVICE_NAME) to Cloud Run using DB: $cloudDbUrl..." -ForegroundColor Cyan
 gcloud run deploy $BACKEND_SERVICE_NAME `
   --source "$PSScriptRoot/.." `
   --region $GCP_REGION `
-  --set-env-vars="SPRING_DATASOURCE_URL=$SPRING_DATASOURCE_URL,SPRING_DATASOURCE_USERNAME=$SPRING_DATASOURCE_USERNAME,SPRING_DATASOURCE_PASSWORD=$SPRING_DATASOURCE_PASSWORD,SPRING_PROFILES_ACTIVE=dev" `
+  --set-env-vars="DATABASE_URL=$cloudDbUrl,SPRING_DATASOURCE_USERNAME=$SPRING_DATASOURCE_USERNAME,SPRING_DATASOURCE_PASSWORD=$SPRING_DATASOURCE_PASSWORD,SPRING_PROFILES_ACTIVE=dev" `
   --allow-unauthenticated `
   --quiet
 

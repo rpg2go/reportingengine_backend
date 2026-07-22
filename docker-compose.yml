@@ -1,19 +1,18 @@
-version: '3.8'
-
 services:
   report_db:
-    image: postgres:16-alpine
+    image: postgres:18-alpine
     container_name: report_template_db
     environment:
-      POSTGRES_USER: user
-      POSTGRES_PASSWORD: password
-      POSTGRES_DB: agentic_ai
+      POSTGRES_USER: ${SPRING_DATASOURCE_USERNAME:?SPRING_DATASOURCE_USERNAME must be set in .env}
+      POSTGRES_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:?SPRING_DATASOURCE_PASSWORD must be set in .env}
+      POSTGRES_DB: reporting_db
+      PGDATA: /var/lib/postgresql/data/pgdata
     ports:
       - "5433:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U user -d agentic_ai"]
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d reporting_db"]
       interval: 5s
       timeout: 5s
       retries: 5

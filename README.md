@@ -69,7 +69,7 @@ The backend ingests Excel layout templates, normalizes their configuration into 
 - **Spring Boot Backend API**: [http://127.0.0.1:8101](http://127.0.0.1:8101)
 - **Angular Frontend UI**: [http://127.0.0.1:4200](http://127.0.0.1:4200)
 - **API Swagger Specification**: [docs/swagger-spec.yaml](docs/swagger-spec.yaml)
-- **PostgreSQL Database**: `127.0.0.1:5433` (DB: `agentic_ai`, User: `user`, Pass: `*****` - maps to container port `5432`)
+- **PostgreSQL Database**: `127.0.0.1:5433` (DB: `reporting_db`, User: `user`, Pass: `*****` - maps to container port `5432`)
 
 > **Windows/macOS Performance Note**: Use `127.0.0.1` instead of `localhost` to avoid IPv6 DNS resolution delay (saves 1–2 s per request on Windows).
 
@@ -371,10 +371,10 @@ pip3 --version || pip --version
 1. **Spin up the Database Container**:
    Build the database image and start the PostgreSQL container:
    ```bash
-   docker-compose down -v
-   docker-compose up --build -d
+   docker compose down -v
+   docker compose up --build -d
    ```
-   *Note: This will expose PostgreSQL on host port `5433` (container port `5432`) with database `agentic_ai`.*
+   *Note: This will expose PostgreSQL on host port `5433` (container port `5432`) with database `reporting_db`.*
 
 2. **Deploy Database Migrations and Seed Data**:
    Deploy the database schemas and seed transaction/configuration records using the Liquibase runner.
@@ -437,8 +437,8 @@ Below is a summary of the most useful commands for building and running the back
 
 | Category | Command | Target/CWD | Description |
 | :--- | :--- | :--- | :--- |
-| **Database** | `docker-compose up --build -d` | Project Root | Builds and starts database container in detached mode (exposes port `5433`) |
-| **Database** | `docker-compose down -v` | Project Root | Stops the database container and deletes the persistent volume |
+| **Database** | `docker compose up --build -d` | Project Root | Builds and starts database container in detached mode (exposes port `5433`) |
+| **Database** | `docker compose down -v` | Project Root | Stops the database container and deletes the persistent volume |
 | **Database** | `./scripts/deploy-liquibase.sh [local\|neon]` | Project Root | Runs the Liquibase database migrations and seeds DWH/configs (defaults to local) |
 | **Backend** | `maven\apache-maven-3.9.6\bin\mvn.cmd clean compile` | Project Root | Clean compile Spring Boot application (Windows) |
 | **Backend** | `./maven/apache-maven-3.9.6/bin/mvn clean compile` | Project Root | Clean compile Spring Boot application (macOS/Linux) |
@@ -465,7 +465,7 @@ Below is a summary of the most useful commands for building and running the back
 
 ## Database Layers
 
-The PostgreSQL instance manages three schemas in the `agentic_ai` database:
+The PostgreSQL instance manages three schemas in the `reporting_db` database:
 
 - **`reporting.*`**: Stores report template layouts (headers, columns, rows, metrics, formulas, style formats, and coordinates).
 - **`catalog.*`**: Stores the metadata schema registry (physical table configurations, columns, visible/filterable flags, and Dijkstra-weighted join pathways).

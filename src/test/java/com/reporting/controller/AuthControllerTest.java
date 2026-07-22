@@ -11,8 +11,14 @@ import org.springframework.test.web.servlet.MockMvc;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
+import org.springframework.test.context.TestPropertySource;
+
 @WebMvcTest(controllers = AuthController.class)
 @Import(SecurityConfiguration.class)
+@TestPropertySource(properties = {
+    "security.admin.username=${SECURITY_ADMIN_USERNAME}",
+    "security.admin.password=${SECURITY_ADMIN_PASSWORD}"
+})
 @DisplayName("AuthController Unit Tests")
 public class AuthControllerTest {
 

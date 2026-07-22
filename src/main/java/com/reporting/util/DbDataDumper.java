@@ -9,22 +9,38 @@ public class DbDataDumper {
 
     public static void main(String[] args) {
         Map<String, String> env = loadEnvFile();
+        String target = System.getProperty("db.target", "local");
         String dbUrl = System.getProperty("db.url");
         if (dbUrl == null || dbUrl.isBlank()) {
-            dbUrl = env.get("NEON_DATABASE_URL");
+            if ("neon".equalsIgnoreCase(target)) {
+                dbUrl = env.get("NEON_DATABASE_URL");
+                if (dbUrl == null || dbUrl.isBlank()) dbUrl = System.getenv("NEON_DATABASE_URL");
+            } else {
+                dbUrl = env.get("LOCAL_DATABASE_URL");
+                if (dbUrl == null || dbUrl.isBlank()) dbUrl = System.getenv("LOCAL_DATABASE_URL");
+                if (dbUrl == null || dbUrl.isBlank()) dbUrl = env.get("DATABASE_URL");
+                if (dbUrl == null || dbUrl.isBlank()) dbUrl = System.getenv("DATABASE_URL");
+            }
         }
         if (dbUrl == null || dbUrl.isBlank()) {
-            dbUrl = System.getenv("NEON_DATABASE_URL");
-        }
-        if (dbUrl == null || dbUrl.isBlank()) {
-            dbUrl = env.get("LOCAL_DATABASE_URL");
-        }
-        if (dbUrl == null || dbUrl.isBlank()) {
-            dbUrl = "jdbc:postgresql://127.0.0.1:5433/agentic_ai";
+            throw new IllegalArgumentException("Database connection URL is not defined in .env file or environment variables.");
         }
 
-        String user = "user";
-        String password = "password";
+        String user = env.get("SPRING_DATASOURCE_USERNAME");
+        if (user == null || user.isBlank()) {
+            user = System.getenv("SPRING_DATASOURCE_USERNAME");
+        }
+        if (user == null || user.isBlank()) {
+            throw new IllegalArgumentException("SPRING_DATASOURCE_USERNAME is not defined in .env file or environment variables.");
+        }
+
+        String password = env.get("SPRING_DATASOURCE_PASSWORD");
+        if (password == null || password.isBlank()) {
+            password = System.getenv("SPRING_DATASOURCE_PASSWORD");
+        }
+        if (password == null || password.isBlank()) {
+            throw new IllegalArgumentException("SPRING_DATASOURCE_PASSWORD is not defined in .env file or environment variables.");
+        }
 
         // Convert standard postgres:// URI to JDBC URL and parse credentials
         if (dbUrl.startsWith("postgresql://") || dbUrl.startsWith("postgres://")) {
@@ -132,13 +148,13 @@ public class DbDataDumper {
             writer.println();
 
             String[] tables = {
-                "reporting.row_style",
-                "reporting.report_config",
-                "reporting.column_definition",
-                "reporting.row_definition",
-                "reporting.row_metric_mapping",
-                "reporting.row_formula",
-                "reporting.row_column_intersection"
+                "report_builder_owner.row_style",
+                "report_builder_owner.report_config",
+                "report_builder_owner.column_definition",
+                "report_builder_owner.row_definition",
+                "report_builder_owner.row_metric_mapping",
+                "report_builder_owner.row_formula",
+                "report_builder_owner.row_column_intersection"
             };
 
             for (String table : tables) {
@@ -156,9 +172,9 @@ public class DbDataDumper {
             writer.println();
 
             String[] tables = {
-                "catalog.meta_table",
-                "catalog.meta_column",
-                "catalog.meta_relationship"
+                "catalog_owner.meta_table",
+                "catalog_owner.meta_column",
+                "catalog_owner.meta_relationship"
             };
 
             for (String table : tables) {

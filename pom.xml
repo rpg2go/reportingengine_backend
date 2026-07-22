@@ -25,7 +25,7 @@
         <testcontainers.version>1.19.7</testcontainers.version>
         <jacoco.version>0.8.11</jacoco.version>
         <!-- Liquibase Configuration Defaults -->
-        <liquibase.url>jdbc:postgresql://127.0.0.1:5433/agentic_ai</liquibase.url>
+        <liquibase.url>jdbc:postgresql://127.0.0.1:5433/reporting_db</liquibase.url>
         <liquibase.username>user</liquibase.username>
         <liquibase.password>password</liquibase.password>
     </properties>
@@ -224,6 +224,27 @@
                 </executions>
             </plugin>
 
+            <!-- Properties Maven Plugin to load .env into Maven build context -->
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>properties-maven-plugin</artifactId>
+                <version>1.2.1</version>
+                <executions>
+                    <execution>
+                        <phase>initialize</phase>
+                        <goals>
+                            <goal>read-project-properties</goal>
+                        </goals>
+                        <configuration>
+                            <files>
+                                <file>${project.basedir}/.env</file>
+                            </files>
+                            <quiet>true</quiet>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
             <!-- Maven Surefire for Unit Tests -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
@@ -232,6 +253,13 @@
                     <includes>
                         <include>**/*Test.java</include>
                     </includes>
+                    <systemPropertyVariables>
+                        <DATABASE_URL>${DATABASE_URL}</DATABASE_URL>
+                        <SPRING_DATASOURCE_USERNAME>${SPRING_DATASOURCE_USERNAME}</SPRING_DATASOURCE_USERNAME>
+                        <SPRING_DATASOURCE_PASSWORD>${SPRING_DATASOURCE_PASSWORD}</SPRING_DATASOURCE_PASSWORD>
+                        <SECURITY_ADMIN_USERNAME>${SECURITY_ADMIN_USERNAME}</SECURITY_ADMIN_USERNAME>
+                        <SECURITY_ADMIN_PASSWORD>${SECURITY_ADMIN_PASSWORD}</SECURITY_ADMIN_PASSWORD>
+                    </systemPropertyVariables>
                 </configuration>
             </plugin>
 
@@ -251,6 +279,13 @@
                     <includes>
                         <include>**/*IT.java</include>
                     </includes>
+                    <systemPropertyVariables>
+                        <DATABASE_URL>${DATABASE_URL}</DATABASE_URL>
+                        <SPRING_DATASOURCE_USERNAME>${SPRING_DATASOURCE_USERNAME}</SPRING_DATASOURCE_USERNAME>
+                        <SPRING_DATASOURCE_PASSWORD>${SPRING_DATASOURCE_PASSWORD}</SPRING_DATASOURCE_PASSWORD>
+                        <SECURITY_ADMIN_USERNAME>${SECURITY_ADMIN_USERNAME}</SECURITY_ADMIN_USERNAME>
+                        <SECURITY_ADMIN_PASSWORD>${SECURITY_ADMIN_PASSWORD}</SECURITY_ADMIN_PASSWORD>
+                    </systemPropertyVariables>
                 </configuration>
             </plugin>
         </plugins>

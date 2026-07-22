@@ -7,7 +7,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 @Entity
-@Table(name = "report_config", schema = "reporting")
+@Table(name = "report_config", schema = "report_builder_owner")
 @IdClass(ReportPk.class)
 @Getter
 @Setter

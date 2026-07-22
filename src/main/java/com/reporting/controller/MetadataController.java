@@ -116,7 +116,7 @@ public class MetadataController {
         if (table.contains(".")) {
             return table;
         }
-        String sql = "SELECT schema_name || '.' || table_name AS table_ref FROM catalog.meta_table WHERE table_name = ?";
+        String sql = "SELECT schema_name || '.' || table_name AS table_ref FROM catalog_owner.meta_table WHERE table_name = ?";
         try {
             return jdbcTemplate.queryForObject(sql, String.class, table);
         } catch (Exception e) {

@@ -17,11 +17,14 @@ public abstract class BaseIT {
     static {
         PostgreSQLContainer<?> container = null;
         try {
-            // Attempt to initialize and start Testcontainers PostgreSQL
-            container = new PostgreSQLContainer<>("postgres:16-alpine")
-                    .withDatabaseName("agentic_ai")
-                    .withUsername("user")
-                    .withPassword("password");
+            String dbUser = System.getenv("SPRING_DATASOURCE_USERNAME");
+            if (dbUser == null || dbUser.isBlank()) dbUser = System.getProperty("SPRING_DATASOURCE_USERNAME", "user");
+            String dbPass = System.getenv("SPRING_DATASOURCE_PASSWORD");
+            if (dbPass == null || dbPass.isBlank()) dbPass = System.getProperty("SPRING_DATASOURCE_PASSWORD", "password");
+            container = new PostgreSQLContainer<>("postgres:18-alpine")
+                    .withDatabaseName("reporting_db")
+                    .withUsername(dbUser)
+                    .withPassword(dbPass);
             container.start();
             System.out.println("Testcontainers PostgreSQL started successfully at port: " + container.getFirstMappedPort());
         } catch (Exception e) {
@@ -38,10 +41,18 @@ public abstract class BaseIT {
             registry.add("spring.datasource.username", postgres::getUsername);
             registry.add("spring.datasource.password", postgres::getPassword);
         } else {
-            // Fallback connection to the running docker container
-            registry.add("spring.datasource.url", () -> "jdbc:postgresql://127.0.0.1:5433/agentic_ai");
-            registry.add("spring.datasource.username", () -> "user");
-            registry.add("spring.datasource.password", () -> "password");
+            String urlVal = System.getenv("DATABASE_URL");
+            if (urlVal == null || urlVal.isBlank()) urlVal = System.getProperty("DATABASE_URL", "jdbc:postgresql://127.0.0.1:5433/reporting_db");
+            String userVal = System.getenv("SPRING_DATASOURCE_USERNAME");
+            if (userVal == null || userVal.isBlank()) userVal = System.getProperty("SPRING_DATASOURCE_USERNAME", "user");
+            String passVal = System.getenv("SPRING_DATASOURCE_PASSWORD");
+            if (passVal == null || passVal.isBlank()) passVal = System.getProperty("SPRING_DATASOURCE_PASSWORD", "password");
+            final String finalUrl = urlVal;
+            final String finalUser = userVal;
+            final String finalPass = passVal;
+            registry.add("spring.datasource.url", () -> finalUrl);
+            registry.add("spring.datasource.username", () -> finalUser);
+            registry.add("spring.datasource.password", () -> finalPass);
         }
     }
 }

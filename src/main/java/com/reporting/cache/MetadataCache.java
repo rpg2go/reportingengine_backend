@@ -131,7 +131,7 @@ public class MetadataCache {
     private void loadTimeKeys() {
         try {
             jdbc.query(
-                "SELECT schema_name || '.' || table_name AS table_ref, time_key FROM catalog.meta_table WHERE time_key IS NOT NULL AND is_cached = TRUE",
+                "SELECT schema_name || '.' || table_name AS table_ref, time_key FROM catalog_owner.meta_table WHERE time_key IS NOT NULL AND is_cached = TRUE",
                 rs -> {
                     String tableRef = rs.getString("table_ref");
                     String timeKey  = rs.getString("time_key");
@@ -157,7 +157,7 @@ public class MetadataCache {
         try {
             Set<String> viewTables = new LinkedHashSet<>();
             jdbc.query(
-                "SELECT DISTINCT schema_name || '.' || table_name AS table_ref FROM catalog.meta_table",
+                "SELECT DISTINCT schema_name || '.' || table_name AS table_ref FROM catalog_owner.meta_table",
                 rs -> {
                     String tbl = rs.getString("table_ref");
                     if (tbl != null && !tbl.isBlank()) {
@@ -234,7 +234,7 @@ public class MetadataCache {
 
     /**
      * Returns the ordered set of distinct {@code table_ref} values from
-     * {@code catalog.meta_table}.
+     * {@code catalog_owner.meta_table}.
      */
     public Set<String> getMetaTableRefs() {
         return metaTableRefs;
@@ -244,8 +244,8 @@ public class MetadataCache {
         try {
             // Find all columns marked as value-cacheable
             String sql = "SELECT t.schema_name, t.table_name, c.column_name " +
-                         "FROM   catalog.meta_column c " +
-                         "JOIN   catalog.meta_table t ON t.table_id = c.table_id " +
+                         "FROM   catalog_owner.meta_column c " +
+                         "JOIN   catalog_owner.meta_table t ON t.table_id = c.table_id " +
                          "WHERE  c.is_cached = TRUE AND t.is_cached = TRUE";
 
             jdbc.query(sql, rs -> {

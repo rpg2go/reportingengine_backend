@@ -73,7 +73,7 @@ until docker inspect --format='{{.State.Health.Status}}' report_template_db 2>/d
   sleep 2
 done
 echo ""
-success "PostgreSQL is healthy on localhost:5433  (DB: agentic_ai | user: user | pass: ********)"
+success "PostgreSQL is healthy on localhost:5433  (DB: reporting_db | user: user | pass: ********)"
 
 # ── Step 2: Build and start Spring Boot ───────────────────────────────────────
 echo ""

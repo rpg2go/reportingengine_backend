@@ -12,8 +12,8 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Application-startup catalog loader that reads the three schema registry
- * tables ({@code catalog.meta_table}, {@code catalog.meta_column},
- * {@code catalog.meta_relationship}) via direct JDBC queries and assembles
+ * tables ({@code catalog_owner.meta_table}, {@code catalog_owner.meta_column},
+ * {@code catalog_owner.meta_relationship}) via direct JDBC queries and assembles
  * an optimized, fully-linked in-memory cache.
  *
  * <h2>Cache structure</h2>
@@ -86,7 +86,7 @@ public class SchemaCatalogLoader {
      */
     @PostConstruct
     public void load() {
-        log.info("SchemaCatalogLoader: starting catalog load from catalog.meta_* tables...");
+        log.info("SchemaCatalogLoader: starting catalog load from catalog_owner.meta_* tables...");
         try {
             loadTables();
             loadColumns();
@@ -108,7 +108,7 @@ public class SchemaCatalogLoader {
     // ─── step 1: tables ───────────────────────────────────────────────────────
 
     /**
-     * Queries {@code catalog.meta_table} and populates {@link #tableById}
+     * Queries {@code catalog_owner.meta_table} and populates {@link #tableById}
      * and {@link #tableByName}.
      *
      * <p>
@@ -118,7 +118,7 @@ public class SchemaCatalogLoader {
      */
     private void loadTables() {
         final String sql = "SELECT table_id, schema_name, table_name, table_type, time_key, description, is_cached " +
-                "FROM   catalog.meta_table " +
+                "FROM   catalog_owner.meta_table " +
                 "ORDER  BY table_id";
 
         jdbc.query(sql, rs -> {
@@ -156,13 +156,13 @@ public class SchemaCatalogLoader {
     // ─── step 2: columns ──────────────────────────────────────────────────────
 
     /**
-     * Queries {@code catalog.meta_column} and attaches each column to its
+     * Queries {@code catalog_owner.meta_column} and attaches each column to its
      * parent {@link MetaTable} node already in {@link #tableById}.
      */
     private void loadColumns() {
         final String sql = "SELECT column_id, table_id, column_name, data_type, " +
                 "       is_primary_key, is_foreign_key, description, is_cached, is_filterable, is_visible " +
-                "FROM   catalog.meta_column " +
+                "FROM   catalog_owner.meta_column " +
                 "ORDER  BY table_id, column_id";
 
         // Collect counts for diagnostic logging
@@ -207,11 +207,11 @@ public class SchemaCatalogLoader {
     // ─── step 3: relationships (edges) ────────────────────────────────────────
 
     /**
-     * Queries {@code catalog.meta_relationship} and attaches each edge as an
+     * Queries {@code catalog_owner.meta_relationship} and attaches each edge as an
      * outgoing edge on its source {@link MetaTable} node.
      *
      * <p>
-     * The query joins back to {@code catalog.meta_table} to retrieve the
+     * The query joins back to {@code catalog_owner.meta_table} to retrieve the
      * fully-qualified names of both endpoint tables, but the Java side resolves
      * the {@link MetaTable} references from the already-loaded {@link #tableById}
      * map to avoid redundant object creation.
@@ -222,7 +222,7 @@ public class SchemaCatalogLoader {
                 "       r.from_table_id, r.from_column, " +
                 "       r.to_table_id,   r.to_column, " +
                 "       r.join_type,     r.is_conformed, r.weight, r.description " +
-                "FROM   catalog.meta_relationship r " +
+                "FROM   catalog_owner.meta_relationship r " +
                 "ORDER  BY r.relationship_id";
 
         final int[] count = { 0 };

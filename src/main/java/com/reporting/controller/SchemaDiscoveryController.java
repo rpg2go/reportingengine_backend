@@ -272,11 +272,11 @@ public class SchemaDiscoveryController {
         model.put("views", jdbcTemplate.queryForList(
                 "SELECT table_id, table_name AS name, label, schema_name || '.' || table_name AS table_ref, " +
                         "       table_type AS view_type, time_key, description " +
-                        "FROM catalog.meta_table ORDER BY table_name",
+                        "FROM catalog_owner.meta_table ORDER BY table_name",
                 Collections.emptyMap()));
         model.put("explores", jdbcTemplate.queryForList(
                 "SELECT table_id AS explore_id, table_name AS name, label, table_name AS fact_view_name, description " +
-                        "FROM catalog.meta_table WHERE table_type = 'fact' ORDER BY table_name",
+                        "FROM catalog_owner.meta_table WHERE table_type = 'fact' ORDER BY table_name",
                 Collections.emptyMap()));
         model.put("joins", jdbcTemplate.queryForList(
                 "SELECT r.relationship_id AS join_id, ft.table_name AS explore_name, ft.table_name AS from_view, tt.table_name AS to_view, "
@@ -285,17 +285,17 @@ public class SchemaDiscoveryController {
                         "       tt.schema_name || '.' || tt.table_name || ' ON ' || " +
                         "       tt.schema_name || '.' || tt.table_name || '.' || r.to_column || ' = ' || " +
                         "       ft.schema_name || '.' || ft.table_name || '.' || r.from_column AS join_sql " +
-                        "FROM catalog.meta_relationship r " +
-                        "JOIN catalog.meta_table ft ON ft.table_id = r.from_table_id " +
-                        "JOIN catalog.meta_table tt ON tt.table_id = r.to_table_id " +
+                        "FROM catalog_owner.meta_relationship r " +
+                        "JOIN catalog_owner.meta_table ft ON ft.table_id = r.from_table_id " +
+                        "JOIN catalog_owner.meta_table tt ON tt.table_id = r.to_table_id " +
                         "ORDER BY r.relationship_id",
                 Collections.emptyMap()));
         model.put("dimensions", jdbcTemplate.queryForList(
                 "SELECT c.column_id, t.table_name AS view_name, c.column_name AS name, c.label, " +
                         "       t.schema_name || '.' || t.table_name || '.' || c.column_name AS column_ref, " +
                         "       c.data_type, c.description, c.is_filterable, c.is_cached, c.is_visible " +
-                        "FROM catalog.meta_column c " +
-                        "JOIN catalog.meta_table t ON t.table_id = c.table_id " +
+                        "FROM catalog_owner.meta_column c " +
+                        "JOIN catalog_owner.meta_table t ON t.table_id = c.table_id " +
                         "WHERE c.is_primary_key = FALSE AND c.is_visible = TRUE " +
                         "ORDER BY t.table_name, c.column_name",
                 Collections.emptyMap()));
@@ -340,9 +340,9 @@ public class SchemaDiscoveryController {
                     tt.schema_name || '.' || tt.table_name || ' ON ' ||
                     tt.schema_name || '.' || tt.table_name || '.' || r.to_column || ' = ' ||
                     ft.schema_name || '.' || ft.table_name || '.' || r.from_column AS joinSql
-                FROM catalog.meta_relationship r
-                JOIN catalog.meta_table ft ON ft.table_id = r.from_table_id
-                JOIN catalog.meta_table tt ON tt.table_id = r.to_table_id
+                FROM catalog_owner.meta_relationship r
+                JOIN catalog_owner.meta_table ft ON ft.table_id = r.from_table_id
+                JOIN catalog_owner.meta_table tt ON tt.table_id = r.to_table_id
                 WHERE ft.schema_name || '.' || ft.table_name = :factTable
                 ORDER BY r.relationship_id
                 """;
@@ -377,7 +377,7 @@ public class SchemaDiscoveryController {
             return table;
         try {
             return jdbcTemplate.getJdbcOperations().queryForObject(
-                    "SELECT schema_name || '.' || table_name AS table_ref FROM catalog.meta_table WHERE table_name = ?",
+                    "SELECT schema_name || '.' || table_name AS table_ref FROM catalog_owner.meta_table WHERE table_name = ?",
                     String.class, table);
         } catch (Exception e) {
             return null;

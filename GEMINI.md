@@ -18,7 +18,7 @@ This document serves as the architecture reference, implementation state, and co
 | Component | Technology | Version / Port / Details |
 | :--- | :--- | :--- |
 | **Backend** | Spring Boot | v3.5.0-SNAPSHOT (Java 21), Spring Data JPA, Hibernate, exp4j, virtual threads enabled |
-| **Database** | PostgreSQL / Neon | v16 (Local Docker container on `5432`, production on Neon cloud) |
+| **Database** | PostgreSQL / Neon | v18 (Local Docker container on `5433`, production on Neon cloud) |
 
 ---
 
@@ -32,7 +32,7 @@ This document serves as the architecture reference, implementation state, and co
 2. **State & Cascade Overwrite**:
    Saving configurations replaces all rows and columns. We perform a cascade delete on child tables (`ColumnDef`, `ReportRow`, `RowMetric`, `RowFormula`, `RowColumnMap`) and flush the session before updating the main `Report` header row.
 3. **Direct JDBC for Hot-Path Reads**:
-   The `loadFromDb()` method in `ReportConfigService.java` was rewritten to use direct JDBC queries with `RowCallbackHandler` instead of 6 sequential JPA repository calls. This eliminated Hibernate entity-hydration overhead and unnecessary JOINs (e.g., `rpt_column_def` joining back to `rpt_report`), reducing the report config endpoint latency from ~163ms to ~59ms.
+   The `loadFromDb()` method in `ReportConfigService.java` was rewritten to use direct JDBC queries with `RowCallbackHandler` instead of 6 sequential JPA repository calls. This eliminated Hibernate entity-hydration overhead and unnecessary JOINs (e.g., `column_definition` joining back to `report_config`), reducing the report config endpoint latency from ~163ms to ~59ms.
 4. **Database Migrations and Tracking**:
    We transitioned from custom Java-based migration scripts to a pure-SQL Liquibase migration architecture.
    - **Changelog ledger**: Changesets are declared in native SQL files under `db/liquibase/sql/` and loaded dynamically via `db/liquibase/db.changelog-master.xml`.
@@ -40,14 +40,15 @@ This document serves as the architecture reference, implementation state, and co
    - **Manual execution**: Managed via `./scripts/deploy-liquibase.sh [local|neon|url]` sourcing connection parameters from `.env`.
    - **Clean rebuild step**: If developers encounter checksum mismatches (from updating seeding files) or want to reset their local schemas, they can clean the database with:
      ```sql
-     DROP SCHEMA IF EXISTS reporting CASCADE;
+     DROP SCHEMA IF EXISTS report_builder_owner CASCADE;
+     DROP SCHEMA IF EXISTS catalog_owner CASCADE;
      DROP SCHEMA IF EXISTS analytics CASCADE;
      DROP TABLE IF EXISTS public.databasechangelog;
      DROP TABLE IF EXISTS public.databasechangeloglock;
      ```
      and re-run `./scripts/deploy-liquibase.sh local`.
 5. **Catalog-Driven Join Graph (SchemaGraphRouter)**:
-   The `catalog` package (`SchemaCatalogLoader`, `SchemaGraphRouter`, `MetaTable`, `MetaColumn`, `MetaRelationship`) loads the `meta_*` schema catalog at startup into an in-memory graph and resolves multi-hop LEFT JOIN chains using a weighted Dijkstra BFS. Edge cost 1 = conformed dimension key, cost 2 = non-conformed FK. This replaces hardcoded join strings from the `sem_*` era.
+   The `catalog` package (`SchemaCatalogLoader`, `SchemaGraphRouter`, `MetaTable`, `MetaColumn`, `MetaRelationship`) loads the `meta_*` schema catalog at startup into an in-memory graph from `catalog_owner.meta_*` and resolves multi-hop LEFT JOIN chains using a weighted Dijkstra BFS. Edge cost 1 = conformed dimension key, cost 2 = non-conformed FK. This replaces hardcoded join strings from the `sem_*` era.
 6. **Report Version Lifecycle**:
    `ReportVersionController` manages a draft → in_review → published → (fork) lifecycle. Publishing a version auto-creates the next draft by cloning all child rows, columns, metrics, formulas, and column maps via direct JDBC `INSERT … SELECT` statements.
 7. **Unified Package Structure**:
@@ -63,18 +64,22 @@ This document serves as the architecture reference, implementation state, and co
 
 ## 🗄️ Database Schemas
 
-### 1. `reporting` Schema
+### 1. `report_builder_owner` Schema
 
 Stores metadata and report configuration templates.
 
 | Table Name | Primary Key | Foreign Keys / Description |
 | :--- | :--- | :--- |
-| `rpt_report` | `(report_id, version)` | Stores report header: `name`, `version`, `status`, `source_table`, `granularity`, `timeframe_start`, `timeframe_end`, `timeframe_today`, `quick_filters`, `general_filters` (JSON), and `deleted` (boolean, soft-delete flag). |
-| `rpt_column_def` | `column_def_id` | References `(report_id, version)`. Defines time columns with offset, rolling period, and formulas. Unique constraint on `(report_id, version, col_id)`. |
-| `rpt_row` | `(report_id, version, row_id)` | References `(report_id, version)`. Defines rows with labels, indent levels, row types (`section`, `data`, `calc`, `blank`), styles, and row-level `filter_expr` strings. |
-| `rpt_row_metric` | `row_metric_id` | References `(report_id, version, row_id)`. Links `data` row to `sql_expr` (the SQL aggregation expression). Unique constraint on `(report_id, version, row_id, measure_id)`. |
-| `rpt_row_formula` | `row_formula_id` | References `(report_id, version, row_id)`. Links `calc` row to `formula_expr` (e.g. `R2/R3`). Unique constraint on `(report_id, version, row_id)`. |
-| `rpt_row_column_map` | `(report_id, version, row_id, col_id)`| References `(report_id, version, row_id)` and `(report_id, version, col_id)`. Grid intersections showing active columns for each row. |
+| `report_config` | `(report_id, version)` | Stores report header: `name`, `version`, `status`, `source_table`, `granularity`, `timeframe_start`, `timeframe_end`, `timeframe_today`, `quick_filters`, `general_filters` (JSON), and `deleted` (boolean, soft-delete flag). |
+| `column_definition` | `column_def_id` | References `(report_id, version)`. Defines time columns with offset, rolling period, and formulas. Unique constraint on `(report_id, version, col_id)`. |
+| `row_definition` | `(report_id, version, row_id)` | References `(report_id, version)`. Defines rows with labels, indent levels, row types (`section`, `data`, `calc`, `blank`), styles, and row-level `filter_expr` strings. |
+| `row_metric_mapping` | `row_metric_id` | References `(report_id, version, row_id)`. Links `data` row to `sql_expr` (the SQL aggregation expression). Unique constraint on `(report_id, version, row_id)`. |
+| `row_formula` | `row_formula_id` | References `(report_id, version, row_id)`. Links `calc` row to `formula_expr` (e.g. `R2/R3`). Unique constraint on `(report_id, version, row_id)`. |
+| `row_column_intersection` | `mapping_id` | References `(report_id, version, row_id)` and `(report_id, version, col_id)`. Grid intersections showing active columns for each row. |
+
+### 2. `catalog_owner` Schema
+
+Stores schema graph catalog metadata for exploration and Dijkstra multi-hop join resolution (`meta_table`, `meta_column`, `meta_relationship`).
 
 ### 2. `analytics` Schema
 
@@ -179,10 +184,10 @@ Use the links below to navigate directly to the primary components:
 
 Spin up the local container from the project root:
 ```bash
-docker-compose down -v
-docker-compose up --build -d
+docker compose down -v
+docker compose up --build -d
 ```
-*Port: `5432` | DB: `agentic_ai` | User: `user` | Pass: `password`*
+*Port: `5433` | DB: `reporting_db` | User: `user` | Pass: `password`*
 
 ### 2. Spring Boot Backend
 

@@ -1,12 +1,12 @@
 --liquibase formatted sql
 --changeset devops:002_create_catalog_tables endDelimiter:;
 
-CREATE SCHEMA IF NOT EXISTS catalog;
+CREATE SCHEMA IF NOT EXISTS catalog_owner;
 
 -- -----------------------------------------------------------------------------
--- catalog.meta_table
+-- catalog_owner.meta_table
 -- -----------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS catalog.meta_table (
+CREATE TABLE IF NOT EXISTS catalog_owner.meta_table (
     table_id      SERIAL PRIMARY KEY,
     schema_name   VARCHAR(63) NOT NULL DEFAULT 'analytics',
     table_name    VARCHAR(128) NOT NULL,
@@ -19,11 +19,11 @@ CREATE TABLE IF NOT EXISTS catalog.meta_table (
 );
 
 -- -----------------------------------------------------------------------------
--- catalog.meta_column
+-- catalog_owner.meta_column
 -- -----------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS catalog.meta_column (
+CREATE TABLE IF NOT EXISTS catalog_owner.meta_column (
     column_id      SERIAL PRIMARY KEY,
-    table_id       INTEGER NOT NULL REFERENCES catalog.meta_table(table_id) ON DELETE CASCADE,
+    table_id       INTEGER NOT NULL REFERENCES catalog_owner.meta_table(table_id) ON DELETE CASCADE,
     column_name    VARCHAR(128) NOT NULL,
     label          VARCHAR(256),
     data_type      VARCHAR(64),
@@ -37,13 +37,13 @@ CREATE TABLE IF NOT EXISTS catalog.meta_column (
 );
 
 -- -----------------------------------------------------------------------------
--- catalog.meta_relationship
+-- catalog_owner.meta_relationship
 -- -----------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS catalog.meta_relationship (
+CREATE TABLE IF NOT EXISTS catalog_owner.meta_relationship (
     relationship_id  SERIAL PRIMARY KEY,
-    from_table_id    INTEGER NOT NULL REFERENCES catalog.meta_table(table_id) ON DELETE CASCADE,
+    from_table_id    INTEGER NOT NULL REFERENCES catalog_owner.meta_table(table_id) ON DELETE CASCADE,
     from_column      VARCHAR(128) NOT NULL,
-    to_table_id      INTEGER NOT NULL REFERENCES catalog.meta_table(table_id) ON DELETE CASCADE,
+    to_table_id      INTEGER NOT NULL REFERENCES catalog_owner.meta_table(table_id) ON DELETE CASCADE,
     to_column        VARCHAR(128) NOT NULL,
     join_type        VARCHAR(20) NOT NULL DEFAULT 'LEFT' CHECK (join_type IN ('LEFT', 'INNER', 'RIGHT')),
     is_conformed     BOOLEAN NOT NULL DEFAULT FALSE,

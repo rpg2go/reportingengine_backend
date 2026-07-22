@@ -47,7 +47,7 @@ public class ReportConfigServiceTest {
         dto.setVersion(1);
 
         when(jdbcTemplate.queryForObject(
-            org.mockito.ArgumentMatchers.eq("SELECT EXISTS(SELECT 1 FROM reporting.report_config WHERE report_id = ? AND version = ?)"),
+            org.mockito.ArgumentMatchers.eq("SELECT EXISTS(SELECT 1 FROM report_builder_owner.report_config WHERE report_id = ? AND version = ?)"),
             org.mockito.ArgumentMatchers.eq(Boolean.class),
             org.mockito.ArgumentMatchers.eq("RPT_1"),
             org.mockito.ArgumentMatchers.eq(1)
@@ -55,7 +55,7 @@ public class ReportConfigServiceTest {
 
         java.util.Map<String, Object> mockRecord = java.util.Map.of("status", "published");
         when(jdbcTemplate.queryForMap(
-            org.mockito.ArgumentMatchers.eq("SELECT status FROM reporting.report_config WHERE report_id = ? AND version = ?"),
+            org.mockito.ArgumentMatchers.eq("SELECT status FROM report_builder_owner.report_config WHERE report_id = ? AND version = ?"),
             org.mockito.ArgumentMatchers.eq("RPT_1"),
             org.mockito.ArgumentMatchers.eq(1)
         )).thenReturn(mockRecord);
@@ -77,7 +77,7 @@ public class ReportConfigServiceTest {
         service.deleteReport("RPT_1");
 
         verify(jdbcTemplate, times(1)).update(
-            eq("DELETE FROM reporting.report_config WHERE report_id = ?"),
+            eq("DELETE FROM report_builder_owner.report_config WHERE report_id = ?"),
             eq("RPT_1")
         );
     }
@@ -94,7 +94,7 @@ public class ReportConfigServiceTest {
         service.deleteReport("RPT_1");
 
         verify(jdbcTemplate, times(1)).update(
-            eq("UPDATE reporting.report_config SET deleted = true WHERE report_id = ?"),
+            eq("UPDATE report_builder_owner.report_config SET deleted = true WHERE report_id = ?"),
             eq("RPT_1")
         );
     }

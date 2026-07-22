@@ -72,7 +72,7 @@ To ensure high-quality software, the workspace maintains a strict testing strate
 ## CI/CD vs Local
 
 - **Local Development**:
-  - Tests connect directly to the active Docker container `report_template_db` on port `5432` for database integration checks.
+  - Tests connect directly to the active Docker container `report_template_db` on port `5433` for database integration checks.
   - Mocked endpoints are utilized in tests where database isolation is required.
 - **CI/CD Environments**:
   - Services are started in detached containers.
