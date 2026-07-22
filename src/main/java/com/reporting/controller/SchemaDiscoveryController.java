@@ -13,6 +13,8 @@ import org.springframework.web.bind.annotation.*;
 import java.util.*;
 import java.util.stream.Collectors;
 
+import com.reporting.config.DatabaseSchemaProperties;
+
 /**
  * REST controller exposing schema and dimension metadata for the Analytics DWH.
  *
@@ -41,15 +43,18 @@ public class SchemaDiscoveryController {
     private final MetadataCache metadataCache;
     private final SchemaCatalogLoader schemaCatalogLoader;
     private final AnalyticsQueryDispatcher analyticsQueryDispatcher;
+    private final DatabaseSchemaProperties dbProperties;
 
     public SchemaDiscoveryController(NamedParameterJdbcTemplate jdbcTemplate,
             MetadataCache metadataCache,
             SchemaCatalogLoader schemaCatalogLoader,
-            AnalyticsQueryDispatcher analyticsQueryDispatcher) {
+            AnalyticsQueryDispatcher analyticsQueryDispatcher,
+            @org.springframework.lang.Nullable DatabaseSchemaProperties dbProperties) {
         this.jdbcTemplate = jdbcTemplate;
         this.metadataCache = metadataCache;
         this.schemaCatalogLoader = schemaCatalogLoader;
         this.analyticsQueryDispatcher = analyticsQueryDispatcher;
+        this.dbProperties = dbProperties != null ? dbProperties : new DatabaseSchemaProperties();
     }
 
     // ─── table / column discovery ─────────────────────────────────────────────
@@ -62,9 +67,10 @@ public class SchemaDiscoveryController {
     @GetMapping("/tables")
     public ResponseEntity<List<String>> listTables() {
         Set<String> keys = metadataCache.getTableColumnsCache().keySet();
+        String schemaPrefix = dbProperties.getAnalyticsSchema() + ".";
         if (!keys.isEmpty()) {
             List<String> qualifiedTables = keys.stream()
-                    .filter(k -> k.startsWith("analytics."))
+                    .filter(k -> k.startsWith(schemaPrefix))
                     .sorted()
                     .collect(Collectors.toList());
             if (!qualifiedTables.isEmpty()) {
@@ -75,7 +81,7 @@ public class SchemaDiscoveryController {
         String sql = "SELECT n.nspname || '.' || c.relname AS full_name " +
                 "FROM pg_catalog.pg_class c " +
                 "JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace " +
-                "WHERE n.nspname = 'analytics' AND c.relkind = 'r' " +
+                "WHERE n.nspname = '" + dbProperties.getAnalyticsSchema() + "' AND c.relkind = 'r' " +
                 "ORDER BY c.relname";
         List<String> tables = jdbcTemplate.getJdbcOperations().queryForList(sql, String.class);
         return ResponseEntity.ok(tables);
@@ -118,15 +124,10 @@ public class SchemaDiscoveryController {
         String schema = parts[0];
         String tableName = parts[1];
 
-        String sql = "SELECT a.attname AS column_name " +
-                "FROM pg_catalog.pg_attribute a " +
-                "JOIN pg_catalog.pg_class c ON c.oid = a.attrelid " +
-                "JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace " +
-                "WHERE n.nspname = ? AND c.relname = ? " +
-                "  AND a.attnum > 0 AND NOT a.attisdropped " +
-                "ORDER BY a.attname";
-        List<String> columns = jdbcTemplate.getJdbcOperations().queryForList(sql, String.class, schema, tableName);
-        return ResponseEntity.ok(columns);
+        String sql = "SELECT column_name FROM information_schema.columns " +
+                "WHERE table_schema = ? AND table_name = ? ORDER BY column_name";
+        List<String> cols = jdbcTemplate.getJdbcOperations().queryForList(sql, String.class, schema, tableName);
+        return ResponseEntity.ok(cols);
     }
 
     /**
@@ -170,33 +171,33 @@ public class SchemaDiscoveryController {
     // ─── dimension value autocomplete ─────────────────────────────────────────
 
     /**
-     * Returns up to 100 distinct values for a dimension column (1,500 for date
-     * keys).
+     * Returns a distinct list of values for the specified dimension column, suitable
+     * for populating autocomplete dropdowns in the report builder.
      *
-     * <p>
-     * The table parameter is validated against the live analytics catalog
-     * whitelist.
-     * The column parameter is validated against {@code ^[a-zA-Z0-9_]+$}.
-     * </p>
-     *
-     * @param table  table name (qualified or unqualified)
-     * @param column column name to query distinct values for
-     * @return ordered list of distinct string values, or 400 on validation failure
+     * @param table unqualified or qualified table name (e.g. {@code "analytics.fact_sales"})
+     * @param column column name (e.g. {@code "product_category"})
+     * @return 200 with list of distinct values (up to 100 entries, or 1500 for date_key)
      */
     @GetMapping("/dimensions/values")
-    public ResponseEntity<List<String>> getDimensionValues(
+    public ResponseEntity<List<String>> listDimensionValues(
             @RequestParam("table") String table,
             @RequestParam("column") String column) {
 
         String resolved = resolveTableRef(table);
         if (resolved == null) {
+            log.warn("Cannot resolve table: {}", table);
             return ResponseEntity.badRequest().build();
         }
 
-        // Map logical reporting_date column to physical date_key for dim_date
-        String queryColumn = column;
-        if ("reporting_date".equals(column) && ("dim_date".equals(table) || "analytics.dim_date".equals(resolved))) {
-            queryColumn = "date_key";
+        String queryColumn = column != null ? column.trim() : "";
+        if (queryColumn.isEmpty()) {
+            log.warn("Column parameter is empty for table: {}", resolved);
+            return ResponseEntity.badRequest().build();
+        }
+
+        // Map logical reporting_date column to physical date column for dim_date
+        if ("reporting_date".equalsIgnoreCase(queryColumn) && (resolved.equalsIgnoreCase("dim_date") || resolved.equalsIgnoreCase(dbProperties.getAnalyticsSchema() + "." + dbProperties.getDateTable()))) {
+            queryColumn = dbProperties.getDateColumn();
         }
 
         // Try the cache first
@@ -215,21 +216,21 @@ public class SchemaDiscoveryController {
                 log.warn(
                         "Performance safety block: Denied autocomplete lookup on invisible/non-filterable/non-cached column: {}.{}",
                         resolved, queryColumn);
-                return ResponseEntity.badRequest().build();
+                return ResponseEntity.badRequest().body(Collections.emptyList());
             }
         } else {
             MetaTable metaTable = schemaCatalogLoader.findTable(resolved);
             if (metaTable != null) {
                 log.warn("Blocked autocomplete lookup because column {}.{} does not exist in schema catalog.", resolved,
                         queryColumn);
-                return ResponseEntity.badRequest().build();
+                return ResponseEntity.badRequest().body(Collections.emptyList());
             }
         }
 
         log.info("Fetching dimension values for table: {} (resolved: {}), column: {} (queried as: {})",
                 table, resolved, column, queryColumn);
 
-        if (!resolved.startsWith("analytics.") || !queryColumn.matches("^[a-zA-Z0-9_]+$")) {
+        if (!resolved.startsWith(dbProperties.getAnalyticsSchema() + ".") || !queryColumn.matches("^[a-zA-Z0-9_]+$")) {
             log.warn("Invalid table format or column regex mismatch. Table: {}, Column: {}", resolved, queryColumn);
             return ResponseEntity.badRequest().build();
         }
@@ -242,7 +243,13 @@ public class SchemaDiscoveryController {
         }
 
         int limit = 100;
-        if ("date_key".equals(queryColumn) && "analytics.dim_date".equals(resolved)) {
+        boolean isDateCol = queryColumn.equalsIgnoreCase(dbProperties.getDateColumn())
+                || queryColumn.equalsIgnoreCase("date_key")
+                || queryColumn.equalsIgnoreCase("dt_key")
+                || queryColumn.equalsIgnoreCase("dt_val")
+                || queryColumn.equalsIgnoreCase("reporting_date");
+        boolean isDateTbl = resolved.equalsIgnoreCase(dbProperties.getAnalyticsSchema() + "." + dbProperties.getDateTable());
+        if (isDateCol && isDateTbl) {
             limit = 1500;
         }
 
@@ -268,15 +275,16 @@ public class SchemaDiscoveryController {
     @GetMapping("/schema-catalog")
     public ResponseEntity<Map<String, Object>> getSchemaCatalog() {
         Map<String, Object> model = new LinkedHashMap<>();
+        String catalogSchema = dbProperties.getCatalogSchema();
 
         model.put("views", jdbcTemplate.queryForList(
                 "SELECT table_id, table_name AS name, label, schema_name || '.' || table_name AS table_ref, " +
                         "       table_type AS view_type, time_key, description " +
-                        "FROM catalog_owner.meta_table ORDER BY table_name",
+                        "FROM " + catalogSchema + ".meta_table ORDER BY table_name",
                 Collections.emptyMap()));
         model.put("explores", jdbcTemplate.queryForList(
                 "SELECT table_id AS explore_id, table_name AS name, label, table_name AS fact_view_name, description " +
-                        "FROM catalog_owner.meta_table WHERE table_type = 'fact' ORDER BY table_name",
+                        "FROM " + catalogSchema + ".meta_table WHERE table_type = 'fact' ORDER BY table_name",
                 Collections.emptyMap()));
         model.put("joins", jdbcTemplate.queryForList(
                 "SELECT r.relationship_id AS join_id, ft.table_name AS explore_name, ft.table_name AS from_view, tt.table_name AS to_view, "
@@ -285,17 +293,17 @@ public class SchemaDiscoveryController {
                         "       tt.schema_name || '.' || tt.table_name || ' ON ' || " +
                         "       tt.schema_name || '.' || tt.table_name || '.' || r.to_column || ' = ' || " +
                         "       ft.schema_name || '.' || ft.table_name || '.' || r.from_column AS join_sql " +
-                        "FROM catalog_owner.meta_relationship r " +
-                        "JOIN catalog_owner.meta_table ft ON ft.table_id = r.from_table_id " +
-                        "JOIN catalog_owner.meta_table tt ON tt.table_id = r.to_table_id " +
+                        "FROM " + catalogSchema + ".meta_relationship r " +
+                        "JOIN " + catalogSchema + ".meta_table ft ON ft.table_id = r.from_table_id " +
+                        "JOIN " + catalogSchema + ".meta_table tt ON tt.table_id = r.to_table_id " +
                         "ORDER BY r.relationship_id",
                 Collections.emptyMap()));
         model.put("dimensions", jdbcTemplate.queryForList(
                 "SELECT c.column_id, t.table_name AS view_name, c.column_name AS name, c.label, " +
                         "       t.schema_name || '.' || t.table_name || '.' || c.column_name AS column_ref, " +
                         "       c.data_type, c.description, c.is_filterable, c.is_cached, c.is_visible " +
-                        "FROM catalog_owner.meta_column c " +
-                        "JOIN catalog_owner.meta_table t ON t.table_id = c.table_id " +
+                        "FROM " + catalogSchema + ".meta_column c " +
+                        "JOIN " + catalogSchema + ".meta_table t ON t.table_id = c.table_id " +
                         "WHERE c.is_primary_key = FALSE AND c.is_visible = TRUE " +
                         "ORDER BY t.table_name, c.column_name",
                 Collections.emptyMap()));
@@ -333,19 +341,20 @@ public class SchemaDiscoveryController {
             return ResponseEntity.ok(joins);
         }
 
-        String sql = """
+        String catalogSchema = dbProperties.getCatalogSchema();
+        String sql = String.format("""
                 SELECT
                     tt.table_name AS dimView,
                     r.join_type   AS joinType,
                     tt.schema_name || '.' || tt.table_name || ' ON ' ||
                     tt.schema_name || '.' || tt.table_name || '.' || r.to_column || ' = ' ||
                     ft.schema_name || '.' || ft.table_name || '.' || r.from_column AS joinSql
-                FROM catalog_owner.meta_relationship r
-                JOIN catalog_owner.meta_table ft ON ft.table_id = r.from_table_id
-                JOIN catalog_owner.meta_table tt ON tt.table_id = r.to_table_id
+                FROM %s.meta_relationship r
+                JOIN %s.meta_table ft ON ft.table_id = r.from_table_id
+                JOIN %s.meta_table tt ON tt.table_id = r.to_table_id
                 WHERE ft.schema_name || '.' || ft.table_name = :factTable
                 ORDER BY r.relationship_id
-                """;
+                """, catalogSchema, catalogSchema, catalogSchema);
         List<Map<String, Object>> joins = jdbcTemplate.query(sql, Map.of("factTable", factTable), (rs, rowNum) -> {
             Map<String, Object> join = new LinkedHashMap<>();
             join.put("dimView", rs.getString("dimView"));
@@ -363,8 +372,8 @@ public class SchemaDiscoveryController {
      *
      * <p>
      * If the name already contains a dot it is returned as-is. Otherwise a
-     * lookup against {@code reporting.meta_table} is attempted; if that fails the
-     * name is prefixed with {@code "analytics."}.
+     * lookup against {@code meta_table} is attempted; if that fails the
+     * name is prefixed with the configured analytics schema.
      * </p>
      *
      * @param table logical or physical table name
@@ -377,7 +386,7 @@ public class SchemaDiscoveryController {
             return table;
         try {
             return jdbcTemplate.getJdbcOperations().queryForObject(
-                    "SELECT schema_name || '.' || table_name AS table_ref FROM catalog_owner.meta_table WHERE table_name = ?",
+                    "SELECT schema_name || '.' || table_name AS table_ref FROM " + dbProperties.getCatalogSchema() + ".meta_table WHERE table_name = ?",
                     String.class, table);
         } catch (Exception e) {
             return null;

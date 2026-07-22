@@ -10,6 +10,8 @@ import com.reporting.catalog.MetaTable;
 import com.reporting.catalog.MetaColumn;
 import com.reporting.service.AnalyticsQueryDispatcher;
 
+import com.reporting.config.DatabaseSchemaProperties;
+
 import java.util.List;
 import java.util.Collections;
 
@@ -23,12 +25,14 @@ public class MetadataController {
     private final MetadataCache metadataCache;
     private final SchemaCatalogLoader schemaCatalogLoader;
     private final AnalyticsQueryDispatcher analyticsQueryDispatcher;
+    private final DatabaseSchemaProperties dbProperties;
 
-    public MetadataController(JdbcTemplate jdbcTemplate, MetadataCache metadataCache, SchemaCatalogLoader schemaCatalogLoader, AnalyticsQueryDispatcher analyticsQueryDispatcher) {
+    public MetadataController(JdbcTemplate jdbcTemplate, MetadataCache metadataCache, SchemaCatalogLoader schemaCatalogLoader, AnalyticsQueryDispatcher analyticsQueryDispatcher, @org.springframework.lang.Nullable DatabaseSchemaProperties dbProperties) {
         this.jdbcTemplate = jdbcTemplate;
         this.metadataCache = metadataCache;
         this.schemaCatalogLoader = schemaCatalogLoader;
         this.analyticsQueryDispatcher = analyticsQueryDispatcher;
+        this.dbProperties = dbProperties != null ? dbProperties : new DatabaseSchemaProperties();
     }
 
     @GetMapping("/distinct-values")
@@ -53,7 +57,7 @@ public class MetadataController {
             if (table.contains(".")) {
                 resolvedTable = table;
             } else {
-                resolvedTable = "analytics." + table;
+                resolvedTable = dbProperties.getAnalyticsSchema() + "." + table;
             }
         }
 
@@ -116,7 +120,7 @@ public class MetadataController {
         if (table.contains(".")) {
             return table;
         }
-        String sql = "SELECT schema_name || '.' || table_name AS table_ref FROM catalog_owner.meta_table WHERE table_name = ?";
+        String sql = "SELECT schema_name || '.' || table_name AS table_ref FROM " + dbProperties.getCatalogSchema() + ".meta_table WHERE table_name = ?";
         try {
             return jdbcTemplate.queryForObject(sql, String.class, table);
         } catch (Exception e) {

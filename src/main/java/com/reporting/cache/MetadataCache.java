@@ -6,6 +6,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 import com.reporting.service.AnalyticsQueryDispatcher;
+import com.reporting.config.DatabaseSchemaProperties;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -43,6 +44,7 @@ public class MetadataCache {
 
     private final JdbcTemplate jdbc;
     private final AnalyticsQueryDispatcher analyticsQueryDispatcher;
+    private final DatabaseSchemaProperties dbProperties;
 
     // ── column metadata: "schema.table" or "table" → lowercase column names ──
     private final Map<String, Set<String>> tableColumnsCache = new ConcurrentHashMap<>();
@@ -59,9 +61,10 @@ public class MetadataCache {
     // ── column values cache: "schema.table.column" or "table.column" → list of distinct values ──
     private final Map<String, List<String>> columnValuesCache = new ConcurrentHashMap<>();
 
-    public MetadataCache(JdbcTemplate jdbc, AnalyticsQueryDispatcher analyticsQueryDispatcher) {
+    public MetadataCache(JdbcTemplate jdbc, AnalyticsQueryDispatcher analyticsQueryDispatcher, @org.springframework.lang.Nullable DatabaseSchemaProperties dbProperties) {
         this.jdbc = jdbc;
         this.analyticsQueryDispatcher = analyticsQueryDispatcher;
+        this.dbProperties = dbProperties != null ? dbProperties : new DatabaseSchemaProperties();
     }
 
     // ─── lifecycle ────────────────────────────────────────────────────────────
@@ -95,13 +98,14 @@ public class MetadataCache {
     private void loadTableColumns() {
         try {
             // Load all columns and types for all tables in the analytics schema in one query using pg_catalog
+            String schemaName = dbProperties.getAnalyticsSchema();
             jdbc.query(
                 "SELECT n.nspname AS schema_name, c.relname AS table_name, a.attname AS column_name, " +
                 "       pg_catalog.format_type(a.atttypid, a.atttypmod) AS data_type " +
                 "FROM pg_catalog.pg_attribute a " +
                 "JOIN pg_catalog.pg_class c ON c.oid = a.attrelid " +
                 "JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace " +
-                "WHERE n.nspname = 'analytics' AND c.relkind = 'r' " +
+                "WHERE n.nspname = ? AND c.relkind = 'r' " +
                 "  AND a.attnum > 0 AND NOT a.attisdropped " +
                 "ORDER BY c.relname, a.attname",
                 rs -> {
@@ -109,7 +113,7 @@ public class MetadataCache {
                     String col   = rs.getString("column_name").toLowerCase();
                     String type  = rs.getString("data_type");
                     
-                    String fullKey = "analytics." + table;
+                    String fullKey = schemaName + "." + table;
 
                     // Index by unqualified name
                     tableColumnsCache.computeIfAbsent(table, k -> new HashSet<>()).add(col);
@@ -118,7 +122,8 @@ public class MetadataCache {
                     // Index by qualified name
                     tableColumnsCache.computeIfAbsent(fullKey, k -> new HashSet<>()).add(col);
                     tableColumnTypesCache.computeIfAbsent(fullKey, k -> new LinkedHashMap<>()).put(col, type);
-                }
+                },
+                schemaName
             );
             log.debug("MetadataCache: loaded column and type metadata for {} table keys.", tableColumnsCache.size());
         } catch (Exception ex) {
@@ -131,7 +136,7 @@ public class MetadataCache {
     private void loadTimeKeys() {
         try {
             jdbc.query(
-                "SELECT schema_name || '.' || table_name AS table_ref, time_key FROM catalog_owner.meta_table WHERE time_key IS NOT NULL AND is_cached = TRUE",
+                "SELECT schema_name || '.' || table_name AS table_ref, time_key FROM " + dbProperties.getCatalogSchema() + ".meta_table WHERE time_key IS NOT NULL AND is_cached = TRUE",
                 rs -> {
                     String tableRef = rs.getString("table_ref");
                     String timeKey  = rs.getString("time_key");
@@ -157,7 +162,7 @@ public class MetadataCache {
         try {
             Set<String> viewTables = new LinkedHashSet<>();
             jdbc.query(
-                "SELECT DISTINCT schema_name || '.' || table_name AS table_ref FROM catalog_owner.meta_table",
+                "SELECT DISTINCT schema_name || '.' || table_name AS table_ref FROM " + dbProperties.getCatalogSchema() + ".meta_table",
                 rs -> {
                     String tbl = rs.getString("table_ref");
                     if (tbl != null && !tbl.isBlank()) {
@@ -244,8 +249,8 @@ public class MetadataCache {
         try {
             // Find all columns marked as value-cacheable
             String sql = "SELECT t.schema_name, t.table_name, c.column_name " +
-                         "FROM   catalog_owner.meta_column c " +
-                         "JOIN   catalog_owner.meta_table t ON t.table_id = c.table_id " +
+                         "FROM   " + dbProperties.getCatalogSchema() + ".meta_column c " +
+                         "JOIN   " + dbProperties.getCatalogSchema() + ".meta_table t ON t.table_id = c.table_id " +
                          "WHERE  c.is_cached = TRUE AND t.is_cached = TRUE";
 
             jdbc.query(sql, rs -> {

@@ -5,45 +5,19 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
+import com.reporting.config.DatabaseSchemaProperties;
 
 import java.util.Collections;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-/**
- * Application-startup catalog loader that reads the three schema registry
- * tables ({@code catalog_owner.meta_table}, {@code catalog_owner.meta_column},
- * {@code catalog_owner.meta_relationship}) via direct JDBC queries and assembles
- * an optimized, fully-linked in-memory cache.
- *
- * <h2>Cache structure</h2>
- * <ul>
- * <li>{@link #tableById} — primary index: {@code table_id → MetaTable}</li>
- * <li>{@link #tableByName} — secondary lookup by fully-qualified name
- * ({@code "analytics.fact_sales → MetaTable"})</li>
- * </ul>
- *
- * <p>
- * Both maps are exposed as unmodifiable views. All mutation happens once,
- * inside the {@link PostConstruct} initializer, making the cache effectively
- * immutable for the remainder of the application lifetime.
- * </p>
- *
- * <h2>Fault tolerance</h2>
- * <p>
- * If the catalog tables do not yet exist (e.g. migration {@code 010} has
- * not been applied), the loader logs a warning and leaves the cache empty.
- * {@link SchemaGraphRouter} will fall back to a direct
- * {@code information_schema}
- * lookup path rather than crashing the application.
- * </p>
- */
 @Component
 public class SchemaCatalogLoader {
 
     private static final Logger log = LoggerFactory.getLogger(SchemaCatalogLoader.class);
 
     private final JdbcTemplate jdbc;
+    private final DatabaseSchemaProperties dbProperties;
 
     // ─── primary in-memory indexes ────────────────────────────────────────────
 
@@ -61,9 +35,11 @@ public class SchemaCatalogLoader {
     /**
      * @param jdbc Spring {@link JdbcTemplate} for direct JDBC queries;
      *             injected by Spring at startup
+     * @param dbProperties Configurable DWH schema properties
      */
-    public SchemaCatalogLoader(JdbcTemplate jdbc) {
+    public SchemaCatalogLoader(JdbcTemplate jdbc, @org.springframework.lang.Nullable DatabaseSchemaProperties dbProperties) {
         this.jdbc = jdbc;
+        this.dbProperties = dbProperties != null ? dbProperties : new DatabaseSchemaProperties();
     }
 
     // ─── lifecycle ────────────────────────────────────────────────────────────
@@ -118,7 +94,7 @@ public class SchemaCatalogLoader {
      */
     private void loadTables() {
         final String sql = "SELECT table_id, schema_name, table_name, table_type, time_key, description, is_cached " +
-                "FROM   catalog_owner.meta_table " +
+                "FROM   " + dbProperties.getCatalogSchema() + ".meta_table " +
                 "ORDER  BY table_id";
 
         jdbc.query(sql, rs -> {
@@ -162,7 +138,7 @@ public class SchemaCatalogLoader {
     private void loadColumns() {
         final String sql = "SELECT column_id, table_id, column_name, data_type, " +
                 "       is_primary_key, is_foreign_key, description, is_cached, is_filterable, is_visible " +
-                "FROM   catalog_owner.meta_column " +
+                "FROM   " + dbProperties.getCatalogSchema() + ".meta_column " +
                 "ORDER  BY table_id, column_id";
 
         // Collect counts for diagnostic logging
@@ -222,7 +198,7 @@ public class SchemaCatalogLoader {
                 "       r.from_table_id, r.from_column, " +
                 "       r.to_table_id,   r.to_column, " +
                 "       r.join_type,     r.is_conformed, r.weight, r.description " +
-                "FROM   catalog_owner.meta_relationship r " +
+                "FROM   " + dbProperties.getCatalogSchema() + ".meta_relationship r " +
                 "ORDER  BY r.relationship_id";
 
         final int[] count = { 0 };
