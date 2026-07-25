@@ -292,6 +292,10 @@ public class PostProcessorService {
         }
 
         String cleanedFormula = formula.trim();
+        if (cleanedFormula.length() > 500) {
+            // Reject excessively long formula expressions to prevent DoS resource exhaustion
+            return 0.0;
+        }
 
         // Sort keys by length in descending order to avoid partial matching (e.g. R11 replaced before R1).
         List<String> sortedKeys = new ArrayList<>(context.keySet());

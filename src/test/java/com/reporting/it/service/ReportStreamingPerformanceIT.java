@@ -70,7 +70,7 @@ public class ReportStreamingPerformanceIT extends BaseIT {
         // Warm up the JVM and Spring MVC stack with 1 execution to initialize class loading & caches
         mockMvc.perform(post("/api/reports/" + reportId + "/run")
                         .param("date", "2026-05-26")
-                        .with(httpBasic("admin", "password")))
+                        .header("Authorization", "Bearer mock-test-token"))
                 .andExpect(status().isOk());
 
         // Perform GC to get a baseline memory reading
@@ -91,7 +91,7 @@ public class ReportStreamingPerformanceIT extends BaseIT {
             futures.add(executor.submit(() -> {
                 MvcResult result = mockMvc.perform(post("/api/reports/" + reportId + "/run")
                                 .param("date", "2026-05-26")
-                                .with(httpBasic("admin", "password")))
+                                .header("Authorization", "Bearer mock-test-token"))
                         .andExpect(status().isOk())
                         .andReturn();
                 return result.getResponse().getContentAsByteArray();

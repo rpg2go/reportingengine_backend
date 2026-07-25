@@ -12,10 +12,10 @@
     </parent>
 
     <groupId>com.reporting</groupId>
-    <artifactId>report-template-engine</artifactId>
+    <artifactId>report-builder-engine</artifactId>
     <version>1.0.0</version>
-    <name>report-template-engine</name>
-    <description>Reporting Engine in Spring Boot</description>
+    <name>report-builder-engine</name>
+    <description>Report Builder Engine in Spring Boot</description>
 
     <properties>
         <java.version>21</java.version>
@@ -148,15 +148,10 @@
     </dependencies>
 
     <build>
-        <!-- Crucial addition to bundle your root 'db' folder into the application classpath -->
         <resources>
             <resource>
                 <directory>src/main/resources</directory>
             </resource>
-            <!-- <resource>
-                <directory>db</directory>
-                <targetPath>db</targetPath>
-            </resource> -->
         </resources>
         <plugins>
             <plugin>
@@ -200,6 +195,7 @@
                     <username>${liquibase.username}</username>
                     <password>${liquibase.password}</password>
                     <driver>org.postgresql.Driver</driver>
+                    <duplicateFileMode>WARN</duplicateFileMode>
                 </configuration>
             </plugin>
 

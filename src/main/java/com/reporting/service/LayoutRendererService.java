@@ -430,7 +430,7 @@ public class LayoutRendererService {
                 if (reportRow.indentLevel() > 0) {
                     labelText = "  ".repeat(reportRow.indentLevel()) + labelText;
                 }
-                labelCell.setCellValue(labelText);
+                labelCell.setCellValue(sanitizeExcelValue(labelText));
 
                 // Select correct style
                 CellStyle textStyle = normalStyle;
@@ -528,7 +528,7 @@ public class LayoutRendererService {
                             for (int sIdx = 0; sIdx < granularityHeaders.size(); sIdx++) {
                                 Cell cell = subRow.createCell(dataColIdx++);
                                 String val = (sIdx < segments.length) ? segments[sIdx] : "";
-                                cell.setCellValue(val);
+                                cell.setCellValue(sanitizeExcelValue(val));
                                 cell.setCellStyle(normalStyle);
                             }
 
@@ -673,5 +673,20 @@ public class LayoutRendererService {
         RegionUtil.setBorderBottom(BorderStyle.THIN, region, sheet);
         RegionUtil.setBorderLeft(BorderStyle.THIN, region, sheet);
         RegionUtil.setBorderRight(BorderStyle.THIN, region, sheet);
+    }
+
+    /**
+     * Sanitizes string values to prevent Excel Formula Injection (CSV/XLSX injection attacks).
+     * If the string begins with '=', '+', '-', '@', '\t', or '\r', it prepends a single quote (').
+     */
+    public static String sanitizeExcelValue(String text) {
+        if (text == null || text.isEmpty()) {
+            return text;
+        }
+        char firstChar = text.charAt(0);
+        if (firstChar == '=' || firstChar == '+' || firstChar == '-' || firstChar == '@' || firstChar == '\t' || firstChar == '\r') {
+            return "'" + text;
+        }
+        return text;
     }
 }

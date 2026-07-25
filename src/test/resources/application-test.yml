@@ -1,0 +1,48 @@
+# Server Port for test (random port)
+server:
+  port: 0
+
+spring:
+  config:
+    activate:
+      on-profile: test
+  datasource:
+    url: ${SPRING_DATASOURCE_URL}
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    show-sql: false
+    hibernate:
+      ddl-auto: none
+    properties:
+      hibernate:
+        format_sql: false
+
+security:
+  admin:
+    username: ${SECURITY_ADMIN_USERNAME}
+    password: ${SECURITY_ADMIN_PASSWORD}
+  jwt:
+    allow-mock-fallback: true
+
+# Application Database Schemas & Default Dataset Configuration
+app:
+  db:
+    catalog-schema: ${DB_CATALOG_SCHEMA:catalog_owner}
+    report-builder-schema: ${DB_REPORT_BUILDER_SCHEMA:report_builder_owner}
+    analytics-schema: ${DB_ANALYTICS_SCHEMA:${BIGQUERY_DATASET:analytics}}
+    date-table: ${DB_DATE_TABLE:dim_date}
+    date-column: ${DB_DATE_COLUMN:date_key}
+
+# BigQuery Test Properties
+bigquery:
+  max-bytes-billed: ${BIGQUERY_MAX_BYTES_BILLED:1073741824}
+
+# Logging configuration during testing
+logging:
+  level:
+    com.reporting: INFO
+    org.springframework.web: WARN
+    org.hibernate.SQL: WARN

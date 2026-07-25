@@ -1,0 +1,52 @@
+# ===================================================================
+# System Integration Testing (SIT) Profile (`sit`)
+# Connects local/staging Spring Boot backend to GCP BigQuery
+# ===================================================================
+
+spring:
+  config:
+    activate:
+      on-profile: sit
+  datasource:
+    url: ${SPRING_DATASOURCE_URL}
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      max-lifetime: 120000        # Retire connections before serverless idle timeout (~5 min)
+      keepalive-time: 60000      # Ping idle connections every 60s
+      connection-timeout: 10000  # Fail fast within 10s if pool is exhausted
+      idle-timeout: 30000        # Return idle connections after 60s
+      minimum-idle: 1            # Maintain 1 warm connection
+      maximum-pool-size: 10       # Scale up to 20 connections under concurrent load
+      connection-test-query: SELECT 1
+  jpa:
+    show-sql: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        format_sql: false
+
+# Google Cloud & BigQuery SIT Environment Tuning
+gcp:
+  project-id: ${GCP_PROJECT_ID}
+
+bigquery:
+  dataset: ${BIGQUERY_DATASET:analytics}
+  max-bytes-billed: ${BIGQUERY_MAX_BYTES_BILLED:1073741824} # 1 GB default billing cap
+
+security:
+  admin:
+    username: ${SECURITY_ADMIN_USERNAME:admin}
+    password: ${SECURITY_ADMIN_PASSWORD:password}
+    role: ${SECURITY_ADMIN_ROLE:USER}
+  jwt:
+    allow-mock-fallback: true # Allows mock JWT testing against real GCP BigQuery in SIT
+
+logging:
+  level:
+    com.reporting: DEBUG
+    org.springframework.web: INFO
+    org.hibernate.SQL: INFO
+    org.hibernate.orm.jdbc.bind: WARN

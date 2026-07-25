@@ -85,6 +85,7 @@ public class SecurityConfiguration {
     public JwtDecoder jwtDecoder() {
         String issuer = env.getProperty("spring.security.oauth2.resourceserver.jwt.issuer-uri");
         String jwkSetUri = env.getProperty("spring.security.oauth2.resourceserver.jwt.jwk-set-uri");
+        boolean allowMockFallback = Boolean.parseBoolean(env.getProperty("security.jwt.allow-mock-fallback", "true"));
 
         if (jwkSetUri != null && !jwkSetUri.isBlank()) {
             log.info("Configuring JWK Set URI JwtDecoder pointing to: {}", jwkSetUri);
@@ -92,8 +93,8 @@ public class SecurityConfiguration {
         } else if (issuer != null && !issuer.isBlank()) {
             log.info("Configuring OIDC Issuer Location JwtDecoder pointing to: {}", issuer);
             return NimbusJwtDecoder.withIssuerLocation(issuer).build();
-        } else {
-            log.warn("OIDC configuration properties are not set. Falling back to Mock local development JwtDecoder...");
+        } else if (allowMockFallback) {
+            log.warn("OIDC configuration properties are not set. Using Mock local development JwtDecoder (security.jwt.allow-mock-fallback=true)...");
             return token -> {
                 try {
                     Map<String, Object> claims = new HashMap<>();
@@ -111,6 +112,9 @@ public class SecurityConfiguration {
                     throw new JwtException("Failed to decode token", e);
                 }
             };
+        } else {
+            log.error("CRITICAL SECURITY ERROR: OIDC OAuth2 JWT configuration properties ('spring.security.oauth2.resourceserver.jwt.jwk-set-uri' or 'issuer-uri') are not configured and mock fallback is disabled!");
+            throw new IllegalStateException("OIDC OAuth2 Resource Server configuration missing. Refusing to startup without valid JwtDecoder.");
         }
     }
 

@@ -31,6 +31,9 @@ public class BigQueryAnalyticsService {
     @Value("${bigquery.dataset}")
     private String datasetName;
 
+    @Value("${bigquery.max-bytes-billed}")
+    private Long maxBytesBilled;
+
     public BigQueryAnalyticsService(BigQuery bigQuery) {
         this.bigQuery = bigQuery;
     }
@@ -45,9 +48,10 @@ public class BigQueryAnalyticsService {
         String qualifiedSql = qualifyTableReferences(sql);
         validateQuerySafety(qualifiedSql);
         try {
-            log.info("Executing BigQuery SQL query for list: {}", qualifiedSql);
+            log.info("Executing BigQuery SQL query for list: {}", sanitizeSqlForLogging(qualifiedSql));
             QueryJobConfiguration queryConfig = QueryJobConfiguration.newBuilder(qualifiedSql)
                     .setUseLegacySql(false)
+                    .setMaximumBytesBilled(maxBytesBilled)
                     .build();
 
             TableResult result = bigQuery.query(queryConfig);
@@ -68,7 +72,7 @@ public class BigQueryAnalyticsService {
             Thread.currentThread().interrupt();
             throw new RuntimeException("BigQuery query execution was interrupted", e);
         } catch (Exception e) {
-            log.error("BigQuery query execution failed for SQL: {}", sql, e);
+            log.error("BigQuery query execution failed for SQL: {}", sanitizeSqlForLogging(sql), e);
             throw new RuntimeException("BigQuery execution error: " + e.getMessage(), e);
         }
     }
@@ -83,9 +87,10 @@ public class BigQueryAnalyticsService {
         String qualifiedSql = qualifyTableReferences(sql);
         validateQuerySafety(qualifiedSql);
         try {
-            log.info("Executing BigQuery SQL query for stream: {}", qualifiedSql);
+            log.info("Executing BigQuery SQL query for stream: {}", sanitizeSqlForLogging(qualifiedSql));
             QueryJobConfiguration queryConfig = QueryJobConfiguration.newBuilder(qualifiedSql)
                     .setUseLegacySql(false)
+                    .setMaximumBytesBilled(maxBytesBilled)
                     .build();
 
             TableResult result = bigQuery.query(queryConfig);
@@ -105,7 +110,7 @@ public class BigQueryAnalyticsService {
             Thread.currentThread().interrupt();
             throw new RuntimeException("BigQuery query execution was interrupted", e);
         } catch (Exception e) {
-            log.error("BigQuery query execution failed for SQL: {}", sql, e);
+            log.error("BigQuery query execution failed for SQL: {}", sanitizeSqlForLogging(sql), e);
             throw new RuntimeException("BigQuery execution error: " + e.getMessage(), e);
         }
     }
@@ -118,9 +123,10 @@ public class BigQueryAnalyticsService {
         String qualifiedSql = qualifyTableReferences(sql);
         validateQuerySafety(qualifiedSql);
         try {
-            log.info("Executing BigQuery SQL query for typed list ({}): {}", elementType.getSimpleName(), qualifiedSql);
+            log.info("Executing BigQuery SQL query for typed list ({}): {}", elementType.getSimpleName(), sanitizeSqlForLogging(qualifiedSql));
             QueryJobConfiguration queryConfig = QueryJobConfiguration.newBuilder(qualifiedSql)
                     .setUseLegacySql(false)
+                    .setMaximumBytesBilled(maxBytesBilled)
                     .build();
 
             TableResult result = bigQuery.query(queryConfig);
@@ -142,7 +148,7 @@ public class BigQueryAnalyticsService {
             Thread.currentThread().interrupt();
             throw new RuntimeException("BigQuery query execution was interrupted", e);
         } catch (Exception e) {
-            log.error("BigQuery query execution failed for SQL: {}", sql, e);
+            log.error("BigQuery query execution failed for SQL: {}", sanitizeSqlForLogging(sql), e);
             throw new RuntimeException("BigQuery execution error: " + e.getMessage(), e);
         }
     }
@@ -153,24 +159,37 @@ public class BigQueryAnalyticsService {
      */
     @SuppressWarnings("unchecked")
     public <T> T queryForObject(String sql, Class<T> requiredType, Object... args) {
-        String formattedSql = sql;
-        if (args != null && args.length > 0) {
-            // Standard placeholder replacement for simple query formats
-            for (Object arg : args) {
-                String replacement = arg == null ? "NULL" : "'" + arg.toString().replace("'", "''") + "'";
-                formattedSql = formattedSql.replaceFirst("\\?", replacement);
-            }
-        }
-
-        String qualifiedSql = qualifyTableReferences(formattedSql);
+        String qualifiedSql = qualifyTableReferences(sql);
         validateQuerySafety(qualifiedSql);
         try {
-            log.info("Executing BigQuery SQL query for object ({}): {}", requiredType.getSimpleName(), qualifiedSql);
-            QueryJobConfiguration queryConfig = QueryJobConfiguration.newBuilder(qualifiedSql)
+            log.info("Executing BigQuery SQL query for object ({}): {}", requiredType.getSimpleName(), sanitizeSqlForLogging(qualifiedSql));
+            QueryJobConfiguration.Builder queryConfigBuilder = QueryJobConfiguration.newBuilder(qualifiedSql)
                     .setUseLegacySql(false)
-                    .build();
+                    .setMaximumBytesBilled(maxBytesBilled);
 
-            TableResult result = bigQuery.query(queryConfig);
+            if (args != null && args.length > 0) {
+                for (Object arg : args) {
+                    if (arg == null) {
+                        queryConfigBuilder.addPositionalParameter(QueryParameterValue.string(null));
+                    } else if (arg instanceof String s) {
+                        queryConfigBuilder.addPositionalParameter(QueryParameterValue.string(s));
+                    } else if (arg instanceof Long l) {
+                        queryConfigBuilder.addPositionalParameter(QueryParameterValue.int64(l));
+                    } else if (arg instanceof Integer i) {
+                        queryConfigBuilder.addPositionalParameter(QueryParameterValue.int64(i.longValue()));
+                    } else if (arg instanceof Double d) {
+                        queryConfigBuilder.addPositionalParameter(QueryParameterValue.float64(d));
+                    } else if (arg instanceof Boolean b) {
+                        queryConfigBuilder.addPositionalParameter(QueryParameterValue.bool(b));
+                    } else if (arg instanceof LocalDate ld) {
+                        queryConfigBuilder.addPositionalParameter(QueryParameterValue.date(ld.toString()));
+                    } else {
+                        queryConfigBuilder.addPositionalParameter(QueryParameterValue.string(arg.toString()));
+                    }
+                }
+            }
+
+            TableResult result = bigQuery.query(queryConfigBuilder.build());
             for (FieldValueList row : result.iterateAll()) {
                 if (!row.isEmpty()) {
                     Object val = convertFieldValue(row.get(0), null);
@@ -193,9 +212,14 @@ public class BigQueryAnalyticsService {
             Thread.currentThread().interrupt();
             throw new RuntimeException("BigQuery query execution was interrupted", e);
         } catch (Exception e) {
-            log.error("BigQuery query execution failed for SQL: {}", formattedSql, e);
+            log.error("BigQuery query execution failed for SQL: {}", sanitizeSqlForLogging(sql), e);
             throw new RuntimeException("BigQuery execution error: " + e.getMessage(), e);
         }
+    }
+
+    private String sanitizeSqlForLogging(String sql) {
+        if (sql == null) return null;
+        return sql.length() > 500 ? sql.substring(0, 500) + "... [TRUNCATED]" : sql;
     }
 
     /**

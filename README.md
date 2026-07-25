@@ -11,7 +11,7 @@ The backend ingests Excel layout templates, normalizes their configuration into 
 - **Author**: Antigravity Developer Team & Google DeepMind Pair Programmer
 - **Repository**: [reportingengine_backend](./)
 - **Backend Stack**: Java 21, Spring Boot 3.5.0-SNAPSHOT, Spring Data JPA, Hibernate, exp4j, Project Loom Virtual Threads
-- **Database**: PostgreSQL 16 (Local Docker container or Neon Serverless Postgres in production)
+- **Database**: PostgreSQL 18 (Local Docker container or Neon Serverless Postgres in production)
 
 ---
 
@@ -25,6 +25,7 @@ The backend ingests Excel layout templates, normalizes their configuration into 
   - [Project Structure](#project-structure)
   - [Architectural Stack \& Key Optimizations](#architectural-stack--key-optimizations)
     - [Core Technologies](#core-technologies)
+    - [Column Time-Window Types \& Period Boundaries](#column-time-window-types--period-boundaries)
   - [Architecture Diagram](#architecture-diagram)
   - [Quick Start: Working With This Repo](#quick-start-working-with-this-repo)
     - [Prerequisites](#prerequisites)

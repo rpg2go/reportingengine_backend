@@ -1,0 +1,38 @@
+# ===================================================================
+# Local Development Configuration Profile (`dev`)
+# ===================================================================
+
+spring:
+  config:
+    activate:
+      on-profile: dev
+  datasource:
+    url: ${SPRING_DATASOURCE_URL}
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      minimum-idle: 1
+      maximum-pool-size: 10
+      idle-timeout: 30000
+      connection-timeout: 10000
+      max-lifetime: 120000
+      connection-test-query: SELECT 1
+  jpa:
+    show-sql: true
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        format_sql: true
+
+security:
+  jwt:
+    allow-mock-fallback: true
+
+logging:
+  level:
+    com.reporting: DEBUG
+    org.springframework.web: INFO
+    org.hibernate.SQL: DEBUG
+    org.hibernate.orm.jdbc.bind: TRACE

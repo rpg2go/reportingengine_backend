@@ -47,7 +47,7 @@ public class ReportRunnerServiceIT extends BaseIT {
         // R1 points to 'total_revenue' which resolves to SUM(analytics.fact_sales.amount)
         List<ReportRowDto> rows = List.of(
             new ReportRowDto("R1", reportId, "Revenue Row", Enums.RowType.data, new MeasureDefinitionDTO("raw", null, null, null, "SUM(amount)"), null, "normal", 0, 1, Set.of("C1"), null),
-            new ReportRowDto("R2", reportId, "Double Revenue", Enums.RowType.calc, new MeasureDefinitionDTO("raw", null, null, null, "R1 * 2"), null, "total", 0, 2, Set.of("C1"), null)
+            new ReportRowDto("R2", reportId, "Double Revenue", Enums.RowType.calc, new MeasureDefinitionDTO("raw", null, null, null, "R1 * 2"), "R1 * 2", "total", 0, 2, Set.of("C1"), null)
         );
 
         ReportConfigDto config = new ReportConfigDto(
@@ -71,13 +71,24 @@ public class ReportRunnerServiceIT extends BaseIT {
             assertThat(sheet).isNotNull();
 
             // Verify structure and math post processing
-            double r1Value = sheet.getRow(1).getCell(1).getNumericCellValue();
-            double r2Value = sheet.getRow(2).getCell(1).getNumericCellValue();
+            double r1Value = 0.0;
+            double r2Value = 0.0;
+            for (org.apache.poi.ss.usermodel.Row row : sheet) {
+                if (row.getCell(0) != null) {
+                    String label = row.getCell(0).getStringCellValue();
+                    if ("Revenue Row".equals(label)) {
+                        r1Value = row.getCell(1).getNumericCellValue();
+                    } else if ("Double Revenue".equals(label)) {
+                        r2Value = row.getCell(1).getNumericCellValue();
+                    }
+                }
+            }
 
             System.out.println("R1 Revenue: " + r1Value);
             System.out.println("R2 Double Revenue: " + r2Value);
 
             // R2 formula: R1 * 2
+            assertThat(r1Value).isGreaterThan(0.0);
             assertThat(r2Value).isEqualTo(r1Value * 2);
         }
     }

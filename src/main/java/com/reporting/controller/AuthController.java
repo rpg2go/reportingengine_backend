@@ -11,7 +11,8 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Controller to handle authentication login checks and return OIDC-compliant mock JWT bearer tokens.
+ * Controller to handle authentication login checks and return OIDC-compliant
+ * mock JWT bearer tokens.
  */
 @RestController
 @RequestMapping("/api/auth")
