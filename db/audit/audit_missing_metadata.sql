@@ -2,7 +2,7 @@
 -- PostgreSQL Schema Discrepancy Discovery Query (audit_missing_metadata.sql)
 --
 -- Objective:
--- Inspect information_schema.columns against reporting.meta_column to identify
+-- Inspect information_schema.columns against catalog_owner.meta_column to identify
 -- physical columns in analytics tables (facts & dimensions) that have no registered metadata.
 -- =============================================================================
 
@@ -14,10 +14,10 @@ SELECT
     mt.table_id AS registered_table_id,
     mt.table_type
 FROM information_schema.columns c
-JOIN catalog.meta_table mt 
+JOIN catalog_owner.meta_table mt 
     ON mt.schema_name = c.table_schema 
    AND mt.table_name = c.table_name
-LEFT JOIN catalog.meta_column mc 
+LEFT JOIN catalog_owner.meta_column mc 
     ON mc.table_id = mt.table_id 
    AND mc.column_name = c.column_name
 WHERE mc.column_id IS NULL

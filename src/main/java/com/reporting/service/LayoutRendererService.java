@@ -55,19 +55,14 @@ public class LayoutRendererService {
     }
 
     public LocalDate getAdjustedRefDate(LocalDate refDate, ColumnDefDto col, List<ColumnDefDto> allCols) {
-        int offset = 0;
-        String grain = "WEEK";
-        if (col.colType() == Enums.ColType.ROLLING) {
-            offset = col.periodOffset();
-            grain = col.effectiveRollingGrain();
-        } else if ("L2".equalsIgnoreCase(col.tierLevel()) && col.parentId() != null) {
+        int offset = col.periodOffset();
+        String grain = col.effectiveGrain();
+        if ("L2".equalsIgnoreCase(col.tierLevel()) && col.parentId() != null) {
             String parentKey = col.parentId().trim().toUpperCase();
             for (ColumnDefDto parent : allCols) {
                 if (parentKey.equals(parent.colId().trim().toUpperCase())) {
-                    if (parent.colType() == Enums.ColType.ROLLING) {
-                        offset = parent.periodOffset();
-                        grain = parent.effectiveRollingGrain();
-                    }
+                    offset = parent.periodOffset();
+                    grain = parent.effectiveGrain();
                     break;
                 }
             }
@@ -81,33 +76,41 @@ public class LayoutRendererService {
 
     public List<ExpandedColumn> expandRollingColumn(ColumnDefDto col, LocalDate colRefDate) {
         List<ExpandedColumn> subCols = new ArrayList<>();
-        int rollingN = col.rollingN() != null ? col.rollingN() : 1;
-        String grain = col.effectiveRollingGrain();
+        int rollingN = Math.abs(col.rollingN() != null ? col.rollingN() : 1);
+        String grain = col.effectiveGrain();
+        int baseOffset = col.periodOffset();
 
         for (int i = rollingN; i >= 1; i--) {
             String subColId = col.colId() + "_" + i;
+            int effectiveOffset = baseOffset - (i - 1);
             String label = "";
 
             switch (grain) {
                 case "DAY": {
-                    LocalDate target = colRefDate.minusDays(i);
+                    LocalDate target = colRefDate.plusDays(effectiveOffset);
                     label = formatShortDay(target);
                     break;
                 }
                 case "MONTH": {
-                    LocalDate target = colRefDate.minusMonths(i);
+                    LocalDate target = colRefDate.plusMonths(effectiveOffset);
                     label = formatMonthYear(target);
                     break;
                 }
+                case "QUARTER": {
+                    LocalDate target = colRefDate.plusMonths(effectiveOffset * 3L);
+                    int q = ((target.getMonthValue() - 1) / 3) + 1;
+                    label = "Q" + q + " " + target.getYear();
+                    break;
+                }
                 case "YEAR": {
-                    LocalDate target = colRefDate.minusYears(i);
+                    LocalDate target = colRefDate.plusYears(effectiveOffset);
                     label = String.valueOf(target.getYear());
                     break;
                 }
                 case "WEEK":
                 default: {
                     LocalDate refMonday = colRefDate.with(java.time.temporal.TemporalAdjusters.previousOrSame(java.time.DayOfWeek.MONDAY));
-                    LocalDate targetMonday = refMonday.minusWeeks(i);
+                    LocalDate targetMonday = refMonday.plusWeeks(effectiveOffset);
                     LocalDate targetSunday = targetMonday.plusDays(6);
                     label = formatWeekRange(targetMonday, targetSunday);
                     break;
@@ -146,14 +149,14 @@ public class LayoutRendererService {
         for (ColumnDefDto col : l1Cols) {
             LocalDate colRefDate = getAdjustedRefDate(refDate, col, config.getColumns());
 
-            if (col.colType() == Enums.ColType.ROLLING) {
+            if (col.isRolling()) {
                 leaves.addAll(expandRollingColumn(col, colRefDate));
             } else if (col.colType() == Enums.ColType.HEADER) {
                 List<ColumnDefDto> children = l2ChildrenMap.getOrDefault(col.colId().trim().toUpperCase(), Collections.emptyList());
                 if (!children.isEmpty()) {
                     for (ColumnDefDto child : children) {
                         LocalDate childRefDate = getAdjustedRefDate(refDate, child, config.getColumns());
-                        if (child.colType() == Enums.ColType.ROLLING) {
+                        if (child.isRolling()) {
                             leaves.addAll(expandRollingColumn(child, childRefDate));
                         } else {
                             leaves.add(new ExpandedColumn(child.colId(), child.label(), false, null));
@@ -168,7 +171,7 @@ public class LayoutRendererService {
                 if (!children.isEmpty()) {
                     for (ColumnDefDto child : children) {
                         LocalDate childRefDate = getAdjustedRefDate(refDate, child, config.getColumns());
-                        if (child.colType() == Enums.ColType.ROLLING) {
+                        if (child.isRolling()) {
                             leaves.addAll(expandRollingColumn(child, childRefDate));
                         } else {
                             leaves.add(new ExpandedColumn(child.colId(), child.label(), false, null));
@@ -195,7 +198,7 @@ public class LayoutRendererService {
                 }
                 if (!hasValidParent) {
                     LocalDate colRefDate = getAdjustedRefDate(refDate, col, config.getColumns());
-                    if (col.colType() == Enums.ColType.ROLLING) {
+                    if (col.isRolling()) {
                         leaves.addAll(expandRollingColumn(col, colRefDate));
                     } else {
                         leaves.add(new ExpandedColumn(col.colId(), col.label(), false, null));

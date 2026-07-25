@@ -122,10 +122,10 @@ public class LayoutRendererServiceTest {
             // Header Row (Row 1)
             Row headerRow1 = sheet.getRow(1);
             assertThat(headerRow1).isNotNull();
-            // C7_3: March 2026, C7_2: April 2026, C7_1: May 2026
-            assertThat(headerRow1.getCell(1).getStringCellValue()).isEqualTo("March 2026");
-            assertThat(headerRow1.getCell(2).getStringCellValue()).isEqualTo("April 2026");
-            assertThat(headerRow1.getCell(3).getStringCellValue()).isEqualTo("May 2026");
+            // C7_3: April 2026, C7_2: May 2026, C7_1: June 2026
+            assertThat(headerRow1.getCell(1).getStringCellValue()).isEqualTo("April 2026");
+            assertThat(headerRow1.getCell(2).getStringCellValue()).isEqualTo("May 2026");
+            assertThat(headerRow1.getCell(3).getStringCellValue()).isEqualTo("June 2026");
 
             // Row 2 (R1 - Revenue)
             Row r1Row = sheet.getRow(2);

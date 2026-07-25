@@ -1,10 +1,5 @@
--- =============================================================================
--- Programmatic Metadata Delta Patch Generation Script (generate_meta_delta.sql)
---
--- Objective:
--- Automatically insert missing columns from all registered analytics tables (facts & dimensions)
--- into catalog_owner.meta_column to resolve catalog synchronization bugs.
--- =============================================================================
+--liquibase formatted sql
+--changeset devops:017_seed_missing_meta_columns runOnChange:true endDelimiter:;
 
 INSERT INTO catalog_owner.meta_column (
     table_id,
@@ -26,9 +21,9 @@ SELECT
         WHEN c.data_type = 'character varying' THEN 'varchar'
         WHEN c.data_type = 'integer' THEN 'integer'
         WHEN c.data_type = 'numeric' THEN 'numeric'
+        WHEN c.data_type = 'double precision' THEN 'numeric'
         ELSE c.data_type
     END AS data_type,
-    -- 1. Check if column is a primary key via system constraints
     EXISTS (
         SELECT 1 
         FROM information_schema.table_constraints tc 
@@ -40,7 +35,6 @@ SELECT
           AND tc.table_name = c.table_name 
           AND kcu.column_name = c.column_name
     ) AS is_primary_key,
-    -- 2. Check if column is a foreign key via system constraints
     EXISTS (
         SELECT 1 
         FROM information_schema.table_constraints tc 
@@ -52,30 +46,17 @@ SELECT
           AND tc.table_name = c.table_name 
           AND kcu.column_name = c.column_name
     ) AS is_foreign_key,
-    -- 3. Filterable check (strings/booleans that are not PKs/FKs)
     (
         c.data_type IN ('character varying', 'varchar', 'text', 'boolean')
         AND c.column_name NOT LIKE '%_id' 
         AND c.column_name <> 'id'
     ) AS is_filterable,
-    -- 4. Caching check
     (
         c.data_type IN ('character varying', 'varchar', 'text', 'boolean')
         AND c.column_name NOT LIKE '%_id' 
         AND c.column_name <> 'id'
     ) AS is_cached,
-    -- 5. Visibility check (hidden primary keys, visible others)
-    NOT EXISTS (
-        SELECT 1 
-        FROM information_schema.table_constraints tc 
-        JOIN information_schema.key_column_usage kcu 
-          ON tc.constraint_name = kcu.constraint_name 
-         AND tc.table_schema = kcu.table_schema
-        WHERE tc.constraint_type = 'PRIMARY KEY' 
-          AND tc.table_schema = c.table_schema 
-          AND tc.table_name = c.table_name 
-          AND kcu.column_name = c.column_name
-    ) AS is_visible,
+    TRUE AS is_visible,
     'Physical column [' || c.column_name || '] of analytical table [' || c.table_name || '].' AS description
 FROM information_schema.columns c
 JOIN catalog_owner.meta_table mt 

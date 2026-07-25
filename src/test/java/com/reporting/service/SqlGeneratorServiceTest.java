@@ -729,7 +729,7 @@ public class SqlGeneratorServiceTest {
         String sql = service.generate(config);
 
         // Assert
-        assertThat(sql).contains("(fact_investments.a = '1' OR (fact_investments.b IN ('2', '3')))");
+        assertThat(sql).contains("(fact_investments.a = 1 OR (fact_investments.b IN (2, 3)))");
     }
 
     @Test

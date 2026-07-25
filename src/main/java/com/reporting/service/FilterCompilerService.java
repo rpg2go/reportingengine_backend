@@ -95,8 +95,7 @@ public class FilterCompilerService {
             case "=":
             case "is": {
                 String val = values.isEmpty() ? "" : values.get(0);
-                String escapedVal = val.replace("'", "''");
-                result = String.format("%s = '%s'", col, escapedVal);
+                result = String.format("%s = %s", col, formatValue(val));
                 break;
             }
             case "!=":
@@ -104,8 +103,8 @@ public class FilterCompilerService {
             case "is not":
             case "is different from": {
                 String val = values.isEmpty() ? "" : values.get(0);
-                String escapedVal = val.replace("'", "''");
-                result = String.format("(%s <> '%s' OR %s IS NULL)", col, escapedVal, col);
+                String formattedVal = formatValue(val);
+                result = String.format("(%s <> %s OR %s IS NULL)", col, formattedVal, col);
                 break;
             }
             case "contains":
@@ -170,27 +169,27 @@ public class FilterCompilerService {
             }
             case "in":
             case "in list": {
-                List<String> quoted = new ArrayList<>();
+                List<String> formatted = new ArrayList<>();
                 for (String v : values) {
-                    quoted.add("'" + v.replace("'", "''") + "'");
+                    formatted.add(formatValue(v));
                 }
-                if (quoted.isEmpty()) {
+                if (formatted.isEmpty()) {
                     result = String.format("%s IN (NULL)", col);
                 } else {
-                    result = String.format("%s IN (%s)", col, String.join(", ", quoted));
+                    result = String.format("%s IN (%s)", col, String.join(", ", formatted));
                 }
                 break;
             }
             case "not in":
             case "not in list": {
-                List<String> quoted = new ArrayList<>();
+                List<String> formatted = new ArrayList<>();
                 for (String v : values) {
-                    quoted.add("'" + v.replace("'", "''") + "'");
+                    formatted.add(formatValue(v));
                 }
-                if (quoted.isEmpty()) {
+                if (formatted.isEmpty()) {
                     result = String.format("%s NOT IN (NULL)", col);
                 } else {
-                    result = String.format("%s NOT IN (%s)", col, String.join(", ", quoted));
+                    result = String.format("%s NOT IN (%s)", col, String.join(", ", formatted));
                 }
                 break;
             }
@@ -198,32 +197,28 @@ public class FilterCompilerService {
             case "greater_than":
             case "is greater then": {
                 String val = values.isEmpty() ? "" : values.get(0);
-                String escapedVal = val.replace("'", "''");
-                result = String.format("%s > '%s'", col, escapedVal);
+                result = String.format("%s > %s", col, formatValue(val));
                 break;
             }
             case ">=":
             case "greater_equal":
             case "is greater or equal": {
                 String val = values.isEmpty() ? "" : values.get(0);
-                String escapedVal = val.replace("'", "''");
-                result = String.format("%s >= '%s'", col, escapedVal);
+                result = String.format("%s >= %s", col, formatValue(val));
                 break;
             }
             case "<":
             case "less_than":
             case "is less then": {
                 String val = values.isEmpty() ? "" : values.get(0);
-                String escapedVal = val.replace("'", "''");
-                result = String.format("%s < '%s'", col, escapedVal);
+                result = String.format("%s < %s", col, formatValue(val));
                 break;
             }
             case "<=":
             case "less_equal":
             case "is less or equal": {
                 String val = values.isEmpty() ? "" : values.get(0);
-                String escapedVal = val.replace("'", "''");
-                result = String.format("%s <= '%s'", col, escapedVal);
+                result = String.format("%s <= %s", col, formatValue(val));
                 break;
             }
             default:
@@ -232,6 +227,24 @@ public class FilterCompilerService {
         
         validateFilterExpr(result);
         return result;
+    }
+
+    private boolean isNumericValue(String val) {
+        if (val == null || val.isBlank()) {
+            return false;
+        }
+        return val.trim().matches("^-?\\d+(\\.\\d+)?$");
+    }
+
+    private String formatValue(String val) {
+        if (val == null) {
+            return "''";
+        }
+        String trimmed = val.trim();
+        if (isNumericValue(trimmed)) {
+            return trimmed;
+        }
+        return "'" + trimmed.replace("'", "''") + "'";
     }
 
     private String compileGroup(GroupNode group) {

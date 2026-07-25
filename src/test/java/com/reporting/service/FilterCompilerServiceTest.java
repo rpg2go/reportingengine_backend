@@ -20,7 +20,7 @@ public class FilterCompilerServiceTest {
     public void compile_flatRuleNode() {
         RuleNode node = new RuleNode("analytics.fact_sales", "amount", ">=", List.of("1000"));
         String sql = compilerService.compile(node);
-        assertThat(sql).isEqualTo("analytics.fact_sales.amount >= '1000'");
+        assertThat(sql).isEqualTo("analytics.fact_sales.amount >= 1000");
     }
 
     @Test
@@ -51,7 +51,7 @@ public class FilterCompilerServiceTest {
         
         GroupNode root = new GroupNode("AND", List.of(r1, r2));
         String sql = compilerService.compile(root);
-        assertThat(sql).isEqualTo("(fact_sales.amount > '5000' AND dim_customers.status = 'active')");
+        assertThat(sql).isEqualTo("(fact_sales.amount > 5000 AND dim_customers.status = 'active')");
     }
 
     @Test
@@ -65,7 +65,7 @@ public class FilterCompilerServiceTest {
         GroupNode root = new GroupNode("OR", List.of(g1, r3));
 
         String sql = compilerService.compile(root);
-        assertThat(sql).isEqualTo("((fact_sales.amount > '5000' AND dim_customers.status = 'active') OR dim_products.category = 'loans')");
+        assertThat(sql).isEqualTo("((fact_sales.amount > 5000 AND dim_customers.status = 'active') OR dim_products.category = 'loans')");
     }
 
     @Test

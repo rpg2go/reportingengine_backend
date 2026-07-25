@@ -344,34 +344,24 @@ public class SqlGeneratorService {
                     String timeKey = getTimeKeyForTable(factTable);
                     boolean hasTimeKey = timeKey != null && !timeKey.isBlank();
 
-                    LocalDate colRefDate = config.getReferenceDate() != null ? config.getReferenceDate() : LocalDate.now();
-                    int shiftOffset = 0;
-                    String shiftGrain = "WEEK";
-                    if (col.colType() == Enums.ColType.ROLLING) {
-                        shiftOffset = col.periodOffset();
-                        shiftGrain = col.effectiveRollingGrain();
-                    } else if ("L2".equalsIgnoreCase(col.tierLevel()) && col.parentId() != null) {
+                    LocalDate refDate = config.getReferenceDate() != null ? config.getReferenceDate() : LocalDate.now();
+                    int totalOffset = col.periodOffset();
+                    if ("L2".equalsIgnoreCase(col.tierLevel()) && col.parentId() != null) {
                         String pId = col.parentId().trim().toUpperCase();
                         for (ColumnDefDto parent : config.getColumns()) {
                             if (pId.equals(parent.colId().trim().toUpperCase())) {
-                                if (parent.colType() == Enums.ColType.ROLLING) {
-                                    shiftOffset = parent.periodOffset();
-                                    shiftGrain = parent.effectiveRollingGrain();
-                                }
+                                totalOffset += parent.periodOffset();
                                 break;
                             }
                         }
                     }
-                    if (shiftOffset != 0) {
-                        colRefDate = TimeWindowResolver.shiftRefDateByGrain(colRefDate, shiftOffset, shiftGrain);
-                    }
 
                     LocalDate[] boundaries = DateUtils.getPeriodBoundaries(
-                        colRefDate,
+                        refDate,
                         col.colType(),
-                        col.colType() == Enums.ColType.ROLLING ? 0 : col.periodOffset(),
+                        totalOffset,
                         col.rollingN(),
-                        col.effectiveRollingGrain()   // DAY | WEEK | MONTH (null → WEEK)
+                        col.effectiveGrain()
                     );
                     LocalDate start = boundaries[0];
                     LocalDate end = boundaries[1];
@@ -398,32 +388,14 @@ public class SqlGeneratorService {
                     String alias = "val_" + row.rowId().toLowerCase() + "_" + col.colId().toLowerCase();
                     selectList.add(String.format("CAST(%s AS DOUBLE PRECISION) AS %s", metricClause, alias));
 
-                    if (col.colType() == Enums.ColType.ROLLING) {
-                        int rollingN = col.rollingN() != null ? col.rollingN() : 1;
-                        String grain = col.effectiveRollingGrain();
+                    if (col.isRolling()) {
+                        int rollingN = Math.abs(col.rollingN() != null ? col.rollingN() : 1);
+                        Enums.ColType subType = col.colType() == Enums.ColType.ROLLING ? Enums.ColType.MTD : col.colType();
                         for (int i = rollingN; i >= 1; i--) {
-                            LocalDate subStart;
-                            LocalDate subEnd;
-                            if ("DAY".equals(grain)) {
-                                subStart = colRefDate.minusDays(i);
-                                subEnd = colRefDate.minusDays(i);
-                            } else if ("MONTH".equals(grain)) {
-                                LocalDate[] b = DateUtils.getPeriodBoundaries(colRefDate, Enums.ColType.MTD, -i, null, null);
-                                subStart = b[0];
-                                subEnd = b[1];
-                            } else if ("QUARTER".equals(grain)) {
-                                LocalDate[] b = DateUtils.getPeriodBoundaries(colRefDate, Enums.ColType.QTD, -i, null, null);
-                                subStart = b[0];
-                                subEnd = b[1];
-                            } else if ("YEAR".equals(grain)) {
-                                LocalDate[] b = DateUtils.getPeriodBoundaries(colRefDate, Enums.ColType.YTD, -i, null, null);
-                                subStart = b[0];
-                                subEnd = b[1];
-                            } else { // WEEK
-                                LocalDate[] b = DateUtils.getPeriodBoundaries(colRefDate, Enums.ColType.WTD, -i, null, null);
-                                subStart = b[0];
-                                subEnd = b[1];
-                            }
+                            int subOffset = totalOffset - (i - 1);
+                            LocalDate[] b = DateUtils.getPeriodBoundaries(refDate, subType, subOffset, 1, col.effectiveGrain());
+                            LocalDate subStart = b[0];
+                            LocalDate subEnd = b[1];
 
                             String subDateConstraint;
                             if (hasTimeKey) {

@@ -62,13 +62,30 @@ public record ColumnDefDto(
     }
 
     /**
+     * Returns the effective time grain for date calculations.
+     * Derived directly from {@code colType} (MTD → MONTH, YTD → YEAR, QTD → QUARTER, WTD → WEEK),
+     * with fallback to {@code rollingGrain} or "WEEK".
+     */
+    public String effectiveGrain() {
+        if (colType == Enums.ColType.MTD) return "MONTH";
+        if (colType == Enums.ColType.YTD) return "YEAR";
+        if (colType == Enums.ColType.QTD) return "QUARTER";
+        if (colType == Enums.ColType.WTD) return "WEEK";
+        return (rollingGrain != null && !rollingGrain.isBlank()) ? rollingGrain.toUpperCase() : "WEEK";
+    }
+
+    public boolean isRolling() {
+        return (rollingN != null && Math.abs(rollingN) > 1) || colType == Enums.ColType.ROLLING;
+    }
+
+    /**
      * Returns the effective rolling grain, defaulting to {@code "WEEK"} when
      * the field is absent (e.g. reports saved before this field was introduced).
      *
-     * @return one of {@code "DAY"}, {@code "WEEK"}, or {@code "MONTH"}
+     * @return one of {@code "DAY"}, {@code "WEEK"}, {@code "MONTH"}, {@code "QUARTER"}, {@code "YEAR"}
      */
     public String effectiveRollingGrain() {
-        return (rollingGrain != null && !rollingGrain.isBlank()) ? rollingGrain.toUpperCase() : "WEEK";
+        return effectiveGrain();
     }
 }
 
