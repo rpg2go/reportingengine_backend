@@ -7,7 +7,7 @@ RUN mvn clean package -DskipTests
 FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
-COPY --from=builder /app/target/report-template-engine-1.0.0.jar app.jar
+COPY --from=builder /app/target/report-builder-engine-1.0.0.jar app.jar
 USER appuser
 # Default port expected by Cloud Run. Spring Boot reads this via ${PORT:8101} in application.properties.
 # Cloud Run overrides this at runtime with its own PORT env var (always 8080).
