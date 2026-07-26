@@ -67,10 +67,10 @@ parse_postgres_uri() {
   fi
 }
 
-if [ "$TARGET_ENV" = "local" ] || [ -z "$TARGET_ENV" ]; then
+`dfnmm m if [ "$TARGET_ENV" = "local" ] || [ "$TARGET_ENV" = "l" ] || [ -z "$TARGET_ENV" ]; then
   URI_TO_PARSE=${SPRING_DATASOURCE_URL:-${LOCAL_DATABASE_URL:-$DATABASE_URL}}
   echo "Target environment: LOCAL database ($URI_TO_PARSE)"
-elif [ "$TARGET_ENV" = "neon" ]; then
+elif [ "$TARGET_ENV" = "neon" ] || [ "$TARGET_ENV" = "n" ]; then
   URI_TO_PARSE=$NEON_DATABASE_URL
   echo "Target environment: NEON cloud database ($URI_TO_PARSE)"
 else
