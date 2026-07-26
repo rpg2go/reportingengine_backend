@@ -46,7 +46,7 @@ security:
 
 logging:
   level:
-    com.reporting: DEBUG
+    com.db.reporting: DEBUG
     org.springframework.web: INFO
     org.hibernate.SQL: INFO
     org.hibernate.orm.jdbc.bind: WARN

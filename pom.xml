@@ -11,7 +11,7 @@
         <relativePath/> <!-- lookup parent from repository -->
     </parent>
 
-    <groupId>com.reporting</groupId>
+    <groupId>com.db.reporting</groupId>
     <artifactId>report-builder-engine</artifactId>
     <version>1.0.0</version>
     <name>report-builder-engine</name>

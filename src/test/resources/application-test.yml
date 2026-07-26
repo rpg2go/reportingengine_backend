@@ -43,6 +43,6 @@ bigquery:
 # Logging configuration during testing
 logging:
   level:
-    com.reporting: INFO
+    com.db.reporting: INFO
     org.springframework.web: WARN
     org.hibernate.SQL: WARN

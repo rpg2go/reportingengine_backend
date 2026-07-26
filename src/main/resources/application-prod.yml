@@ -51,7 +51,7 @@ security:
 
 logging:
   level:
-    com.reporting: INFO
+    com.db.reporting: INFO
     org.springframework.web: WARN
     org.hibernate.SQL: WARN
     org.hibernate.orm.jdbc.bind: WARN

@@ -43,7 +43,7 @@ This document serves as the architecture reference, implementation state, and co
 6. **Report Version Lifecycle**:
    `ReportVersionController` manages a draft → in_review → published → (fork) lifecycle. Publishing a version auto-creates the next draft by cloning all child rows, columns, metrics, formulas, and column maps via direct JDBC `INSERT … SELECT` statements.
 7. **Unified Package Structure**:
-   Consolidated all backend source files under the unified package `com.reporting.*`. The legacy package structure under `com.banking.reporting` (including `HierarchicalColumnDto` and `ExcelExporterService`) was completely removed to avoid split packages and simplify import maps.
+   Consolidated all backend source files under the unified package `com.db.reporting.*`. The legacy package structure under `com.banking.reporting` (including `HierarchicalColumnDto` and `ExcelExporterService`) was completely removed to avoid split packages and simplify import maps.
 8. **Sealed AST Filter Compiler**:
    Introduced a dedicated `FilterCompilerService` using modern Java 21 Record structures and a sealed hierarchy (`FilterNode` permitting `RuleNode` and `GroupNode`) to represent row-level dynamic filter configurations, performing AST-to-SQL compilation via switch pattern matching.
 9. **Conditional Soft / Hard Deletion**:
@@ -160,7 +160,7 @@ Use the links below to navigate directly to the primary components:
   - [ReportValidationService.java](src/main/java/com/reporting/service/ReportValidationService.java) — Validates cycle detections, schema checks, and expressions.
   - [SemanticResolverService.java](src/main/java/com/reporting/service/SemanticResolverService.java) — Resolves metric metadata (legacy; bypassed in current execution flow).
   - [DateUtils.java](src/main/java/com/reporting/service/DateUtils.java) — Period boundary calculations (start/end of week, month, quarter, year) for rolling columns.
-- **Catalog Package** (`com.reporting.catalog`):
+- **Catalog Package** (`com.db.reporting.catalog`):
   - [SchemaCatalogLoader.java](src/main/java/com/reporting/catalog/SchemaCatalogLoader.java) — Loads `meta_table`, `meta_column`, `meta_relationship` into an in-memory graph at startup via `@PostConstruct`.
   - [SchemaGraphRouter.java](src/main/java/com/reporting/catalog/SchemaGraphRouter.java) — Dijkstra BFS pathfinder resolving multi-hop LEFT JOIN chains between fact and dimension tables.
   - [MetaTable.java](src/main/java/com/reporting/catalog/MetaTable.java), [MetaColumn.java](src/main/java/com/reporting/catalog/MetaColumn.java), [MetaRelationship.java](src/main/java/com/reporting/catalog/MetaRelationship.java) — In-memory graph node/edge models.

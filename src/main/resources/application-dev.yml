@@ -32,7 +32,7 @@ security:
 
 logging:
   level:
-    com.reporting: DEBUG
+    com.db.reporting: DEBUG
     org.springframework.web: INFO
     org.hibernate.SQL: DEBUG
     org.hibernate.orm.jdbc.bind: TRACE

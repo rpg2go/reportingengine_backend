@@ -89,7 +89,7 @@ logging:
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] [%X{correlationId:-no-corr-id}] %-5level %logger{36} - %msg%n"
   level:
-    com.reporting: DEBUG
+    com.db.reporting: DEBUG
     org.springframework.web: WARN
     org.hibernate.SQL: WARN
     org.hibernate.orm.jdbc.bind: WARN
