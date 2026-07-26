@@ -34,19 +34,10 @@ This document serves as the architecture reference, implementation state, and co
 3. **Direct JDBC for Hot-Path Reads**:
    The `loadFromDb()` method in `ReportConfigService.java` was rewritten to use direct JDBC queries with `RowCallbackHandler` instead of 6 sequential JPA repository calls. This eliminated Hibernate entity-hydration overhead and unnecessary JOINs (e.g., `column_definition` joining back to `report_config`), reducing the report config endpoint latency from ~163ms to ~59ms.
 4. **Database Migrations and Tracking**:
-   We transitioned from custom Java-based migration scripts to a pure-SQL Liquibase migration architecture.
-   - **Changelog ledger**: Changesets are declared in native SQL files under `db/liquibase/sql/` and loaded dynamically via `db/liquibase/db.changelog-master.xml`.
-   - **Automatic execution**: Applied automatically at application startup via Spring Boot's integrated Liquibase auto-configuration (which executes before Hibernate validation runs).
-   - **Manual execution**: Managed via `./scripts/deploy-liquibase.sh [local|neon|url]` sourcing connection parameters from `.env`.
-   - **Clean rebuild step**: If developers encounter checksum mismatches (from updating seeding files) or want to reset their local schemas, they can clean the database with:
-     ```sql
-     DROP SCHEMA IF EXISTS report_builder_owner CASCADE;
-     DROP SCHEMA IF EXISTS catalog_owner CASCADE;
-     DROP SCHEMA IF EXISTS analytics CASCADE;
-     DROP TABLE IF EXISTS public.databasechangelog;
-     DROP TABLE IF EXISTS public.databasechangeloglock;
-     ```
-     and re-run `./scripts/deploy-liquibase.sh local`.
+   Database migrations and changesets are managed in the dedicated `reportingengine_db` repository using pure-SQL Liquibase migrations.
+   - **Changelog ledger**: Changesets are declared in native SQL files under `db/liquibase/sql/` and loaded dynamically via `db/liquibase/db.changelog-master.xml` in `reportingengine_db`.
+   - **Execution**: Run `./scripts/deploy-liquibase.sh [local|neon|url]` from the `reportingengine_db` repository.
+   - **Clean rebuild step**: Reset local schemas by running `./scripts/deploy-liquibase.sh local clean` in `reportingengine_db`.
 5. **Catalog-Driven Join Graph (SchemaGraphRouter)**:
    The `catalog` package (`SchemaCatalogLoader`, `SchemaGraphRouter`, `MetaTable`, `MetaColumn`, `MetaRelationship`) loads the `meta_*` schema catalog at startup into an in-memory graph from `catalog_owner.meta_*` and resolves multi-hop LEFT JOIN chains using a weighted Dijkstra BFS. Edge cost 1 = conformed dimension key, cost 2 = non-conformed FK. This replaces hardcoded join strings from the `sem_*` era.
 6. **Report Version Lifecycle**:
@@ -203,11 +194,12 @@ Start the backend on port `8101` using the Maven wrapper:
   ./maven/apache-maven-3.9.6/bin/mvn spring-boot:run
   ```
 
-### 3. Run Database Migrations Manually
+### 3. Run Database Migrations
 
-To apply migrations against a Postgres database using the compiled runner:
-```cmd
-maven\apache-maven-3.9.6\bin\mvn.cmd compile exec:java "-Dexec.mainClass=com.reporting.util.MigrationRunner" "-Dexec.args=YOUR_DATABASE_URL"
+Database migrations are managed in the `reportingengine_db` repository:
+```bash
+cd ../reportingengine_db
+./scripts/deploy-liquibase.sh local
 ```
 
 ---

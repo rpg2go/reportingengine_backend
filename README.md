@@ -378,30 +378,12 @@ pip3 --version || pip --version
    *Note: This will expose PostgreSQL on host port `5433` (container port `5432`) with database `reporting_db`.*
 
 2. **Deploy Database Migrations and Seed Data**:
-   Deploy the database schemas and seed transaction/configuration records using the Liquibase runner.
-   * **Local Database** (Uses `LOCAL_DATABASE_URL` from `.env` or defaults to port `5433` local container):
-     ```bash
-     ./scripts/deploy-liquibase.sh local
-     ```
-   * **Neon Cloud Database** (Uses `NEON_DATABASE_URL` from `.env`):
-     ```bash
-     ./scripts/deploy-liquibase.sh neon
-     ```
-   * **Custom Database URL**:
-     ```bash
-     ./scripts/deploy-liquibase.sh postgresql://user:pass@host:port/db
-     ```
-
-   > [!IMPORTANT]
-   > **How to Force a Clean Database Rebuild / Reset Checklist**:
-   > If you encounter checksum validation issues (due to regenerating seed files) or want to reset your local database environment from scratch, execute the following SQL commands in your database client editor to drop the existing schemas and changelog tracking tables:
-   > ```sql
-   > DROP SCHEMA IF EXISTS reporting CASCADE;
-   > DROP SCHEMA IF EXISTS analytics CASCADE;
-   > DROP TABLE IF EXISTS public.databasechangelog;
-   > DROP TABLE IF EXISTS public.databasechangeloglock;
-   > ```
-   > After dropping them, run `./scripts/deploy-liquibase.sh local` to recreate the schemas and re-seed the tables.
+   Database migrations and schema definitions are managed in the `reportingengine_db` repository.
+   Navigate to `reportingengine_db` and deploy the database schemas:
+   ```bash
+   cd ../reportingengine_db
+   ./scripts/deploy-liquibase.sh local
+   ```
 
 3. **Initialize ADK Validation Environment**:
    Ensure `google-adk` is installed:
@@ -440,7 +422,7 @@ Below is a summary of the most useful commands for building and running the back
 | :--- | :--- | :--- | :--- |
 | **Database** | `docker compose up --build -d` | Project Root | Builds and starts database container in detached mode (exposes port `5433`) |
 | **Database** | `docker compose down -v` | Project Root | Stops the database container and deletes the persistent volume |
-| **Database** | `./scripts/deploy-liquibase.sh [local\|neon]` | Project Root | Runs the Liquibase database migrations and seeds DWH/configs (defaults to local) |
+| **Database** | `./scripts/deploy-liquibase.sh [local\|neon]` | `reportingengine_db` | Runs Liquibase database migrations and seeds DWH/configs (defaults to local) |
 | **Backend** | `maven\apache-maven-3.9.6\bin\mvn.cmd clean compile` | Project Root | Clean compile Spring Boot application (Windows) |
 | **Backend** | `./maven/apache-maven-3.9.6/bin/mvn clean compile` | Project Root | Clean compile Spring Boot application (macOS/Linux) |
 | **Backend** | `maven\apache-maven-3.9.6\bin\mvn.cmd spring-boot:run` | Project Root | Runs the backend server on port 8101 (Windows) |
