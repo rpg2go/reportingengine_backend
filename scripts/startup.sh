@@ -7,7 +7,7 @@
 #   2. Spring Boot backend          (port 8101)
 #
 # Run from anywhere:
-#   ./scripts/dev.sh
+#   ./scripts/startup.sh  (or ./scripts/start.sh)
 #
 # Prerequisites: Docker, Java 17+
 # =============================================================================
@@ -17,7 +17,15 @@ set -e
 # Resolve paths relative to this script, regardless of CWD
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-MVN="$PROJECT_ROOT/maven/apache-maven-3.9.6/bin/mvn"
+
+# Determine Maven executable (system PATH or wrapper)
+if command -v mvn >/dev/null 2>&1; then
+  MVN="mvn"
+elif [ -f "$PROJECT_ROOT/maven/apache-maven-3.9.6/bin/mvn" ]; then
+  MVN="$PROJECT_ROOT/maven/apache-maven-3.9.6/bin/mvn"
+elif [ -f "$PROJECT_ROOT/mvnw" ]; then
+  MVN="$PROJECT_ROOT/mvnw"
+fi
 
 # Helper to load .env variables
 if [ -f "$PROJECT_ROOT/.env" ]; then
@@ -46,7 +54,7 @@ error()   { echo -e "${RED}[ERROR]${NC} $*"; exit 1; }
 # ── Preflight checks ──────────────────────────────────────────────────────────
 command -v docker >/dev/null 2>&1 || error "Docker is not installed or not on PATH."
 command -v java   >/dev/null 2>&1 || error "Java 17+ is not installed or not on PATH."
-[ -f "$MVN" ] || error "Maven wrapper not found at $MVN"
+[ -n "$MVN" ] || error "Maven executable not found on system PATH or in project directory."
 
 echo ""
 echo -e "${GREEN}============================================${NC}"

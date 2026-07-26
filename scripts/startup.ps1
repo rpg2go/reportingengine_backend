@@ -6,7 +6,7 @@
 #   2. Spring Boot backend          (port 8101)
 #
 # Run from anywhere:
-#   .\scripts\dev.ps1
+#   .\scripts\startup.ps1  (or .\scripts\start.ps1)
 #
 # Prerequisites: Docker Desktop, Java 17+
 # =============================================================================
@@ -15,7 +15,13 @@ $ErrorActionPreference = "Stop"
 
 # Resolve paths relative to this script, regardless of CWD
 $ProjectRoot = Resolve-Path "$PSScriptRoot/.."
-$Mvn         = Join-Path $ProjectRoot "maven\apache-maven-3.9.6\bin\mvn.cmd"
+
+# Determine Maven executable
+if (Get-Command mvn -ErrorAction SilentlyContinue) {
+    $Mvn = "mvn"
+} else {
+    $Mvn = Join-Path $ProjectRoot "maven\apache-maven-3.9.6\bin\mvn.cmd"
+}
 
 # ── Preflight checks ──────────────────────────────────────────────────────────
 if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
@@ -24,8 +30,8 @@ if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
 if (-not (Get-Command java -ErrorAction SilentlyContinue)) {
     Write-Error "Java 17+ is not installed or not on PATH."; exit 1
 }
-if (-not (Test-Path $Mvn)) {
-    Write-Error "Maven wrapper not found at $Mvn"; exit 1
+if ($Mvn -ne "mvn" -and -not (Test-Path $Mvn)) {
+    Write-Error "Maven executable not found on system PATH or at $Mvn"; exit 1
 }
 
 Write-Host ""
