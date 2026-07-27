@@ -28,14 +28,7 @@ The backend ingests Excel layout templates, normalizes their configuration into 
     - [Column Time-Window Types \& Period Boundaries](#column-time-window-types--period-boundaries)
   - [Architecture Diagram](#architecture-diagram)
   - [Quick Start: Working With This Repo](#quick-start-working-with-this-repo)
-    - [Prerequisites](#prerequisites)
-      - [1. Software Runtimes \& Platforms](#1-software-runtimes--platforms)
-      - [2. Step-by-Step Installation Instructions](#2-step-by-step-installation-instructions)
-        - [🍎 macOS (using Homebrew, SDKMAN!, and NVM)](#-macos-using-homebrew-sdkman-and-nvm)
-        - [🐧 Ubuntu / Debian Linux (using apt, NodeSource, and Docker Repository)](#-ubuntu--debian-linux-using-apt-nodesource-and-docker-repository)
-        - [🪟 Windows (using winget or manual packages)](#-windows-using-winget-or-manual-packages)
-      - [3. Verification Command Cheat Sheet](#3-verification-command-cheat-sheet)
-    - [One-Time Setup](#one-time-setup)
+    - [1. Environment Variables](#1-environment-variables)
     - [Per Dev Session](#per-dev-session)
   - [Useful Commands](#useful-commands)
   - [End-to-End Application Flow](#end-to-end-application-flow)
@@ -80,18 +73,10 @@ The backend ingests Excel layout templates, normalizes their configuration into 
 
 ```text
 reportingengine_backend/
-├── .agents/                    # ADK validation agents configuration & code
-│   ├── agents/                 # Validator specifications
-│   └── validation/             # Executable validation agent (agent.py, tools.py)
-├── db/                         # Database configuration and Liquibase scripts
-│   └── liquibase/              # Liquibase migrations and SQL scripts
-│       ├── db.changelog-master.xml  # Changelog ledger routing migrations
-│       └── sql/                # Split DDL and seeding files per schema (000 to 011)
 ├── docs/                       # Architecture, data model, and testing docs
-├── documentation/              # Business user design plans and authoring guides
 ├── src/                        # Spring Boot Java application source code
 │   ├── main/
-│   │   ├── java/com/reporting/
+│   │   ├── java/com/db/reporting/
 │   │   │   ├── Application.java          # Bootloader application class
 │   │   │   ├── cache/                    # In-memory startup caches
 │   │   │   │   └── MetadataCache.java    # Pre-loads DWH schema catalogs, views & measures
@@ -104,9 +89,11 @@ reportingengine_backend/
 │   │   │   ├── config/                   # Security & CORS settings
 │   │   │   ├── controller/               # REST Endpoints
 │   │   │   │   ├── AuthController.java
+│   │   │   │   ├── ColumnFilterCacheController.java # Pre-cached filter value REST endpoints
 │   │   │   │   ├── GlobalExceptionHandler.java
 │   │   │   │   ├── MetadataController.java
-│   │   │   │   ├── ReportController.java     # CRUD, validation, and Excel run
+│   │   │   │   ├── ReportCloneController.java       # Clones report configurations REST endpoints
+│   │   │   │   ├── ReportController.java     # CRUD, validation, and multi-format run
 │   │   │   │   ├── ReportExecutionController.java # Live unpivoted query runs
 │   │   │   │   ├── ReportPreviewController.java
 │   │   │   │   ├── ReportVersionController.java   # HTTP adapter for versioning actions
@@ -118,10 +105,21 @@ reportingengine_backend/
 │   │   │   │   └── CorrelationIdFilter.java # Injects MDC with request X-Correlation-ID
 │   │   │   ├── repository/               # Spring Data repositories
 │   │   │   ├── service/                  # Core services (Parser, SQL, POI, formulas)
+│   │   │   │   ├── AnalyticsQueryDispatcher.java # Routes SQL queries between PostgreSQL and BigQuery
+│   │   │   │   ├── BigQueryAnalyticsService.java # Runs analytical queries over BigQuery SDK
+│   │   │   │   ├── ColumnFilterCacheService.java # Caches filter dropdown options via Caffeine
 │   │   │   │   ├── FilterCompilerService.java # Compiles row filters into AST and SQL
 │   │   │   │   ├── FilterNode.java       # AST Sealed interface type
 │   │   │   │   ├── RuleNode.java         # AST Record for terminal rule
 │   │   │   │   ├── GroupNode.java        # AST Record for logical group
+│   │   │   │   ├── LayoutRendererService.java # Renders styled Excel layouts
+│   │   │   │   ├── PostgresExcelStreamService.java # Streaming Excel exporter using SXSSF
+│   │   │   │   ├── ReportCloneService.java # Clones report definitions
+│   │   │   │   ├── ReportConfigService.java  # CRUD & config loading via fast JDBC read
+│   │   │   │   ├── ReportRunnerService.java  # Orchestrates load -> execute -> render pipeline
+│   │   │   │   ├── ReportValidationService.java # Schema expression and cyclic checks
+│   │   │   │   ├── SecurityContextService.java # Ingests OAuth2 JWT token claims
+│   │   │   │   ├── SqlGeneratorService.java  # Compiles dynamic CTE queries
 │   │   │   │   └── VersioningService.java # Business rules for version state and auto-forking
 │   │   │   └── util/                     # MigrationRunner, DbDumper utilities
 │   │   └── resources/
@@ -147,13 +145,16 @@ The backend is architected as a high-performance Spring Boot application priorit
 *   **Persistence:** Spring Data JPA (Hibernate v6.x) for configuration CRUD operations.
 *   **Sealed AST Filter Compiler:** Uses a modern pattern matching compiler (`FilterCompilerService`) with sealed hierarchy (`FilterNode`) and Java 21 records (`RuleNode`, `GroupNode`) to compile row-level filter expressions.
 *   **In-Memory Metadata Cache:** Startup-loaded `MetadataCache` pre-fetches column definitions, time keys, semantic measures, and views, reducing report compilation latency to ~50ms by eliminating live `information_schema` query overhead.
+*   **Autocomplete Cache (Caffeine):** Pre-caches distinct filter values via `ColumnFilterCacheService` to achieve <5ms autocomplete dropdown rendering latencies.
 *   **Direct JDBC Optimization:** Direct JDBC Template with `RowCallbackHandler` bypassing Hibernate hydration for the critical read hot-path (`loadFromDb()`). This optimization reduces report configuration latency from ~163ms to ~59ms.
 *   **Direct JDBC Save Path:** Report row/column configurations are persisted using direct `JdbcTemplate` updates in `ReportConfigService`, resolving Hibernate cascade overhead and preventing orphan rows.
 *   **Pushed-Down SQL Filters:** Pushes general and quick filters into the individual fact table CTEs inside `SqlGeneratorService`, allowing PostgreSQL to optimize execution plans by filtering early during the scan.
 *   **Request Trace Correlation:** `CorrelationIdFilter` stamps every incoming request and downstream log entry with a request-scoped `X-Correlation-ID` header, facilitating distributed tracing in Cloud Run.
-*   **Excel Engine:** Apache POI (v5.3.0) for cell-level layout extraction and styled spreadsheet generation.
-*   **Formula Engine:** `exp4j` (v0.4.8) for fast, isolated, sandbox-safe mathematical evaluation of cell and row formulas (preventing SQL or script injection).
-*   **Database:** PostgreSQL 16 (hosted via Docker container locally; Neon Serverless Postgres in production).
+*   **Hybrid Analytics Query Routing:** Executes local PostgreSQL queries under `dev` profile and compiles/executes GoogleSQL dialect queries over the BigQuery client SDK under `sit` profile (managed by `AnalyticsQueryDispatcher`).
+*   **Multi-Format Export Engine:** Supports Excel (Apache POI), PDF (OpenPDF / `com.lowagie.text`), and CSV exports.
+*   **Low-Memory Excel Streaming:** Bypasses heap constraints for large files (100k+ rows) by using Apache POI `SXSSFWorkbook` to stream PostgreSQL database cursor records into compressed temp files (managed by `PostgresExcelStreamService`).
+*   **OAuth2 Resource Server:** Upgraded security layer using JWT tokens with `SecurityContextService` extracting custom user claims.
+*   **Database:** PostgreSQL 18 (Local Docker container on port `5433` and Neon Serverless Postgres in production).
 
 ### Column Time-Window Types & Period Boundaries
 
@@ -162,7 +163,6 @@ The engine resolves dynamic column time boundaries in `DateUtils` according to t
 *   **`MTD` (Month-to-Date):** Beginning of the month to reporting date.
 *   **`QTD` (Quarter-to-Date):** Beginning of the quarter (Q1: Jan 1, Q2: Apr 1, Q3: Jul 1, Q4: Oct 1) to reporting date.
 *   **`YTD` (Year-to-Date):** January 1st to reporting date.
-*   **`ROLLING`:** Multi-period rolling window (supporting `DAY`, `WEEK`, `MONTH`, `QUARTER`, and `YEAR` grains).
 
 **Immutability & Expansion Rules for Past Periods:**
 For all current periods (period offset = 0), the end boundary is locked to the reporting date (e.g. current day). For all past/future periods (period offset $\neq$ 0), the boundary automatically expands to cover the **entire period** (e.g. full month or quarter) rather than truncating to the day-of-period of the reporting date.
@@ -196,200 +196,30 @@ flowchart TD
 
 Follow these steps to run the Reporting Engine backend locally:
 
-### Prerequisites
+### 1. Environment Variables
 
-Your development environment must have the following software runtimes, dependencies, and packages installed:
+The backend requires the following environment variables to be defined (either in your environment or via a `.env` file):
 
-#### 1. Software Runtimes & Platforms
+| Variable | Description | Default / Example Value |
+| :--- | :--- | :--- |
+| `DB_CATALOG_SCHEMA` | Schema name for graph catalog metadata | `catalog_owner` |
+| `DB_REPORT_BUILDER_SCHEMA` | Schema name for report builder definitions | `report_builder_owner` |
+| `BIGQUERY_DATASET` | BigQuery analytics dataset name | `<<your_bq_dataset>>` |
+| `SPRING_DATASOURCE_URL` | PostgreSQL JDBC connection URL | `jdbc:postgresql://127.0.0.1:5433/reporting_db` |
+| `SPRING_DATASOURCE_USERNAME` | Database connection username | `<<your_db_username>>` |
+| `SPRING_DATASOURCE_PASSWORD` | Database connection password | `<<your_db_password>>` |
+| `GCP_PROJECT_ID` | GCP Project ID (for SIT profile BigQuery calls) | `your-gcp-project-id` |
 
-* **Java Development Kit (JDK) 21**: Needed to compile and run the Spring Boot backend. OpenJDK 21 or Eclipse Temurin 21 are recommended.
-* **Node.js (v24+) & npm**: Needed to build and run the Angular frontend.
-* **Docker & Docker Compose**: Needed to orchestrate and run the PostgreSQL 16 database container.
-* **Python (v3.10+) & pip**: Needed to execute the ADK validation agents for automated code verification.
-* **Git**: Needed to clone and manage the repository code.
+```properties
+# Example .env configuration
+DB_CATALOG_SCHEMA=catalog_owner
+DB_REPORT_BUILDER_SCHEMA=report_builder_owner
+BIGQUERY_DATASET=analytics
+SPRING_DATASOURCE_URL=jdbc:postgresql://127.0.0.1:5433/reporting_db
+SPRING_DATASOURCE_USERNAME=<<your_db_username>>
+SPRING_DATASOURCE_PASSWORD=<<your_db_password>>
 
----
-
-#### 2. Step-by-Step Installation Instructions
-
-##### 🍎 macOS (using Homebrew, SDKMAN!, and NVM)
-
-1. **Install Git**:
-   ```bash
-   brew install git
-   ```
-
-2. **Install Java 21 (OpenJDK)**:
-   You can install Java using Homebrew or via SDKMAN! (recommended for managing multiple Java versions):
-   * *Option A: Via Homebrew*
-     ```bash
-     brew install openjdk@21
-     # Link the system wrapper so macOS recognizes it
-
-     sudo ln -sfn /opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk /Library/Java/JavaVirtualMachines/openjdk-21.jdk
-     export JAVA_HOME="/Library/Java/JavaVirtualMachines/openjdk-21.jdk/Contents/Home"
-     ```
-   * *Option B: Via SDKMAN!*
-     ```bash
-     curl -s "https://get.sdkman.io" | bash
-     source "$HOME/.sdkman/bin/sdkman-init.sh"
-     sdk install java 21.0.2-tem
-     sdk default java 21.0.2-tem
-     ```
-
-3. **Install Node.js & npm (via NVM)**:
-   ```bash
-   curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
-   source ~/.zshrc # or ~/.bashrc depending on your shell
-   nvm install 24
-   nvm use 24
-   ```
-
-4. **Install Docker & Docker Compose**:
-   The easiest way is to install Docker Desktop:
-   ```bash
-   brew install --cask docker
-   ```
-   *Alternatively, start Docker from your Applications folder once installed.*
-
-5. **Install Python & Pip**:
-   ```bash
-   brew install python@3.11
-   # Validate version and ensure pip is linked
-
-   python3 --version
-   pip3 --version
-   ```
-
----
-
-##### 🐧 Ubuntu / Debian Linux (using apt, NodeSource, and Docker Repository)
-
-1. **Install Git & Java 21**:
-   ```bash
-   sudo apt update
-   sudo apt install -y git openjdk-21-jdk python3 python3-pip python3-venv
-   # Verify Java installation
-
-   java -version
-   ```
-
-2. **Install Node.js & npm (v24 via NodeSource)**:
-   ```bash
-   sudo apt install -y curl
-   curl -fsSL https://deb.nodesource.com/setup_24.x | sudo -E bash -
-   sudo apt install -y nodejs
-   # Verify versions
-
-   node -v
-   npm -v
-   ```
-
-3. **Install Docker & Docker Compose**:
-   ```bash
-   sudo apt install -y ca-certificates gnupg
-   sudo install -m 0755 -d /etc/apt/keyrings
-   curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-   sudo chmod a+r /etc/apt/keyrings/docker.gpg
-
-   echo \
-     "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
-     $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
-     sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-   
-   sudo apt update
-   sudo apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-   
-   # Add user to the docker group
-
-   sudo usermod -aG docker $USER
-   newgrp docker
-   ```
-
----
-
-##### 🪟 Windows (using winget or manual packages)
-
-We highly recommend using Windows Package Manager (`winget`) via PowerShell (Run as Administrator):
-
-1. **Install Git**:
-   ```powershell
-   winget install --id Git.Git -e --source winget
-   ```
-
-2. **Install Java 21 (Eclipse Temurin)**:
-   ```powershell
-   winget install --id EclipseAdoptium.Temurin.21.JDK -e --source winget
-   ```
-
-3. **Install Node.js & npm**:
-   ```powershell
-   winget install --id OpenJS.NodeJS.LTS -e --source winget
-   ```
-
-4. **Install Docker Desktop**:
-   ```powershell
-   winget install --id Docker.DockerDesktop -e --source winget
-   ```
-
-5. **Install Python & Pip**:
-   ```powershell
-   winget install --id Python.Python.3.11 -e --source winget
-   ```
-
----
-
-#### 3. Verification Command Cheat Sheet
-
-```bash
-# Verify Git
-
-git --version
-
-# Verify Java Compiler and Runtime
-
-java -version
-javac -version
-
-# Verify Node.js and npm
-
-node -v
-npm -v
-
-# Verify Docker and Docker Compose
-
-docker --version
-docker compose version
-
-# Verify Python and pip
-
-python3 --version || python --version
-pip3 --version || pip --version
 ```
-
-### One-Time Setup
-
-1. **Spin up the Database Container**:
-   Build the database image and start the PostgreSQL container:
-   ```bash
-   docker compose down -v
-   docker compose up --build -d
-   ```
-   *Note: This will expose PostgreSQL on host port `5433` (container port `5432`) with database `reporting_db`.*
-
-2. **Deploy Database Migrations and Seed Data**:
-   Database migrations and schema definitions are managed in the `reportingengine_db` repository.
-   Navigate to `reportingengine_db` and deploy the database schemas:
-   ```bash
-   cd ../reportingengine_db
-   ./scripts/deploy-liquibase.sh local
-   ```
-
-3. **Initialize ADK Validation Environment**:
-   Ensure `google-adk` is installed:
-   ```bash
-   pip install google-adk
-   ```
 
 ### Per Dev Session
 
@@ -406,12 +236,6 @@ pip3 --version || pip --version
      ./maven/apache-maven-3.9.6/bin/mvn spring-boot:run
      ```
 
-2. **Run ADK Validation Agent**:
-   To validate backend changes (compiling, running JUnit tests, and checking code quality/security):
-   ```bash
-   adk run .agents/validation
-   ```
-
 ---
 
 ## Useful Commands
@@ -420,17 +244,12 @@ Below is a summary of the most useful commands for building and running the back
 
 | Category | Command | Target/CWD | Description |
 | :--- | :--- | :--- | :--- |
-| **Database** | `docker compose up --build -d` | Project Root | Builds and starts database container in detached mode (exposes port `5433`) |
-| **Database** | `docker compose down -v` | Project Root | Stops the database container and deletes the persistent volume |
-| **Database** | `./scripts/deploy-liquibase.sh [local\|neon]` | `reportingengine_db` | Runs Liquibase database migrations and seeds DWH/configs (defaults to local) |
 | **Backend** | `maven\apache-maven-3.9.6\bin\mvn.cmd clean compile` | Project Root | Clean compile Spring Boot application (Windows) |
 | **Backend** | `./maven/apache-maven-3.9.6/bin/mvn clean compile` | Project Root | Clean compile Spring Boot application (macOS/Linux) |
 | **Backend** | `maven\apache-maven-3.9.6\bin\mvn.cmd spring-boot:run` | Project Root | Runs the backend server on port 8101 (Windows) |
 | **Backend** | `./maven/apache-maven-3.9.6/bin/mvn spring-boot:run` | Project Root | Runs the backend server on port 8101 (macOS/Linux) |
 | **Backend** | `maven\apache-maven-3.9.6\bin\mvn.cmd test` | Project Root | Runs JUnit unit and integration tests (Windows) |
 | **Backend** | `./maven/apache-maven-3.9.6/bin/mvn test` | Project Root | Runs JUnit unit and integration tests (macOS/Linux) |
-| **ADK Agent**| `adk run .agents/validation` | Project Root | Runs the backend validation agent interactively |
-| **ADK Agent**| `adk web .agents/validation` | Project Root | Launches the Web UI to chat/run backend validation tasks |
 
 ---
 
@@ -448,11 +267,10 @@ Below is a summary of the most useful commands for building and running the back
 
 ## Database Layers
 
-The PostgreSQL instance manages three schemas in the `reporting_db` database:
+The PostgreSQL instance manages two schemas in the `reporting_db` database:
 
-- **`reporting.*`**: Stores report template layouts (headers, columns, rows, metrics, formulas, style formats, and coordinates).
-- **`catalog.*`**: Stores the metadata schema registry (physical table configurations, columns, visible/filterable flags, and Dijkstra-weighted join pathways).
-- **`analytics.*`**: Represents the physical Data Warehouse (DWH) containing dimension and fact tables (seeding transaction, performance, investment, and sales data for 2024–2026).
+- **`report_builder_owner.*`**: Stores report template layouts (headers, columns, rows, metrics, formulas, style formats, and coordinates).
+- **`catalog_owner.*`**: Stores the metadata schema registry (physical table configurations, columns, visible/filterable flags, and Dijkstra-weighted join pathways).
 
 ---
 

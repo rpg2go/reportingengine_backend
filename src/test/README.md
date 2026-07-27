@@ -21,20 +21,45 @@ All test sources must reside in `src/test/java`, paralleling the package structu
 
 ```
 src/test/java
-├── com.reporting
-│   ├── BaseIT.java                           <-- Base Integration Test Class
+├── com.db.reporting
 │   ├── controller
-│   │   ├── AuthControllerTest.java           <-- Unit/Security Controller Test
-│   │   ├── ReportControllerTest.java         <-- Unit/API Controller Test
-│   │   └── ReportControllerIT.java           <-- Integration Controller/Security Test
-│   └── service
-│       ├── DateUtilsTest.java                <-- Utility Unit Test
-│       ├── LayoutRendererServiceTest.java    <-- Service Excel Generation Unit Test
-│       ├── PostProcessorServiceTest.java     <-- Service Formula Processor Unit Test
-│       ├── SqlGeneratorServiceTest.java      <-- Service SQL Generator Unit Test
-│       ├── ReportConfigServiceTest.java      <-- Service Config Unit Test
-│       ├── ReportConfigServiceIT.java        <-- Service Config Integration Test
-│       └── ReportRunnerServiceIT.java        <-- E2E Runner Pipeline Integration Test
+│   │   ├── AuthControllerTest.java               <-- Unit/Security Controller Test
+│   │   ├── ColumnFilterCacheControllerTest.java  <-- Autocomplete filter cache Controller Test
+│   │   ├── GlobalExceptionHandlerTest.java      <-- Exception mapping Controller Test
+│   │   ├── MetadataControllerTest.java           <-- Security & Injection Controller Test
+│   │   ├── ReportCloneControllerTest.java       <-- Report cloning Controller Test
+│   │   ├── ReportControllerTest.java             <-- Unit/API Controller Test
+│   │   ├── ReportExecutionControllerTest.java    <-- Live unpivoted grid execution Controller Test
+│   │   ├── ReportPreviewControllerTest.java      <-- Preview SQL Controller Test
+│   │   ├── ReportVersionControllerTest.java      <-- Version state lifecycle Controller Test
+│   │   └── SchemaDiscoveryControllerTest.java    <-- Autocomplete metadata Controller Test
+│   ├── service
+│   │   ├── AnalyticsQueryDispatcherTest.java     <-- BigQuery vs Postgres routing Service Test
+│   │   ├── BigQueryAnalyticsServiceTest.java     <-- BigQuery execution Service Test
+│   │   ├── DateUtilsTest.java                    <-- Utility Unit Test
+│   │   ├── ExcelExporterServiceTest.java         <-- Legacy Excel exporter Service Test
+│   │   ├── FilterCompilerServiceTest.java        <-- AST filter compiler Service Test
+│   │   ├── LayoutRendererServiceTest.java        <-- Service Excel Generation Unit Test
+│   │   ├── PostProcessorServiceTest.java         <-- Service Formula Processor Unit Test
+│   │   ├── PostgresExcelStreamServiceTest.java   <-- Low-memory streaming Excel Service Test
+│   │   ├── ReportCloneServiceTest.java           <-- Report cloning Service Test
+│   │   ├── ReportConfigServiceTest.java          <-- Service Config Unit Test
+│   │   ├── ReportValidationServiceTest.java      <-- Validation Service Unit Test
+│   │   ├── SqlGeneratorServiceTest.java          <-- Service SQL Generator Unit Test
+│   │   ├── TimeWindowResolverTest.java           <-- Rolling boundaries Resolver Test
+│   │   └── VersioningServiceTest.java            <-- Lifecycle version auto-forking Service Test
+│   └── it
+│       ├── BaseIT.java                           <-- Base Integration Test Class
+│       ├── ReportSeededValidationIT.java         <-- Seeded report validation smoke-test IT
+│       ├── controller
+│       │   └── ReportControllerIT.java           <-- Secured API Integration Test (live DB)
+│       └── service
+│           ├── PostgresExcelStreamServiceIT.java <-- Streaming Excel Integration Test
+│           ├── ReportCloneServiceIT.java         <-- Report cloning Integration Test
+│           ├── ReportConfigServiceIT.java         <-- Config save/delete Integration Test
+│           ├── ReportRunnerServiceIT.java         <-- E2E Runner Pipeline Integration Test
+│           ├── ReportStreamingPerformanceIT.java  <-- Low-memory stream performance IT
+│           └── SqlGeneratorServiceIT.java         <-- SQL Generator Integration Test (live DB)
 src/test/resources
 └── application-test.properties               <-- Test environment properties
 ```
@@ -43,8 +68,8 @@ src/test/resources
 
 ## 📝 Test Class Naming Conventions
 
-* **Unit Tests**: Suffixed with `Test`, e.g., [DateUtilsTest](java/com/reporting/service/DateUtilsTest.java) for [DateUtils](../main/java/com/reporting/service/DateUtils.java).
-* **Integration Tests**: Suffixed with `IT`, e.g., [ReportConfigServiceIT](java/com/reporting/service/ReportConfigServiceIT.java) for [ReportConfigService](../main/java/com/reporting/service/ReportConfigService.java).
+* **Unit Tests**: Suffixed with `Test`, e.g., [DateUtilsTest](java/com/db/reporting/service/DateUtilsTest.java) for [DateUtils](../main/java/com/db/reporting/service/DateUtils.java).
+* **Integration Tests**: Suffixed with `IT`, e.g., [ReportConfigServiceIT](java/com/db/reporting/it/service/ReportConfigServiceIT.java) for [ReportConfigService](../main/java/com/db/reporting/service/ReportConfigService.java).
 * **Test Methods**: Follow the descriptive convention:
   `methodName_should_expectedBehavior_when_scenario`
   *Example*: `getPeriodBoundaries_weekOffsetMinusOne_shouldReturnPreviousFullWeek()`
@@ -105,7 +130,7 @@ public class MyServiceTest {
 Integration tests require a running database schema and application context.
 
 1. **Extend BaseIT**:
-   Always extend [BaseIT](java/com/reporting/BaseIT.java). This handles starting the Testcontainers PostgreSQL DB or falling back to the local database, applying migrations, and loading properties.
+   Always extend [BaseIT](java/com/db/reporting/it/BaseIT.java). This handles starting the Testcontainers PostgreSQL DB or falling back to the local database, applying migrations, and loading properties.
 2. **Handle Database State (Transactional Tests)**:
    Annotate test classes or methods with `@Transactional` so database modifications roll back automatically after each test runs, keeping the tests isolated and independent.
 3. **API Validation**:
@@ -140,7 +165,7 @@ public class MyControllerIT extends BaseIT {
 ## ⚠️ Common Gotchas & Avoidance Guidelines
 
 1. **Empty Context Short-Circuit in Formula Evaluation**:
-   In [PostProcessorService](../main/java/com/reporting/service/PostProcessorService.java), `evaluateFormula(formula, context)` returns `0.0` immediately if the context map is empty. When testing simple math expressions that do not require variables, **always pass a dummy key-value pair in the context** (e.g. `Map.of("dummy", 0.0)`) to avoid this guard check.
+   In [PostProcessorService](../main/java/com/db/reporting/service/PostProcessorService.java), `evaluateFormula(formula, context)` returns `0.0` immediately if the context map is empty. When testing simple math expressions that do not require variables, **always pass a dummy key-value pair in the context** (e.g. `Map.of("dummy", 0.0)`) to avoid this guard check.
 2. **Case Sensitivity in Exp4J Variables**:
    Variable lookups inside `ExpressionBuilder` are case-sensitive. If your context keys are uppercase (e.g. `R1`), the formula variables **must** match that casing (e.g. `R1` instead of `r1`). Ensure test contexts align with formula cases.
 3. **Avoid Hardcoded Thread.sleep()**:

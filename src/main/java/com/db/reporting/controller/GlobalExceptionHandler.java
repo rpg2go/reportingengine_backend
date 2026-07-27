@@ -24,6 +24,7 @@ public class GlobalExceptionHandler {
             errors.put(fieldName, errorMessage);
         });
         
+        log.warn("Validation failed for request: {}", errors);
         Map<String, Object> body = new HashMap<>();
         body.put("message", "Validation failed");
         body.put("errors", errors);

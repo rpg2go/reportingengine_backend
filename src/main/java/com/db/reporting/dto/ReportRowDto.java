@@ -14,7 +14,6 @@ public record ReportRowDto(
     @Size(max = 50, message = "Report ID must be at most 50 characters")
     String reportId,
 
-    @NotBlank(message = "Label is required")
     @Size(max = 300, message = "Label must be at most 300 characters")
     String label,
 

@@ -142,30 +142,30 @@ Use the links below to navigate directly to the primary components:
 ### Backend Services & Controllers
 
 - **Controllers**:
-  - [ReportController.java](src/main/java/com/reporting/controller/ReportController.java) — Report CRUD, run, validate, table metadata, and semantic-model endpoints.
-  - [AuthController.java](src/main/java/com/reporting/controller/AuthController.java) — Manages login validation.
-  - [ReportExecutionController.java](src/main/java/com/reporting/controller/ReportExecutionController.java) — Raw cell query execution with date validation against `dim_date`.
-  - [ReportPreviewController.java](src/main/java/com/reporting/controller/ReportPreviewController.java) — Previews dry-run generated SQL queries.
-  - [ReportVersionController.java](src/main/java/com/reporting/controller/ReportVersionController.java) — Report version lifecycle: submit-review, reject, publish (with auto-fork), and manual fork.
-  - [MetadataController.java](src/main/java/com/reporting/controller/MetadataController.java) — Provides security-sanitized distinct autocomplete values.
-  - [GlobalExceptionHandler.java](src/main/java/com/reporting/controller/GlobalExceptionHandler.java) — `@ControllerAdvice` mapping common exceptions to structured HTTP error responses.
+  - [ReportController.java](src/main/java/com/db/reporting/controller/ReportController.java) — Report CRUD, run, validate, table metadata, and semantic-model endpoints.
+  - [AuthController.java](src/main/java/com/db/reporting/controller/AuthController.java) — Manages login validation.
+  - [ReportExecutionController.java](src/main/java/com/db/reporting/controller/ReportExecutionController.java) — Raw cell query execution with date validation against `dim_date`.
+  - [ReportPreviewController.java](src/main/java/com/db/reporting/controller/ReportPreviewController.java) — Previews dry-run generated SQL queries.
+  - [ReportVersionController.java](src/main/java/com/db/reporting/controller/ReportVersionController.java) — Report version lifecycle: submit-review, reject, publish (with auto-fork), and manual fork.
+  - [MetadataController.java](src/main/java/com/db/reporting/controller/MetadataController.java) — Provides security-sanitized distinct autocomplete values.
+  - [GlobalExceptionHandler.java](src/main/java/com/db/reporting/controller/GlobalExceptionHandler.java) — `@ControllerAdvice` mapping common exceptions to structured HTTP error responses.
 - **Core Engine Services**:
-  - [ReportRunnerService.java](src/main/java/com/reporting/service/ReportRunnerService.java) — Orchestrates the full execution pipeline: Load → Resolve → Generate SQL → Execute → Post-Process → Render.
-  - [SqlGeneratorService.java](src/main/java/com/reporting/service/SqlGeneratorService.java) — Compiles report filters, fact tables, and rolling date boundaries into dynamic CTE queries. Delegates join resolution to `SchemaGraphRouter` and delegating row filter expression compiling to `FilterCompilerService`.
-  - [FilterCompilerService.java](src/main/java/com/reporting/service/FilterCompilerService.java) — Compiles structured row filter configurations into record-based AST and parses using switch pattern matching to output standard SQL string filters.
-  - [FilterNode.java](src/main/java/com/reporting/service/FilterNode.java), [RuleNode.java](src/main/java/com/reporting/service/RuleNode.java), [GroupNode.java](src/main/java/com/reporting/service/GroupNode.java) — Java 21 Sealed interface and Record subclasses for filter AST nodes.
-  - [PostProcessorService.java](src/main/java/com/reporting/service/PostProcessorService.java) — Evaluates mathematical formulas at row/column intersections using `exp4j`.
-  - [LayoutRendererService.java](src/main/java/com/reporting/service/LayoutRendererService.java) — Renders POI styles, grid alignments, fonts, colors, and formatting into downloading templates.
-  - [ReportConfigService.java](src/main/java/com/reporting/service/ReportConfigService.java) — CRUD and config loading (hot-path JDBC read + cascade-delete JDBC write).
-  - [ReportValidationService.java](src/main/java/com/reporting/service/ReportValidationService.java) — Validates cycle detections, schema checks, and expressions.
-  - [SemanticResolverService.java](src/main/java/com/reporting/service/SemanticResolverService.java) — Resolves metric metadata (legacy; bypassed in current execution flow).
-  - [DateUtils.java](src/main/java/com/reporting/service/DateUtils.java) — Period boundary calculations (start/end of week, month, quarter, year) for rolling columns.
+  - [ReportRunnerService.java](src/main/java/com/db/reporting/service/ReportRunnerService.java) — Orchestrates the full execution pipeline: Load → Resolve → Generate SQL → Execute → Post-Process → Render.
+  - [SqlGeneratorService.java](src/main/java/com/db/reporting/service/SqlGeneratorService.java) — Compiles report filters, fact tables, and rolling date boundaries into dynamic CTE queries. Delegates join resolution to `SchemaGraphRouter` and delegating row filter expression compiling to `FilterCompilerService`.
+  - [FilterCompilerService.java](src/main/java/com/db/reporting/service/FilterCompilerService.java) — Compiles structured row filter configurations into record-based AST and parses using switch pattern matching to output standard SQL string filters.
+  - [FilterNode.java](src/main/java/com/db/reporting/service/FilterNode.java), [RuleNode.java](src/main/java/com/db/reporting/service/RuleNode.java), [GroupNode.java](src/main/java/com/db/reporting/service/GroupNode.java) — Java 21 Sealed interface and Record subclasses for filter AST nodes.
+  - [ColumnFilterCacheService.java](src/main/java/com/db/reporting/service/ColumnFilterCacheService.java) — Serves pre-cached distinct column values directly from Caffeine memory backed by `catalog_owner.meta_column_value_cache`.
+  - [PostProcessorService.java](src/main/java/com/db/reporting/service/PostProcessorService.java) — Evaluates mathematical formulas at row/column intersections using `exp4j`.
+  - [LayoutRendererService.java](src/main/java/com/db/reporting/service/LayoutRendererService.java) — Renders POI styles, grid alignments, fonts, colors, and formatting into downloading templates.
+  - [ReportConfigService.java](src/main/java/com/db/reporting/service/ReportConfigService.java) — CRUD and config loading (hot-path JDBC read + cascade-delete JDBC write).
+  - [ReportValidationService.java](src/main/java/com/db/reporting/service/ReportValidationService.java) — Validates cycle detections, schema checks, and expressions.
+  - [DateUtils.java](src/main/java/com/db/reporting/service/DateUtils.java) — Period boundary calculations (start/end of week, month, quarter, year) for rolling columns.
 - **Catalog Package** (`com.db.reporting.catalog`):
-  - [SchemaCatalogLoader.java](src/main/java/com/reporting/catalog/SchemaCatalogLoader.java) — Loads `meta_table`, `meta_column`, `meta_relationship` into an in-memory graph at startup via `@PostConstruct`.
-  - [SchemaGraphRouter.java](src/main/java/com/reporting/catalog/SchemaGraphRouter.java) — Dijkstra BFS pathfinder resolving multi-hop LEFT JOIN chains between fact and dimension tables.
-  - [MetaTable.java](src/main/java/com/reporting/catalog/MetaTable.java), [MetaColumn.java](src/main/java/com/reporting/catalog/MetaColumn.java), [MetaRelationship.java](src/main/java/com/reporting/catalog/MetaRelationship.java) — In-memory graph node/edge models.
+  - [SchemaCatalogLoader.java](src/main/java/com/db/reporting/catalog/SchemaCatalogLoader.java) — Loads `meta_table`, `meta_column`, `meta_relationship` into an in-memory graph at startup via `@PostConstruct`.
+  - [SchemaGraphRouter.java](src/main/java/com/db/reporting/catalog/SchemaGraphRouter.java) — Dijkstra BFS pathfinder resolving multi-hop LEFT JOIN chains between fact and dimension tables.
+  - [MetaTable.java](src/main/java/com/db/reporting/catalog/MetaTable.java), [MetaColumn.java](src/main/java/com/db/reporting/catalog/MetaColumn.java), [MetaRelationship.java](src/main/java/com/db/reporting/catalog/MetaRelationship.java) — In-memory graph node/edge models.
 - **Database Utilities**:
-  - [DbDumper.java](src/main/java/com/reporting/util/DbDumper.java) — Helper utility to dump local reporting templates into migration files.
+  - [DbDumper.java](src/main/java/com/db/reporting/util/DbDumper.java) — Helper utility to dump local reporting templates into migration files.
 
 ---
 

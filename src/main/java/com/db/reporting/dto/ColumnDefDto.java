@@ -35,7 +35,7 @@ public record ColumnDefDto(
      * {@code null} is treated as {@code "WEEK"} (legacy default).
      */
     @Pattern(
-        regexp = "^(DAY|WEEK|MONTH|YEAR)$",
+        regexp = "^$|^(DAY|WEEK|MONTH|YEAR)$",
         message = "rollingGrain must be one of: DAY, WEEK, MONTH, YEAR"
     )
     String rollingGrain,

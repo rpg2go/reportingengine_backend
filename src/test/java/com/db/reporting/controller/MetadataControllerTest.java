@@ -4,6 +4,7 @@ import com.db.reporting.config.SecurityConfiguration;
 import com.db.reporting.cache.MetadataCache;
 import com.db.reporting.catalog.SchemaCatalogLoader;
 import com.db.reporting.service.AnalyticsQueryDispatcher;
+import com.db.reporting.service.ColumnFilterCacheService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -44,8 +45,11 @@ public class MetadataControllerTest {
     @MockitoBean
     private AnalyticsQueryDispatcher analyticsQueryDispatcher;
 
+    @MockitoBean
+    private ColumnFilterCacheService columnFilterCacheService;
+
     @Test
-    @DisplayName("GET /api/metadata/distinct-values: returns values when table is registered in sem_view")
+    @DisplayName("GET /api/metadata/distinct-values: returns values when table is registered in meta_table")
     public void getDistinctValues_registeredTable_shouldResolveAndReturnValues() throws Exception {
         when(jdbcTemplate.queryForObject(
                 eq("SELECT schema_name || '.' || table_name AS table_ref FROM catalog_owner.meta_table WHERE table_name = ?"),
@@ -68,7 +72,7 @@ public class MetadataControllerTest {
     }
 
     @Test
-    @DisplayName("GET /api/metadata/distinct-values: falls back to analytics schema if not found in sem_view")
+    @DisplayName("GET /api/metadata/distinct-values: falls back to analytics schema if not found in meta_table")
     public void getDistinctValues_unregisteredTable_shouldFallbackAndReturnValues() throws Exception {
         when(jdbcTemplate.queryForObject(
                 eq("SELECT schema_name || '.' || table_name AS table_ref FROM catalog_owner.meta_table WHERE table_name = ?"),

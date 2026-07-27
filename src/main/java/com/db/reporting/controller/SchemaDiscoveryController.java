@@ -5,6 +5,7 @@ import com.db.reporting.catalog.SchemaCatalogLoader;
 import com.db.reporting.catalog.MetaTable;
 import com.db.reporting.catalog.MetaColumn;
 import com.db.reporting.service.AnalyticsQueryDispatcher;
+import com.db.reporting.service.ColumnFilterCacheService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
@@ -43,17 +44,20 @@ public class SchemaDiscoveryController {
     private final MetadataCache metadataCache;
     private final SchemaCatalogLoader schemaCatalogLoader;
     private final AnalyticsQueryDispatcher analyticsQueryDispatcher;
+    private final ColumnFilterCacheService columnFilterCacheService;
     private final DatabaseSchemaProperties dbProperties;
 
     public SchemaDiscoveryController(NamedParameterJdbcTemplate jdbcTemplate,
             MetadataCache metadataCache,
             SchemaCatalogLoader schemaCatalogLoader,
             AnalyticsQueryDispatcher analyticsQueryDispatcher,
+            ColumnFilterCacheService columnFilterCacheService,
             @org.springframework.lang.Nullable DatabaseSchemaProperties dbProperties) {
         this.jdbcTemplate = jdbcTemplate;
         this.metadataCache = metadataCache;
         this.schemaCatalogLoader = schemaCatalogLoader;
         this.analyticsQueryDispatcher = analyticsQueryDispatcher;
+        this.columnFilterCacheService = columnFilterCacheService;
         this.dbProperties = dbProperties != null ? dbProperties : new DatabaseSchemaProperties();
     }
 
@@ -168,18 +172,18 @@ public class SchemaDiscoveryController {
         return ResponseEntity.ok(colTypes);
     }
 
-    // ─── dimension value autocomplete ─────────────────────────────────────────
+    // ─── column value autocomplete ───────────────────────────────────────────
 
     /**
-     * Returns a distinct list of values for the specified dimension column, suitable
-     * for populating autocomplete dropdowns in the report builder.
+     * Returns a distinct list of values for the specified column (fact or dimension table),
+     * suitable for populating autocomplete dropdowns in the report builder.
      *
      * @param table unqualified or qualified table name (e.g. {@code "analytics.fact_sales"})
      * @param column column name (e.g. {@code "product_category"})
      * @return 200 with list of distinct values (up to 100 entries, or 1500 for date_key)
      */
-    @GetMapping("/dimensions/values")
-    public ResponseEntity<List<String>> listDimensionValues(
+    @GetMapping({"/column-values", "/dimensions/values"})
+    public ResponseEntity<List<String>> getColumnValues(
             @RequestParam("table") String table,
             @RequestParam("column") String column) {
 
@@ -200,11 +204,10 @@ public class SchemaDiscoveryController {
             queryColumn = dbProperties.getDateColumn();
         }
 
-        // Try the cache first
-        String cacheKey = (resolved + "." + queryColumn).toLowerCase();
-        List<String> cachedValues = metadataCache.getCachedColumnValues(cacheKey);
+        // Try the cache first via ColumnFilterCacheService
+        List<String> cachedValues = columnFilterCacheService.getFilterValues(resolved, queryColumn);
         if (cachedValues != null && !cachedValues.isEmpty()) {
-            log.info("MetadataCache: hit for autocomplete values: {}", cacheKey);
+            log.info("ColumnFilterCacheService: hit for autocomplete values: {}.{}", resolved, queryColumn);
             return ResponseEntity.ok(cachedValues);
         }
 

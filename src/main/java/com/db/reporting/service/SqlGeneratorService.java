@@ -2,6 +2,7 @@ package com.db.reporting.service;
 
 import com.db.reporting.cache.MetadataCache;
 import com.db.reporting.catalog.SchemaGraphRouter;
+import com.db.reporting.config.DatabaseSchemaProperties;
 import com.db.reporting.dto.*;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -25,27 +26,32 @@ public class SqlGeneratorService {
     private final SchemaGraphRouter schemaGraphRouter;
 
     /**
-     * Startup-loaded metadata cache: column sets, time-keys, sem-measures.
-     * Eliminates repeated {@code information_schema} and {@code sem_view} round-trips
-     * during query generation.
+     * Startup-loaded metadata cache: column sets, time-keys, and meta-table references.
+     * Eliminates repeated database catalog round-trips during query generation.
      */
     private final MetadataCache metadataCache;
     private final FilterCompilerService filterCompilerService;
+    private final DatabaseSchemaProperties dbProperties;
 
     @Autowired
-    public SqlGeneratorService(JdbcTemplate jdbcTemplate, SchemaGraphRouter schemaGraphRouter, MetadataCache metadataCache, FilterCompilerService filterCompilerService) {
+    public SqlGeneratorService(JdbcTemplate jdbcTemplate, SchemaGraphRouter schemaGraphRouter, MetadataCache metadataCache, FilterCompilerService filterCompilerService, @org.springframework.lang.Nullable DatabaseSchemaProperties dbProperties) {
         this.jdbcTemplate    = jdbcTemplate;
         this.schemaGraphRouter = schemaGraphRouter;
         this.metadataCache   = metadataCache;
         this.filterCompilerService = filterCompilerService;
+        this.dbProperties    = dbProperties != null ? dbProperties : new DatabaseSchemaProperties();
+    }
+
+    public SqlGeneratorService(JdbcTemplate jdbcTemplate, SchemaGraphRouter schemaGraphRouter, MetadataCache metadataCache, FilterCompilerService filterCompilerService) {
+        this(jdbcTemplate, schemaGraphRouter, metadataCache, filterCompilerService, new DatabaseSchemaProperties());
     }
 
     public SqlGeneratorService(JdbcTemplate jdbcTemplate, SchemaGraphRouter schemaGraphRouter, MetadataCache metadataCache) {
-        this(jdbcTemplate, schemaGraphRouter, metadataCache, new FilterCompilerService());
+        this(jdbcTemplate, schemaGraphRouter, metadataCache, new FilterCompilerService(), new DatabaseSchemaProperties());
     }
 
     public SqlGeneratorService(JdbcTemplate jdbcTemplate) {
-        this(jdbcTemplate, null, null, new FilterCompilerService());
+        this(jdbcTemplate, null, null, new FilterCompilerService(), new DatabaseSchemaProperties());
     }
 
     public String generateMatrixQuery(ReportConfigDto config) {
@@ -766,7 +772,7 @@ public class SqlGeneratorService {
         // Special hardcoded rule for customer_id in banking transactions
         if ("customer_id".equalsIgnoreCase(cleanGran) && factTable.toLowerCase().contains("fact_banking_transactions")) {
             dimensionTargets.add("dim_accounts");
-            return "analytics.dim_accounts.customer_id";
+            return dbProperties.getAnalyticsSchema() + ".dim_accounts.customer_id";
         }
         
         // Check if it exists in the fact table
@@ -908,7 +914,7 @@ public class SqlGeneratorService {
         String val = null;
         try {
             val = jdbcTemplate.queryForObject(
-                "SELECT time_key FROM catalog_owner.meta_table WHERE schema_name || '.' || table_name = ?",
+                "SELECT time_key FROM " + dbProperties.getCatalogSchema() + ".meta_table WHERE schema_name || '.' || table_name = ?",
                 String.class,
                 table
             );
@@ -942,7 +948,7 @@ public class SqlGeneratorService {
             : cache;
 
         Set<String> columns = effectiveCache.computeIfAbsent(cleanTable, t -> {
-            String schema = "analytics";
+            String schema = dbProperties.getAnalyticsSchema();
             String tableName = t;
             if (t.contains(".")) {
                 String[] parts = t.split("\\.");
@@ -970,7 +976,7 @@ public class SqlGeneratorService {
         if (table == null || column == null || column.isBlank()) {
             return false;
         }
-        String schema = "analytics";
+        String schema = dbProperties.getAnalyticsSchema();
         String tableName = table.trim();
         if (tableName.contains(".")) {
             String[] parts = tableName.split("\\.");

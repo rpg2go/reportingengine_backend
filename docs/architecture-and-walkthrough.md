@@ -5,7 +5,7 @@
 | Decision | Rationale |
 | :--- | :--- |
 | **Bypassed Semantic Layer** | Completely bypassed lookups to legacy semantic metadata tables. Reports bind directly to physical database tables (e.g. `analytics.fact_sales`) and measure aggregation expressions are entered directly in row configurations. This simplifies query compilation, increases execution speed, and reduces complex joins. |
-| **Catalog-Driven Join Graph** | Introduced `SchemaCatalogLoader` (reads `catalog.meta_table`, `catalog.meta_column`, `catalog.meta_relationship` at startup) and `SchemaGraphRouter` (Dijkstra BFS, edge cost 1 for conformed keys, cost 2 for non-conformed FKs). `SqlGeneratorService` delegates all multi-hop LEFT JOIN resolution to this router, eliminating any hardcoded join strings. |
+| **Catalog-Driven Join Graph** | Introduced `SchemaCatalogLoader` (reads `catalog_owner.meta_table`, `catalog_owner.meta_column`, `catalog_owner.meta_relationship` at startup) and `SchemaGraphRouter` (Dijkstra BFS, edge cost 1 for conformed keys, cost 2 for non-conformed FKs). `SqlGeneratorService` delegates all multi-hop LEFT JOIN resolution to this router, eliminating any hardcoded join strings. |
 | **State & Cascade Overwrite** | Implemented a cascade-delete strategy on saving report definitions. It clears child configurations (`column_definition`, `row_definition`, `row_metric_mapping`, `row_formula`, `row_column_intersection`) in a flushed session transaction before saving the header. This eliminates "orphan" rows or column records. |
 | **Report Version Lifecycle** | `ReportVersionController` enforces a `draft → in_review → published` state machine. Publishing auto-creates the next draft by cloning all child configurations via direct JDBC `INSERT … SELECT`. Manual `fork` is permitted only from a published version and only if no higher version already exists. |
 | **Angular Standalone Architecture** | Frontend utilizes Angular standalone components without `NgModules`. Each component declares its imports directly, making code cleaner and improving module load speeds. |
@@ -22,7 +22,7 @@
 | **Robust Health Check Probes** | Integrated Spring Boot Actuator health checks and configured `deploy.sh` with Cloud Run `--liveness-probe` and `--startup-probe` parameters pointing to `/actuator/health/liveness` and `/actuator/health/readiness`. |
 | **Resilient Catalog Listing (Latest Published View)** | Modified the report listing catalog query to fetch the latest `published` version using `findLatestPublishedPerReport()` rather than raw `MAX(version)` (which flips to draft immediately after publish due to the auto-forking system). |
 | **Pure SQL Liquibase Migrations** | Replaced custom Java migration scripts with pure SQL changeset files routed by a master XML changelog (`db/liquibase/db.changelog-master.xml`). Migration files are split per schema (`001_create_reporting_tables.sql` and `002_create_catalog_tables.sql`). Connection configurations are loaded from `.env` (supporting local vs. Neon GCP production databases) and executed via `./scripts/deploy-liquibase.sh`. |
-| **Unified Package Refactoring** | Completely deleted the legacy package folders and consolidated all components (including `HierarchicalColumnDto` and `ExcelExporterService`) under the unified `com.reporting` namespace to prevent split package issues and enforce structural consistency. |
+| **Unified Package Refactoring** | Completely deleted the legacy package folders and consolidated all components (including `HierarchicalColumnDto` and `ExcelExporterService`) under the unified `com.db.reporting` namespace to prevent split package issues and enforce structural consistency. |
 | **Java 21 & Spring Boot 3.5 Migration** | Modernized runtime and library dependencies to target the Java 21 LTS and Spring Boot 3.5.0-SNAPSHOT parent framework baseline. Enabled Project Loom virtual threads (`spring.threads.virtual.enabled=true`) for Tomcat HTTP request processing and upgraded Apache POI to version `5.3.0`. |
 | **Sealed AST Filter Compiler** | Extracted recursive row-level parenthetical expression compiling logic from `SqlGeneratorService` into a dedicated `FilterCompilerService`. The compiler maps input filter configurations into a Java 21 sealed AST structure (`FilterNode` permitting record types `RuleNode` and `GroupNode`) and parses it using switch pattern matching expressions. |
 | **Conditional Soft/Hard Deletion** | Replaced default cascade delete with a hybrid deletion pattern. Reports with a history containing at least one `PUBLISHED` version are soft-deleted by setting a `deleted` flag to true across all version rows. This preserves audit histories and past reports. Reports with only `DRAFT` or `IN_REVIEW` versions are physically cascade-deleted from the database. |
@@ -30,6 +30,11 @@
 | **Lombok JDK 21 Compatibility** | Upgraded Lombok to `1.18.38` to resolve AST type tag compilation compatibility errors. |
 | **Serverless Database Pool Tuning & Actuator Health Decoupling** | Increased backend HikariCP maximum pool size to 20 to support concurrent DWH metadata requests, and disabled database status evaluation in Spring Boot Actuator health checks (`management.health.db.enabled=false`). This prevents Cloud Run liveness probe timeouts and container restarts when the Neon database wakes up from a scale-to-zero sleep state or undergoes connection spikes. |
 | **OAuth2 Resource Server and JWT Claims Ingestion** | Upgraded security to OAuth2 JWT Resource Server. Added `SecurityContextService` to extract custom claims from token contexts. |
+| **Query Routing & Hybrid Cloud Analytics** | Introduced `AnalyticsQueryDispatcher` to route SQL queries between PostgreSQL (under `dev` profile) and the BigQuery SDK (under `sit` profile). This allows seamless local development while executing analytical queries against the DWH in SIT. |
+| **Low-Memory Excel Streaming** | Bypassed heap constraints for large files (100k+ rows) using `PostgresExcelStreamService` which consumes database records via cursors and streams them into an Apache POI `SXSSFWorkbook` that flushes older rows to temporary files on disk. |
+| **Caffeine Autocomplete Value Caching** | Implemented Caffeine pre-caching for distinct dimension filter values inside `ColumnFilterCacheService` to achieve sub-5ms latencies for autocomplete dropdown components in the Report Builder interface. |
+| **Multi-Format Document Exporter** | Extended `ReportRunnerService` to support Excel (`xlsx`), PDF (using OpenPDF via `PdfRendererService`), and CSV (using `CsvRendererService`) generation based on runtime query parameters. |
+| **Cloning Utility Service** | Exposed a report configuration cloning endpoint (`/api/v1/reports/{id}/clone`) allowing users to quickly replicate report headers and all child rows, columns, metrics, and intersections under a new report name. |
 
 ---
 
@@ -52,12 +57,12 @@ The system follows a classic decoupled 3-tier architecture:
      - **`LayoutRendererService`**: Writes styled workbook data sheets back to POI cells.
      - **`ReportRunnerService`**: Orchestrates the full pipeline: Load Config → Resolve Metrics → Generate SQL → Execute → Post-Process → Render.
    - Catalog Package:
-     - **`SchemaCatalogLoader`**: Reads `catalog.meta_*` registry tables at startup and assembles an in-memory graph.
+     - **`SchemaCatalogLoader`**: Reads `catalog_owner.meta_*` registry tables at startup and assembles an in-memory graph.
      - **`SchemaGraphRouter`**: Weighted Dijkstra BFS pathfinder for dynamic LEFT JOIN resolution.
 
 3. **Data Layer (PostgreSQL Container)**:
    - Exposed on port `5433` (mapping to `5432` in container).
-   - Separated into `reporting` schema (layouts and templates), `catalog` schema (DWH metadata registry), and `analytics` schema (warehouse tables).
+   - Separated into `report_builder_owner` schema (layouts and templates), `catalog_owner` schema (DWH metadata registry), and `analytics` schema (warehouse tables).
 
 ---
 
@@ -89,8 +94,8 @@ Security enforces a stateless JWT-based authentication system:
 ## Data Layer
 
 The PostgreSQL instance manages three main schemas:
-- **`reporting`**: Holds configurations (`report_config`, `column_definition`, `row_definition`, `row_metric_mapping`, `row_formula`, `row_column_intersection`).
-- **`catalog`**: Holds the metadata schema registry (`meta_table`, `meta_column`, `meta_relationship`).
+- **`report_builder_owner`**: Holds configurations (`report_config`, `column_definition`, `row_definition`, `row_metric_mapping`, `row_formula`, `row_column_intersection`).
+- **`catalog_owner`**: Holds the metadata schema registry (`meta_table`, `meta_column`, `meta_relationship`).
 - **`analytics`**: Houses dimensional warehouse facts (e.g., `fact_sales`, `dim_date`, `fact_investments`).
 
 ---

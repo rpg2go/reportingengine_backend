@@ -58,9 +58,6 @@ public class MetadataCache {
     // ── ordered set of distinct meta_table table_ref values ────────────────────
     private volatile Set<String> metaTableRefs = Collections.emptySet();
 
-    // ── column values cache: "schema.table.column" or "table.column" → list of distinct values ──
-    private final Map<String, List<String>> columnValuesCache = new ConcurrentHashMap<>();
-
     public MetadataCache(JdbcTemplate jdbc, AnalyticsQueryDispatcher analyticsQueryDispatcher, @org.springframework.lang.Nullable DatabaseSchemaProperties dbProperties) {
         this.jdbc = jdbc;
         this.analyticsQueryDispatcher = analyticsQueryDispatcher;
@@ -75,9 +72,8 @@ public class MetadataCache {
         loadTableColumns();
         loadTimeKeys();
         loadMetaTableRefs();
-        loadColumnValues();
-        log.info("MetadataCache: pre-load complete — {} tables, {} time-keys, {} meta-table refs, {} column value caches.",
-                tableColumnsCache.size(), timeKeyCache.size(), metaTableRefs.size(), columnValuesCache.size());
+        log.info("MetadataCache: pre-load complete — {} tables, {} time-keys, {} meta-table refs.",
+                tableColumnsCache.size(), timeKeyCache.size(), metaTableRefs.size());
     }
 
     /**
@@ -89,7 +85,6 @@ public class MetadataCache {
         tableColumnTypesCache.clear();
         timeKeyCache.clear();
         metaTableRefs = Collections.emptySet();
-        columnValuesCache.clear();
         load();
     }
 
@@ -243,53 +238,5 @@ public class MetadataCache {
      */
     public Set<String> getMetaTableRefs() {
         return metaTableRefs;
-    }
-
-    private void loadColumnValues() {
-        try {
-            // Find all columns marked as value-cacheable
-            String sql = "SELECT t.schema_name, t.table_name, c.column_name " +
-                         "FROM   " + dbProperties.getCatalogSchema() + ".meta_column c " +
-                         "JOIN   " + dbProperties.getCatalogSchema() + ".meta_table t ON t.table_id = c.table_id " +
-                         "WHERE  c.is_cached = TRUE AND t.is_cached = TRUE";
-
-            jdbc.query(sql, rs -> {
-                String schema = rs.getString("schema_name");
-                String table  = rs.getString("table_name");
-                String column = rs.getString("column_name");
-
-                String qualifiedTable = schema + "." + table;
-                String cacheKey = (qualifiedTable + "." + column).toLowerCase();
-
-                try {
-                    int limit = 500;
-                    if ("dim_date".equalsIgnoreCase(table) && "date_key".equalsIgnoreCase(column)) {
-                        limit = 1500;
-                    }
-                    String querySql = String.format(
-                        "SELECT DISTINCT %s FROM %s WHERE %s IS NOT NULL ORDER BY %s LIMIT %d",
-                        column, qualifiedTable, column, column, limit
-                    );
-                    List<String> values = analyticsQueryDispatcher.queryForList(querySql, String.class);
-
-                    columnValuesCache.put(cacheKey, values);
-                    columnValuesCache.put((table + "." + column).toLowerCase(), values);
-                    log.info("MetadataCache: cached values for column {} ({} values)", cacheKey, values.size());
-                } catch (Exception e) {
-                    log.warn("MetadataCache: failed to cache values for column {}. Cause: {}", cacheKey, e.getMessage());
-                }
-            });
-        } catch (Exception ex) {
-            log.warn("MetadataCache: failed to pre-load column values cache. Cause: {}", ex.getMessage());
-        }
-    }
-
-    /**
-     * Returns the cached distinct values for a given column key (e.g. "schema.table.column" or "table.column"),
-     * or null if the column's values are not cached.
-     */
-    public List<String> getCachedColumnValues(String cacheKey) {
-        if (cacheKey == null || cacheKey.isBlank()) return null;
-        return columnValuesCache.get(cacheKey.trim().toLowerCase());
     }
 }

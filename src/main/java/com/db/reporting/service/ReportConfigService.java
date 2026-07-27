@@ -1,6 +1,7 @@
 package com.db.reporting.service;
 
 import com.db.reporting.cache.MetadataCache;
+import com.db.reporting.config.DatabaseSchemaProperties;
 import com.db.reporting.domain.*;
 import com.db.reporting.dto.*;
 import com.db.reporting.repository.*;
@@ -18,15 +19,26 @@ public class ReportConfigService {
     private final StyleRepository styleRepository;
     private final org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
     private final MetadataCache metadataCache;
+    private final DatabaseSchemaProperties dbProperties;
 
+    @org.springframework.beans.factory.annotation.Autowired
     public ReportConfigService(ReportRepository reportRepository,
-                              StyleRepository styleRepository,
-                              org.springframework.jdbc.core.JdbcTemplate jdbcTemplate,
-                              MetadataCache metadataCache) {
+                               StyleRepository styleRepository,
+                               org.springframework.jdbc.core.JdbcTemplate jdbcTemplate,
+                               MetadataCache metadataCache,
+                               @org.springframework.lang.Nullable DatabaseSchemaProperties dbProperties) {
         this.reportRepository = reportRepository;
         this.styleRepository = styleRepository;
         this.jdbcTemplate = jdbcTemplate;
         this.metadataCache = metadataCache;
+        this.dbProperties = dbProperties != null ? dbProperties : new DatabaseSchemaProperties();
+    }
+
+    public ReportConfigService(ReportRepository reportRepository,
+                               StyleRepository styleRepository,
+                               org.springframework.jdbc.core.JdbcTemplate jdbcTemplate,
+                               MetadataCache metadataCache) {
+        this(reportRepository, styleRepository, jdbcTemplate, metadataCache, new DatabaseSchemaProperties());
     }
 
     @Transactional(readOnly = true)
@@ -49,7 +61,7 @@ public class ReportConfigService {
         List<ColumnDefDto> columns = jdbcTemplate.query(
             "SELECT col_id, label, col_type, COALESCE(period_offset,0) AS period_offset, " +
             "rolling_n, rolling_grain, formula_expr, COALESCE(tier_level, 'L1') AS tier_level, parent_id, display_order " +
-            "FROM report_builder_owner.column_definition WHERE report_id = ? AND version = ? ORDER BY display_order",
+            "FROM " + dbProperties.getReportBuilderSchema() + ".column_definition WHERE report_id = ? AND version = ? ORDER BY display_order",
             (rs, rowNum) -> new ColumnDefDto(
                 rs.getString("col_id"),
                 rs.getString("label"),
@@ -67,7 +79,7 @@ public class ReportConfigService {
         Set<String> metaTableRefs = new LinkedHashSet<>(metadataCache.getMetaTableRefs());
         if (metaTableRefs.isEmpty()) {
             jdbcTemplate.query(
-                "SELECT DISTINCT schema_name || '.' || table_name AS table_ref FROM catalog_owner.meta_table",
+                "SELECT DISTINCT schema_name || '.' || table_name AS table_ref FROM " + dbProperties.getCatalogSchema() + ".meta_table",
                 (RowCallbackHandler) rs -> {
                     String tbl = rs.getString("table_ref");
                     if (tbl != null && !tbl.isBlank()) {
@@ -82,7 +94,7 @@ public class ReportConfigService {
         com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
         jdbcTemplate.query(
             "SELECT rm.row_id, rm.measure_definition, rm.sql_expr " +
-            "FROM report_builder_owner.row_metric_mapping rm " +
+            "FROM " + dbProperties.getReportBuilderSchema() + ".row_metric_mapping rm " +
             "WHERE rm.report_id = ? AND rm.version = ?",
             (RowCallbackHandler) rs -> {
                 String rid = rs.getString("row_id").toUpperCase();
@@ -129,14 +141,14 @@ public class ReportConfigService {
         // 4. Row formulas
         Map<String, String> formulasByRow = new HashMap<>();
         jdbcTemplate.query(
-            "SELECT row_id, formula_expr FROM report_builder_owner.row_formula WHERE report_id = ? AND version = ?",
+            "SELECT row_id, formula_expr FROM " + dbProperties.getReportBuilderSchema() + ".row_formula WHERE report_id = ? AND version = ?",
             (RowCallbackHandler) rs -> formulasByRow.put(rs.getString("row_id").toUpperCase(), rs.getString("formula_expr")),
             reportId, version);
 
         // 5. Active column flags
         Map<String, Set<String>> activeColsByRow = new HashMap<>();
         jdbcTemplate.query(
-            "SELECT row_id, col_id FROM report_builder_owner.row_column_intersection " +
+            "SELECT row_id, col_id FROM " + dbProperties.getReportBuilderSchema() + ".row_column_intersection " +
             "WHERE report_id = ? AND version = ? AND is_enabled = TRUE",
             (RowCallbackHandler) rs -> activeColsByRow
                 .computeIfAbsent(rs.getString("row_id").toUpperCase(), k -> new HashSet<>())
@@ -146,14 +158,14 @@ public class ReportConfigService {
         // 6. Style name map
         Map<Integer, String> styleNameMap = new HashMap<>();
         jdbcTemplate.query(
-            "SELECT style_id, name FROM report_builder_owner.row_style",
+            "SELECT style_id, name FROM " + dbProperties.getReportBuilderSchema() + ".row_style",
             (RowCallbackHandler) rs -> styleNameMap.put(rs.getInt("style_id"), rs.getString("name")));
 
         // 7. Rows
         List<ReportRowDto> rows = jdbcTemplate.query(
             "SELECT r.row_id, r.report_id, r.label, r.row_type, r.parent_row_id, " +
             "r.indent_level, r.display_order, r.filter_expr, r.style_id " +
-            "FROM report_builder_owner.row_definition r WHERE r.report_id = ? AND r.version = ? ORDER BY r.display_order",
+            "FROM " + dbProperties.getReportBuilderSchema() + ".row_definition r WHERE r.report_id = ? AND r.version = ? ORDER BY r.display_order",
             (rs, rowNum) -> {
                 String rid = rs.getString("row_id").toUpperCase();
                 String rowType = rs.getString("row_type");
@@ -217,11 +229,11 @@ public class ReportConfigService {
         com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
 
         // 1. Delete previous configuration cascade for this specific version only
-        jdbcTemplate.update("DELETE FROM report_builder_owner.row_column_intersection WHERE report_id = ? AND version = ?", reportId, version);
-        jdbcTemplate.update("DELETE FROM report_builder_owner.row_formula WHERE report_id = ? AND version = ?", reportId, version);
-        jdbcTemplate.update("DELETE FROM report_builder_owner.row_metric_mapping WHERE report_id = ? AND version = ?", reportId, version);
-        jdbcTemplate.update("DELETE FROM report_builder_owner.row_definition WHERE report_id = ? AND version = ?", reportId, version);
-        jdbcTemplate.update("DELETE FROM report_builder_owner.column_definition WHERE report_id = ? AND version = ?", reportId, version);
+        jdbcTemplate.update("DELETE FROM " + dbProperties.getReportBuilderSchema() + ".row_column_intersection WHERE report_id = ? AND version = ?", reportId, version);
+        jdbcTemplate.update("DELETE FROM " + dbProperties.getReportBuilderSchema() + ".row_formula WHERE report_id = ? AND version = ?", reportId, version);
+        jdbcTemplate.update("DELETE FROM " + dbProperties.getReportBuilderSchema() + ".row_metric_mapping WHERE report_id = ? AND version = ?", reportId, version);
+        jdbcTemplate.update("DELETE FROM " + dbProperties.getReportBuilderSchema() + ".row_definition WHERE report_id = ? AND version = ?", reportId, version);
+        jdbcTemplate.update("DELETE FROM " + dbProperties.getReportBuilderSchema() + ".column_definition WHERE report_id = ? AND version = ?", reportId, version);
 
         // 2. Get standard styles name map
         List<Style> dbStyles = styleRepository.findAll();
@@ -231,7 +243,7 @@ public class ReportConfigService {
         }
 
         Boolean existsObj = jdbcTemplate.queryForObject(
-            "SELECT EXISTS(SELECT 1 FROM report_builder_owner.report_config WHERE report_id = ? AND version = ?)",
+            "SELECT EXISTS(SELECT 1 FROM " + dbProperties.getReportBuilderSchema() + ".report_config WHERE report_id = ? AND version = ?)",
             Boolean.class,
             reportId,
             version
@@ -271,7 +283,7 @@ public class ReportConfigService {
 
         if (exists) {
             Map<String, Object> currentRecord = jdbcTemplate.queryForMap(
-                "SELECT status FROM report_builder_owner.report_config WHERE report_id = ? AND version = ?",
+                "SELECT status FROM " + dbProperties.getReportBuilderSchema() + ".report_config WHERE report_id = ? AND version = ?",
                 reportId,
                 version
             );
@@ -281,7 +293,7 @@ public class ReportConfigService {
             }
 
             jdbcTemplate.update(
-                "UPDATE report_builder_owner.report_config SET report_name = ?, status = ?, granularity = ?, " +
+                "UPDATE " + dbProperties.getReportBuilderSchema() + ".report_config SET report_name = ?, status = ?, granularity = ?, " +
                 "quick_filters = ?, general_filters = ?, " +
                 "source_table = ?, source_field = ?, " +
                 "reporting_date_type = ?, reporting_date_static = ?, reporting_date_expression = ?, " +
@@ -309,7 +321,7 @@ public class ReportConfigService {
             );
         } else {
             jdbcTemplate.update(
-                "INSERT INTO report_builder_owner.report_config (report_id, report_name, description, version, status, granularity, " +
+                "INSERT INTO " + dbProperties.getReportBuilderSchema() + ".report_config (report_id, report_name, description, version, status, granularity, " +
                 "quick_filters, general_filters, source_table, source_field, " +
                 "reporting_date_type, reporting_date_static, reporting_date_expression, " +
                 "timeframe_start_type, timeframe_start_static, timeframe_start_expression, " +
@@ -339,7 +351,7 @@ public class ReportConfigService {
 
         // 4. Save Column Definitions via JDBC
         if (dto.getColumns() != null) {
-            String insertColSql = "INSERT INTO report_builder_owner.column_definition (report_id, version, col_id, label, col_type, period_offset, rolling_n, rolling_grain, formula_expr, tier_level, parent_id, display_order) " +
+            String insertColSql = "INSERT INTO " + dbProperties.getReportBuilderSchema() + ".column_definition (report_id, version, col_id, label, col_type, period_offset, rolling_n, rolling_grain, formula_expr, tier_level, parent_id, display_order) " +
                                   "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
             for (int i = 0; i < dto.getColumns().size(); i++) {
                 ColumnDefDto cdDto = dto.getColumns().get(i);
@@ -363,13 +375,13 @@ public class ReportConfigService {
 
         // 5. Save Report Rows via JDBC
         if (dto.getRows() != null) {
-            String insertRowSql = "INSERT INTO report_builder_owner.row_definition (row_id, report_id, version, parent_row_id, label, row_type, display_order, indent_level, style_id, filter_expr) " +
+            String insertRowSql = "INSERT INTO " + dbProperties.getReportBuilderSchema() + ".row_definition (row_id, report_id, version, parent_row_id, label, row_type, display_order, indent_level, style_id, filter_expr) " +
                                   "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-            String insertMetricSql = "INSERT INTO report_builder_owner.row_metric_mapping (report_id, version, row_id, sql_expr, measure_definition) " +
+            String insertMetricSql = "INSERT INTO " + dbProperties.getReportBuilderSchema() + ".row_metric_mapping (report_id, version, row_id, sql_expr, measure_definition) " +
                                      "VALUES (?, ?, ?, ?, ?)";
-            String insertFormulaSql = "INSERT INTO report_builder_owner.row_formula (report_id, version, row_id, formula_expr) " +
+            String insertFormulaSql = "INSERT INTO " + dbProperties.getReportBuilderSchema() + ".row_formula (report_id, version, row_id, formula_expr) " +
                                       "VALUES (?, ?, ?, ?)";
-            String insertColMapSql = "INSERT INTO report_builder_owner.row_column_intersection (report_id, version, row_id, col_id, is_enabled) " +
+            String insertColMapSql = "INSERT INTO " + dbProperties.getReportBuilderSchema() + ".row_column_intersection (report_id, version, row_id, col_id, is_enabled) " +
                                      "VALUES (?, ?, ?, ?, ?)";
 
             for (int i = 0; i < dto.getRows().size(); i++) {
@@ -455,16 +467,16 @@ public class ReportConfigService {
     @Transactional
     public void deleteReport(String reportId) {
         Boolean hasPublishedObj = jdbcTemplate.queryForObject(
-            "SELECT EXISTS(SELECT 1 FROM report_builder_owner.report_config WHERE report_id = ? AND status = 'published')",
+            "SELECT EXISTS(SELECT 1 FROM " + dbProperties.getReportBuilderSchema() + ".report_config WHERE report_id = ? AND status = 'published')",
             Boolean.class,
             reportId
         );
         boolean hasPublished = hasPublishedObj != null && hasPublishedObj;
 
         if (hasPublished) {
-            jdbcTemplate.update("UPDATE report_builder_owner.report_config SET deleted = true WHERE report_id = ?", reportId);
+            jdbcTemplate.update("UPDATE " + dbProperties.getReportBuilderSchema() + ".report_config SET deleted = true WHERE report_id = ?", reportId);
         } else {
-            jdbcTemplate.update("DELETE FROM report_builder_owner.report_config WHERE report_id = ?", reportId);
+            jdbcTemplate.update("DELETE FROM " + dbProperties.getReportBuilderSchema() + ".report_config WHERE report_id = ?", reportId);
         }
     }
 }

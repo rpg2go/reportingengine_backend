@@ -1,5 +1,6 @@
 package com.db.reporting.service;
 
+import com.db.reporting.config.DatabaseSchemaProperties;
 import com.google.cloud.bigquery.*;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -24,6 +25,7 @@ import java.util.stream.StreamSupport;
 public class BigQueryAnalyticsService {
 
     private final BigQuery bigQuery;
+    private final DatabaseSchemaProperties dbProperties;
 
     @Value("${gcp.project-id}")
     private String projectId;
@@ -34,8 +36,14 @@ public class BigQueryAnalyticsService {
     @Value("${bigquery.max-bytes-billed}")
     private Long maxBytesBilled;
 
-    public BigQueryAnalyticsService(BigQuery bigQuery) {
+    @org.springframework.beans.factory.annotation.Autowired
+    public BigQueryAnalyticsService(BigQuery bigQuery, @org.springframework.lang.Nullable DatabaseSchemaProperties dbProperties) {
         this.bigQuery = bigQuery;
+        this.dbProperties = dbProperties != null ? dbProperties : new DatabaseSchemaProperties();
+    }
+
+    public BigQueryAnalyticsService(BigQuery bigQuery) {
+        this(bigQuery, new DatabaseSchemaProperties());
     }
 
     /**
@@ -303,8 +311,9 @@ public class BigQueryAnalyticsService {
         if (projectId == null || projectId.isBlank())
             return sql;
 
-        String targetPrefix1 = "analytics";
-        String targetPrefix2 = (datasetName != null && !datasetName.isBlank()) ? datasetName : "analytics";
+        String defaultSchema = dbProperties != null ? dbProperties.getAnalyticsSchema() : "analytics";
+        String targetPrefix1 = defaultSchema;
+        String targetPrefix2 = (datasetName != null && !datasetName.isBlank()) ? datasetName : defaultSchema;
 
         String resolvedSql = sql;
         resolvedSql = replaceTableRef(resolvedSql, targetPrefix1);

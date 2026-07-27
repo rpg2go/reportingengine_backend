@@ -1,5 +1,6 @@
 package com.db.reporting.service;
 
+import com.db.reporting.config.DatabaseSchemaProperties;
 import com.db.reporting.domain.Report;
 import com.db.reporting.domain.ReportPk;
 import com.db.reporting.repository.ReportRepository;
@@ -41,10 +42,19 @@ public class VersioningService {
 
     private final ReportRepository reportRepository;
     private final JdbcTemplate jdbcTemplate;
+    private final DatabaseSchemaProperties dbProperties;
 
-    public VersioningService(ReportRepository reportRepository, JdbcTemplate jdbcTemplate) {
+    @org.springframework.beans.factory.annotation.Autowired
+    public VersioningService(ReportRepository reportRepository,
+                              JdbcTemplate jdbcTemplate,
+                              @org.springframework.lang.Nullable DatabaseSchemaProperties dbProperties) {
         this.reportRepository = reportRepository;
         this.jdbcTemplate = jdbcTemplate;
+        this.dbProperties = dbProperties != null ? dbProperties : new DatabaseSchemaProperties();
+    }
+
+    public VersioningService(ReportRepository reportRepository, JdbcTemplate jdbcTemplate) {
+        this(reportRepository, jdbcTemplate, new DatabaseSchemaProperties());
     }
 
     // ─── state transitions ────────────────────────────────────────────────────
@@ -246,43 +256,45 @@ public class VersioningService {
      * @param toVersion   the target version to clone into
      */
     private void cloneChildRecords(String reportId, int fromVersion, int toVersion) {
+        String schema = dbProperties.getReportBuilderSchema();
+
         jdbcTemplate.update(
-            "INSERT INTO report_builder_owner.column_definition " +
+            "INSERT INTO " + schema + ".column_definition " +
             "  (report_id, version, col_id, label, col_type, period_offset, rolling_n, rolling_grain, formula_expr, tier_level, parent_id, display_order) " +
             "SELECT report_id, ? AS version, col_id, label, col_type, period_offset, rolling_n, rolling_grain, formula_expr, tier_level, parent_id, display_order " +
-            "FROM report_builder_owner.column_definition WHERE report_id = ? AND version = ?",
+            "FROM " + schema + ".column_definition WHERE report_id = ? AND version = ?",
             toVersion, reportId, fromVersion
         );
 
         jdbcTemplate.update(
-            "INSERT INTO report_builder_owner.row_definition " +
+            "INSERT INTO " + schema + ".row_definition " +
             "  (row_id, report_id, version, parent_row_id, label, row_type, display_order, indent_level, style_id, filter_expr) " +
             "SELECT row_id, report_id, ? AS version, parent_row_id, label, row_type, display_order, indent_level, style_id, filter_expr " +
-            "FROM report_builder_owner.row_definition WHERE report_id = ? AND version = ?",
+            "FROM " + schema + ".row_definition WHERE report_id = ? AND version = ?",
             toVersion, reportId, fromVersion
         );
 
         jdbcTemplate.update(
-            "INSERT INTO report_builder_owner.row_metric_mapping " +
+            "INSERT INTO " + schema + ".row_metric_mapping " +
             "  (report_id, version, row_id, sql_expr, measure_definition) " +
             "SELECT report_id, ? AS version, row_id, sql_expr, measure_definition " +
-            "FROM report_builder_owner.row_metric_mapping WHERE report_id = ? AND version = ?",
+            "FROM " + schema + ".row_metric_mapping WHERE report_id = ? AND version = ?",
             toVersion, reportId, fromVersion
         );
 
         jdbcTemplate.update(
-            "INSERT INTO report_builder_owner.row_formula " +
+            "INSERT INTO " + schema + ".row_formula " +
             "  (report_id, version, row_id, formula_expr) " +
             "SELECT report_id, ? AS version, row_id, formula_expr " +
-            "FROM report_builder_owner.row_formula WHERE report_id = ? AND version = ?",
+            "FROM " + schema + ".row_formula WHERE report_id = ? AND version = ?",
             toVersion, reportId, fromVersion
         );
 
         jdbcTemplate.update(
-            "INSERT INTO report_builder_owner.row_column_intersection " +
+            "INSERT INTO " + schema + ".row_column_intersection " +
             "  (report_id, version, row_id, col_id, is_enabled) " +
             "SELECT report_id, ? AS version, row_id, col_id, is_enabled " +
-            "FROM report_builder_owner.row_column_intersection WHERE report_id = ? AND version = ?",
+            "FROM " + schema + ".row_column_intersection WHERE report_id = ? AND version = ?",
             toVersion, reportId, fromVersion
         );
 

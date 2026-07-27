@@ -9,6 +9,7 @@ import com.db.reporting.catalog.SchemaCatalogLoader;
 import com.db.reporting.catalog.MetaTable;
 import com.db.reporting.catalog.MetaColumn;
 import com.db.reporting.service.AnalyticsQueryDispatcher;
+import com.db.reporting.service.ColumnFilterCacheService;
 
 import com.db.reporting.config.DatabaseSchemaProperties;
 
@@ -25,13 +26,15 @@ public class MetadataController {
     private final MetadataCache metadataCache;
     private final SchemaCatalogLoader schemaCatalogLoader;
     private final AnalyticsQueryDispatcher analyticsQueryDispatcher;
+    private final ColumnFilterCacheService columnFilterCacheService;
     private final DatabaseSchemaProperties dbProperties;
 
-    public MetadataController(JdbcTemplate jdbcTemplate, MetadataCache metadataCache, SchemaCatalogLoader schemaCatalogLoader, AnalyticsQueryDispatcher analyticsQueryDispatcher, @org.springframework.lang.Nullable DatabaseSchemaProperties dbProperties) {
+    public MetadataController(JdbcTemplate jdbcTemplate, MetadataCache metadataCache, SchemaCatalogLoader schemaCatalogLoader, AnalyticsQueryDispatcher analyticsQueryDispatcher, ColumnFilterCacheService columnFilterCacheService, @org.springframework.lang.Nullable DatabaseSchemaProperties dbProperties) {
         this.jdbcTemplate = jdbcTemplate;
         this.metadataCache = metadataCache;
         this.schemaCatalogLoader = schemaCatalogLoader;
         this.analyticsQueryDispatcher = analyticsQueryDispatcher;
+        this.columnFilterCacheService = columnFilterCacheService;
         this.dbProperties = dbProperties != null ? dbProperties : new DatabaseSchemaProperties();
     }
 
@@ -74,11 +77,10 @@ public class MetadataController {
             }
         }
 
-        // Try the cache first
-        String cacheKey = (resolvedTable + "." + column).toLowerCase();
-        List<String> cachedValues = metadataCache.getCachedColumnValues(cacheKey);
+        // Try the cache first via ColumnFilterCacheService
+        List<String> cachedValues = columnFilterCacheService.getFilterValues(resolvedTable, column);
         if (cachedValues != null && !cachedValues.isEmpty()) {
-            log.info("MetadataCache: hit for distinct values: {}", cacheKey);
+            log.info("ColumnFilterCacheService: hit for distinct values: {}.{}", resolvedTable, column);
             return ResponseEntity.ok(cachedValues);
         }
 

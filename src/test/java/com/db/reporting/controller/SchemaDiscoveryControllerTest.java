@@ -6,6 +6,7 @@ import com.db.reporting.catalog.SchemaCatalogLoader;
 import com.db.reporting.catalog.MetaColumn;
 import com.db.reporting.catalog.MetaTable;
 import com.db.reporting.service.AnalyticsQueryDispatcher;
+import com.db.reporting.service.ColumnFilterCacheService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -51,6 +52,9 @@ public class SchemaDiscoveryControllerTest {
     @MockitoBean
     private AnalyticsQueryDispatcher analyticsQueryDispatcher;
 
+    @MockitoBean
+    private ColumnFilterCacheService columnFilterCacheService;
+
     @Test
     @DisplayName("GET /api/reports/tables: returns list of fully-qualified analytics tables")
     public void listTables_shouldReturnQualifiedTableList() throws Exception {
@@ -86,8 +90,8 @@ public class SchemaDiscoveryControllerTest {
     }
 
     @Test
-    @DisplayName("GET /api/reports/dimensions/values: fetches distinct autocomplete values")
-    public void listDimensionValues_shouldReturnDistinctValues() throws Exception {
+    @DisplayName("GET /api/reports/column-values: fetches distinct autocomplete values")
+    public void getColumnValues_shouldReturnDistinctValues() throws Exception {
         MetaTable metaTable = new MetaTable(1, "analytics", "fact_sales", MetaTable.TableType.fact, "date_key", "Fact Sales");
         MetaColumn col = new MetaColumn(1, metaTable.getTableId(), "region", "VARCHAR", false, false, "Region", true, true, true);
 
@@ -96,7 +100,7 @@ public class SchemaDiscoveryControllerTest {
         when(analyticsQueryDispatcher.queryForList(anyString(), eq(String.class)))
                 .thenReturn(List.of("EMEA", "LATAM", "NORTH_AMERICA"));
 
-        mockMvc.perform(get("/api/reports/dimensions/values")
+        mockMvc.perform(get("/api/reports/column-values")
                         .param("table", "analytics.fact_sales")
                         .param("column", "region")
                         .contentType(MediaType.APPLICATION_JSON))
@@ -104,5 +108,12 @@ public class SchemaDiscoveryControllerTest {
                 .andExpect(jsonPath("$[0]").value("EMEA"))
                 .andExpect(jsonPath("$[1]").value("LATAM"))
                 .andExpect(jsonPath("$[2]").value("NORTH_AMERICA"));
+
+        mockMvc.perform(get("/api/reports/dimensions/values")
+                        .param("table", "analytics.fact_sales")
+                        .param("column", "region")
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0]").value("EMEA"));
     }
 }
